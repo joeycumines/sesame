@@ -7,7 +7,7 @@ STATICCHECK ?= staticcheck
 STATICCHECK_FLAGS ?=
 
 GO_PACKAGES ?= ./...
-GO_TEST_FLAGS ?= -cover
+GO_TEST_FLAGS ?= -cover -race
 
 .PHONY: all
 all: lint build test
