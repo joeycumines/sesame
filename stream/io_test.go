@@ -13,6 +13,23 @@ import (
 	"time"
 )
 
+func TestCloser_panic(t *testing.T) {
+	e := new(struct{})
+	c := Closer(func() error { panic(e) }).Once()
+	func() {
+		defer func() {
+			if r := recover(); r != e {
+				t.Error(r)
+			}
+		}()
+		_ = c.Close()
+		t.Error(`expected panic`)
+	}()
+	if err := c.Close(); err != ErrPanic {
+		t.Error(err)
+	}
+}
+
 func TestCloser(t *testing.T) {
 	var (
 		e      = errors.New(`some error`)
