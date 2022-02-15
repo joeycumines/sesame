@@ -33,3 +33,11 @@ vet:
 .PHONY: staticcheck
 staticcheck:
 	$(STATICCHECK) $(STATICCHECK_FLAGS) $(GO_PACKAGES)
+
+# this won't work on all systems
+.PHONY: tools
+tools:
+	export CGO_ENABLED=0 && \
+		grep -P '^\t_' tools.go | \
+		cut -d '"' -f 2 | \
+		while read -r line; do go install "$$line" || exit 1; done
