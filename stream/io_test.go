@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/joeycumines/sesame/internal/testutil"
 	"io"
 	"math"
 	"math/rand"
+	"reflect"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -93,6 +96,26 @@ func TestCloser(t *testing.T) {
 	}
 }
 
+func TestCloser_Comparable(t *testing.T) {
+	e := errors.New(`some error`)
+	fn := Closer(func() error { return e })
+	closer := fn.Comparable()
+	if v, ok := closer.(*comparableCloser); !ok || v.ioCloser == nil {
+		t.Fatal(v, ok)
+	} else if v, ok := v.ioCloser.(Closer); !ok || reflect.ValueOf(v).Pointer() != reflect.ValueOf(fn).Pointer() {
+		t.Fatal(v, ok)
+	}
+	//lint:ignore SA4000 checking if it's comparable with itself
+	if closer != closer {
+		t.Error(closer)
+	}
+	m := map[interface{}]struct{}{}
+	m[closer] = struct{}{}
+	if _, ok := m[closer]; !ok {
+		t.Fatal()
+	}
+}
+
 func TestChunkWriter_Write_rand(t *testing.T) {
 	r := rand.New(rand.NewSource(0))
 	var data [ChunkSize*3 + ChunkSize*7/11]byte
@@ -140,6 +163,7 @@ func TestChunkWriter_Write_insane(t *testing.T) {
 }
 
 func TestChunkWriter_Write_shortWrite(t *testing.T) {
+	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 	var (
 		in   = make(chan []byte)
 		out  = make(chan int)

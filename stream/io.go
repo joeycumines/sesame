@@ -13,6 +13,10 @@ type (
 	// ChunkWriter implements io.Writer by wrapping another writer (e.g. io.Writer.Write), such that calls will be
 	// chunked, at a maximum of ChunkSize bytes per chunk.
 	ChunkWriter func(b []byte) (int, error)
+
+	ioCloser io.Closer
+
+	comparableCloser struct{ ioCloser }
 )
 
 // Close passes through to the receiver.
@@ -33,6 +37,9 @@ func (x Closer) Once() Closer {
 		return err
 	}
 }
+
+// Comparable wraps the receiver so that it is comparable.
+func (x Closer) Comparable() io.Closer { return &comparableCloser{x} }
 
 // Write implements io.Writer, calling the receiver.
 // Note that it will panic if the receiver's results are not sane.
