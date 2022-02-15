@@ -9,6 +9,9 @@ STATICCHECK_FLAGS ?=
 GO_PACKAGES ?= ./...
 GO_TEST_FLAGS ?= -cover -race
 
+GODOC ?= godoc
+GODOC_FLAGS ?= -http=:6060
+
 .PHONY: all
 all: lint build test
 
@@ -45,3 +48,8 @@ tools:
 .PHONY: fmt
 fmt:
 	$(GO) fmt $(GO_PACKAGES)
+
+.PHONY: godoc
+godoc:
+	@echo 'Running godoc, the default URL is http://localhost:6060/pkg/github.com/joeycumines/sesame/'
+	$(GODOC) $(GODOC_FLAGS)
