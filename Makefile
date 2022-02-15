@@ -41,3 +41,7 @@ tools:
 		grep -P '^\t_' tools.go | \
 		cut -d '"' -f 2 | \
 		while read -r line; do go install "$$line" || exit 1; done
+
+.PHONY: fmt
+fmt:
+	$(GO) fmt $(GO_PACKAGES)
