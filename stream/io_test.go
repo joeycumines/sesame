@@ -194,3 +194,43 @@ func TestChunkWriter_Write_shortWrite(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func Test_alwaysCallClosersOrdered_overwrite(t *testing.T) {
+	var (
+		err error
+		e1  = errors.New(`some error 1`)
+		e2  = errors.New(`some error 2`)
+		er  = new(struct{})
+	)
+	defer func() {
+		if err != e2 {
+			t.Error(err)
+		}
+		if r := recover(); r != er {
+			t.Error(r)
+		}
+	}()
+	alwaysCallClosersOrdered(
+		&err,
+		nil,
+		nil,
+		&mockCloser{func() error { return e1 }},
+		nil,
+		nil,
+		&mockCloser{func() error { panic(er) }},
+		nil,
+		nil,
+		&mockCloser{func() error {
+			if err != e1 {
+				t.Error(err)
+			}
+			if r := recover(); r != nil {
+				t.Error(r)
+			}
+			return e2
+		}},
+		nil,
+		&mockCloser{func() error { return nil }},
+		nil,
+	)
+}

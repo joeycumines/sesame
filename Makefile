@@ -7,7 +7,7 @@ STATICCHECK ?= staticcheck
 STATICCHECK_FLAGS ?=
 
 GO_PACKAGES ?= ./...
-GO_TEST_FLAGS ?= -cover -race
+GO_TEST_FLAGS ?=
 
 GODOC ?= godoc
 GODOC_FLAGS ?= -http=:6060
@@ -26,8 +26,15 @@ build:
 	$(GO) build $(GO_FLAGS) $(GO_PACKAGES)
 
 .PHONY: test
-test: build
-	$(GO) test $(GO_FLAGS) $(GO_TEST_FLAGS) $(GO_PACKAGES)
+test: test-cover test-race
+
+.PHONY: test-cover
+test-cover: build
+	$(GO) test $(GO_FLAGS) $(GO_TEST_FLAGS) -cover $(GO_PACKAGES)
+
+.PHONY: test-race
+test-race: build
+	$(GO) test $(GO_FLAGS) $(GO_TEST_FLAGS) -race $(GO_PACKAGES)
 
 .PHONY: vet
 vet:

@@ -1,11 +1,14 @@
 package stream
 
 import (
+	"context"
 	"errors"
 	"github.com/joeycumines/sesame/internal/testutil"
 	"io"
 	"runtime"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 type (
@@ -103,12 +106,14 @@ func TestPipe_Close_allFieldsSet(t *testing.T) {
 	if err := <-rIn; err != e {
 		t.Error(err)
 	}
-	rOut <- errors.New(`r error`)
-	if err := <-wIn; err != e {
+	rErr := errors.New(`r error`)
+	rOut <- rErr
+	if err := <-wIn; err != rErr {
 		t.Error(err)
 	}
-	wOut <- errors.New(`w error`)
-	if err := <-out; err != e {
+	wErr := errors.New(`w error`)
+	wOut <- wErr
+	if err := <-out; err != wErr {
 		t.Error(err)
 	}
 }
@@ -154,11 +159,13 @@ func TestPipe_Close_panic(t *testing.T) {
 	if err := <-rIn; err != ErrPanic {
 		t.Error(err)
 	}
-	rOut <- errors.New(`r error`)
-	if err := <-wIn; err != ErrPanic {
+	rErr := errors.New(`r error`)
+	rOut <- rErr
+	if err := <-wIn; err != rErr {
 		t.Error(err)
 	}
-	wOut <- errors.New(`w error`)
+	wErr := errors.New(`w error`)
+	wOut <- wErr
 	if err := <-out; err != e {
 		t.Error(err)
 	}
@@ -231,8 +238,9 @@ func TestPipe_CloseWithError_allFieldsSet(t *testing.T) {
 	if err := <-wIn; err != e1 {
 		t.Error(err)
 	}
-	wOut <- errors.New(`w error`)
-	if err := <-out; err != e2 {
+	wErr := errors.New(`w error`)
+	wOut <- wErr
+	if err := <-out; err != wErr {
 		t.Error(err)
 	}
 }
@@ -290,5 +298,128 @@ func TestPipe_Write_pass(t *testing.T) {
 	}
 	if b[0] != 123 || b[1] != 7 {
 		t.Error(b)
+	}
+}
+
+func TestPair(t *testing.T) {
+	t.Run(`local to remote`, func(t *testing.T) {
+		local, remote := Pair(io.Pipe())(io.Pipe())
+		testBasicIO(t, local, remote)
+	})
+	t.Run(`remote to local`, func(t *testing.T) {
+		local, remote := Pair(io.Pipe())(io.Pipe())
+		testBasicIO(t, remote, local)
+	})
+}
+
+func TestWrap_basicIO(t *testing.T) {
+	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
+
+	initHalfCloser := func(fn func(pipe Pipe) []HalfCloserOption) func(t *testing.T) (io.ReadWriteCloser, io.ReadWriteCloser, func()) {
+		return func(t *testing.T) (io.ReadWriteCloser, io.ReadWriteCloser, func()) {
+			var (
+				localR, localW                     int64
+				remoteR, remoteW                   int64
+				localHalfCloserR, localHalfCloserW int64
+				localPipeR, localPipeW             int64
+			)
+			local, remote := Pair(io.Pipe())(io.Pipe())
+			localHalfCloser, err := NewHalfCloser(context.Background(), fn(Pipe{
+				Reader: trackPipeReaderSize(local.Reader, &localR),
+				Writer: trackPipeWriterSize(local.Writer, &localW),
+				Closer: local.Closer,
+			})...)
+			if err != nil {
+				t.Fatal(err)
+			}
+			localPipe := Wrap(io.Pipe())(io.Pipe())(trackReadWriteCloserSize(localHalfCloser, &localHalfCloserR, &localHalfCloserW))
+			if localPipe.Closer == nil {
+				t.Fatal()
+			}
+			return trackReadWriteCloserSize(localPipe, &localPipeR, &localPipeW),
+				trackReadWriteCloserSize(remote, &remoteR, &remoteW),
+				func() {
+					t.Logf(
+						"localR, localW = %d, %d\nremoteR, remoteW = %d, %d\nlocalHalfCloserR, localHalfCloserW = %d, %d\nlocalPipeR, localPipeW = %d, %d",
+						atomic.LoadInt64(&localR), atomic.LoadInt64(&localW),
+						atomic.LoadInt64(&remoteR), atomic.LoadInt64(&remoteW),
+						atomic.LoadInt64(&localHalfCloserR), atomic.LoadInt64(&localHalfCloserW),
+						atomic.LoadInt64(&localPipeR), atomic.LoadInt64(&localPipeW),
+					)
+				}
+		}
+	}
+
+	for _, tc := range [...]struct {
+		Name string
+		Init func(t *testing.T) (io.ReadWriteCloser, io.ReadWriteCloser, func())
+	}{
+		{
+			Name: `wrap io pipe pair`,
+			Init: func(t *testing.T) (io.ReadWriteCloser, io.ReadWriteCloser, func()) {
+				var (
+					localR, localW         int64
+					remoteR, remoteW       int64
+					localPipeR, localPipeW int64
+				)
+				local, remote := Pair(io.Pipe())(io.Pipe())
+				localPipe := Wrap(io.Pipe())(io.Pipe())(trackReadWriteCloserSize(local, &localR, &localW))
+				if localPipe.Closer == nil {
+					t.Fatal()
+				}
+				return trackReadWriteCloserSize(localPipe, &localPipeR, &localPipeW),
+					trackReadWriteCloserSize(remote, &remoteR, &remoteW),
+					func() {
+						t.Logf(
+							"localR, localW = %d, %d\nremoteR, remoteW = %d, %d\nlocalPipeR, localPipeW = %d, %d",
+							atomic.LoadInt64(&localR), atomic.LoadInt64(&localW),
+							atomic.LoadInt64(&remoteR), atomic.LoadInt64(&remoteW),
+							atomic.LoadInt64(&localPipeR), atomic.LoadInt64(&localPipeW),
+						)
+					}
+			},
+		},
+		{
+			Name: `half closer default`,
+			Init: initHalfCloser(func(pipe Pipe) []HalfCloserOption {
+				return []HalfCloserOption{
+					OptHalfCloser.Pipe(pipe),
+				}
+			}),
+		},
+		{
+			Name: `half closer wait`,
+			Init: initHalfCloser(func(pipe Pipe) []HalfCloserOption {
+				return []HalfCloserOption{
+					OptHalfCloser.Pipe(pipe),
+					OptHalfCloser.ClosePolicy(WaitRemote{}),
+				}
+			}),
+		},
+		{
+			Name: `half closer 10s timeout`,
+			Init: initHalfCloser(func(pipe Pipe) []HalfCloserOption {
+				return []HalfCloserOption{
+					OptHalfCloser.Pipe(pipe),
+					OptHalfCloser.ClosePolicy(WaitRemoteTimeout(time.Second * 10)),
+				}
+			}),
+		},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Run(`a`, func(t *testing.T) {
+				defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
+				local, remote, cleanup := tc.Init(t)
+				defer cleanup()
+				testBasicIO(t, local, remote)
+			})
+
+			t.Run(`b`, func(t *testing.T) {
+				defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
+				local, remote, cleanup := tc.Init(t)
+				defer cleanup()
+				testBasicIO(t, remote, local)
+			})
+		})
 	}
 }

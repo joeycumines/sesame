@@ -1,0 +1,84 @@
+//go:build !race
+// +build !race
+
+package ionet
+
+import (
+	"github.com/joeycumines/sesame/internal/testutil"
+	"github.com/joeycumines/sesame/stream"
+	"golang.org/x/net/nettest"
+	"io"
+	"net"
+	"runtime"
+	"testing"
+)
+
+func TestPipe_nettest_a(t *testing.T) {
+	nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), _ error) {
+		c1, c2 = Pipe()
+		stop = func() {
+			_ = c1.Close()
+			_ = c2.Close()
+		}
+		return
+	})
+}
+
+func TestPipe_nettest_b(t *testing.T) {
+	nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), _ error) {
+		c2, c1 = Pipe()
+		stop = func() {
+			_ = c1.Close()
+			_ = c2.Close()
+		}
+		return
+	})
+}
+
+func TestWrap_nettest(t *testing.T) {
+	netPipeRWC := func() (c1, c2 io.ReadWriteCloser) {
+		type c io.ReadWriteCloser
+		type C struct{ c }
+		a, b := net.Pipe()
+		return C{a}, C{b}
+	}
+	for _, tc := range [...]struct {
+		Name string
+		Init func(t *testing.T) func() (c1, c2 net.Conn, stop func(), _ error)
+	}{
+		{
+			Name: `net pipe rwc 1`,
+			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+					a, b := netPipeRWC()
+					c1, c2 = Wrap(a), Wrap(b)
+					stop = func() {
+						_ = c1.Close()
+						_ = c2.Close()
+					}
+					return
+				}
+			},
+		},
+		{
+			Name: `stream pair io pipe`,
+			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+					a, b := stream.Pair(io.Pipe())(io.Pipe())
+					c2, c1 = Wrap(a), Wrap(b)
+					stop = func() {
+						_ = c1.Close()
+						_ = c2.Close()
+					}
+					return
+				}
+			},
+		},
+	} {
+		tc := tc
+		t.Run(tc.Name, func(t *testing.T) {
+			defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
+			nettest.TestConn(t, tc.Init(t))
+		})
+	}
+}

@@ -1,8 +1,10 @@
 package testutil
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
+	"runtime/pprof"
 	"testing"
 	"time"
 )
@@ -54,9 +56,15 @@ func CheckNumGoroutines(t *testing.T, start int, increase bool, wait time.Durati
 	}
 	if now := WaitNumGoroutines(wait, fn); increase {
 		if start >= now {
-			errorf("too few goroutines: -%d", start-now+1)
+			errorf("too few goroutines: -%d\n%s", start-now+1, DumpGoroutineStacktrace())
 		}
 	} else if start < now {
-		errorf("too many goroutines: +%d", now-start)
+		errorf("too many goroutines: +%d\n%s", now-start, DumpGoroutineStacktrace())
 	}
+}
+
+func DumpGoroutineStacktrace() string {
+	var b bytes.Buffer
+	_ = pprof.Lookup("goroutine").WriteTo(&b, 1)
+	return b.String()
 }
