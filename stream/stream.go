@@ -83,8 +83,6 @@ func Wrap(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeR
 // Handle is a convenience function intended to be used with io.Pipe or ionet.Pipe, to generate an io.ReadWriteCloser
 // from a Handler, e.g. like `pipe := stream.Handle(io.Pipe())(io.Pipe())(handler)` or
 // `handlerPipe := stream.Handle(basePipe.SendPipe())(basePipe.ReceivePipe())(handler)`.
-//
-// TODO reference example of the complex use case described by Pipe's doc
 func Handle(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeReader, receiveWriter PipeWriter) func(handler Handler) Pipe {
 	return func(receiveReader PipeReader, receiveWriter PipeWriter) func(handler Handler) Pipe {
 		return func(handler Handler) Pipe {

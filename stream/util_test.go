@@ -2,6 +2,8 @@ package stream
 
 import (
 	"io"
+	"math/rand"
+	"sync"
 	"sync/atomic"
 )
 
@@ -14,6 +16,11 @@ type (
 	atomicWriterSize struct {
 		writer io.Writer
 		size   *int64
+	}
+
+	lockedRand struct {
+		mu   sync.Mutex
+		rand *rand.Rand
 	}
 )
 
@@ -83,4 +90,22 @@ func (x atomicWriterSize) Write(b []byte) (n int, err error) {
 	n, err = x.writer.Write(b)
 	atomic.AddInt64(x.size, int64(n))
 	return
+}
+
+func (r *lockedRand) Seed(seed int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.rand.Seed(seed)
+}
+
+func (r *lockedRand) Read(p []byte) (n int, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rand.Read(p)
+}
+
+func (r *lockedRand) Intn(n int) int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rand.Intn(n)
 }
