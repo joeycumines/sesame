@@ -8,6 +8,22 @@ import (
 )
 
 type (
+	mockCloser struct {
+		close func() error
+	}
+
+	mockReader struct {
+		read func(b []byte) (n int, err error)
+	}
+
+	mockWriter struct {
+		write func(b []byte) (n int, err error)
+	}
+
+	mockPipeCloser struct {
+		closeWithError func(err error) error
+	}
+
 	atomicReaderSize struct {
 		reader io.Reader
 		size   *int64
@@ -25,6 +41,46 @@ type (
 
 	naiveHalfCloser struct{ Pipe }
 )
+
+func mockPipeReader(
+	read func(b []byte) (n int, err error),
+	close func() error,
+	closeWithError func(err error) error,
+) PipeReader {
+	return &struct {
+		mockReader
+		mockCloser
+		mockPipeCloser
+	}{
+		mockReader{read},
+		mockCloser{close},
+		mockPipeCloser{closeWithError},
+	}
+}
+
+func mockPipeWriter(
+	write func(b []byte) (n int, err error),
+	close func() error,
+	closeWithError func(err error) error,
+) PipeWriter {
+	return &struct {
+		mockWriter
+		mockCloser
+		mockPipeCloser
+	}{
+		mockWriter{write},
+		mockCloser{close},
+		mockPipeCloser{closeWithError},
+	}
+}
+
+func (x *mockCloser) Close() error { return x.close() }
+
+func (x *mockReader) Read(b []byte) (int, error) { return x.read(b) }
+
+func (x *mockWriter) Write(b []byte) (int, error) { return x.write(b) }
+
+func (x *mockPipeCloser) CloseWithError(err error) error { return x.closeWithError(err) }
 
 func trackReadWriteCloserSize(p io.ReadWriteCloser, r, w *int64) io.ReadWriteCloser {
 	type (

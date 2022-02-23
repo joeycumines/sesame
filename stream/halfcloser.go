@@ -155,19 +155,23 @@ func (x *HalfCloser) Close() error { return x.CloseWithError(nil) }
 
 func (x *HalfCloser) CloseWithError(err error) error {
 	x.once.Do(func() {
+		var success bool
 		closePipe := func() func(force bool) {
 			var once sync.Once
 			return func(force bool) {
 				once.Do(func() {
 					if force || x.err != nil {
-						_ = x.pipe.Close()
+						// note: we only TRY to avoid calling x.pipe.Writer.CloseWithError twice
+						pipe := x.pipe
+						if success {
+							pipe.Writer = nil
+						}
+						_ = pipe.Close()
 					}
 				})
 			}
 		}()
 		defer closePipe(false)
-
-		var success bool
 		defer func() {
 			if !success {
 				x.err = ErrPanic

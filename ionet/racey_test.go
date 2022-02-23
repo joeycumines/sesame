@@ -14,6 +14,7 @@ import (
 )
 
 func TestPipe_nettest_a(t *testing.T) {
+	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 	nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), _ error) {
 		c1, c2 = Pipe()
 		stop = func() {
@@ -25,6 +26,7 @@ func TestPipe_nettest_a(t *testing.T) {
 }
 
 func TestPipe_nettest_b(t *testing.T) {
+	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 	nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), _ error) {
 		c2, c1 = Pipe()
 		stop = func() {
@@ -36,6 +38,7 @@ func TestPipe_nettest_b(t *testing.T) {
 }
 
 func TestWrap_nettest(t *testing.T) {
+	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 	wrapN := func(stream io.ReadWriteCloser, n int) (conn net.Conn) {
 		if n <= 0 {
 			panic(n)
