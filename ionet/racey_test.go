@@ -142,11 +142,11 @@ func TestWrap_nettest(t *testing.T) {
 			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					a, b := stream.Pair(stream.SyncPipe(io.Pipe()))(stream.SyncPipe(io.Pipe()))
-					ac, err := WrapPipe(a)
+					ac, err := WrapPipe(stream.OptHalfCloser.Pipe(a))
 					if err != nil {
 						t.Fatal(err)
 					}
-					bc, err := WrapPipe(b)
+					bc, err := WrapPipe(stream.OptHalfCloser.Pipe(b))
 					if err != nil {
 						t.Fatal(err)
 					}

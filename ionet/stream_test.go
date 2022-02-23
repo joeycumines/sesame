@@ -61,7 +61,7 @@ func TestWrapPipe_pipeWriterSafe(t *testing.T) {
 
 			hasWritten := make(chan struct{}, 1)
 
-			conn, err := WrapPipe(stream.Pipe{Writer: mockPipeWriter(
+			conn, err := WrapPipe(stream.OptHalfCloser.Pipe(stream.Pipe{Writer: mockPipeWriter(
 				func(b []byte) (n int, err error) {
 					add(string(b))
 					select {
@@ -81,7 +81,7 @@ func TestWrapPipe_pipeWriterSafe(t *testing.T) {
 					add(`c`)
 					return someErr
 				},
-			)})
+			)}))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -56,16 +56,12 @@ func Wrap(conn io.ReadWriteCloser) net.Conn {
 // WrapPipe extends Wrap with support for stream.HalfCloser.
 //
 // See also stream.Wrap.
-func WrapPipe(conn stream.Pipe, options ...stream.HalfCloserOption) (*WrappedPipe, error) {
-	const c = 1
-	o := make([]stream.HalfCloserOption, c, len(options)+c)
-	o[0] = stream.OptHalfCloser.Pipe(conn)
-	o = append(o, options...)
-	h, err := stream.NewHalfCloser(o...)
+func WrapPipe(options ...stream.HalfCloserOption) (*WrappedPipe, error) {
+	halfCloser, err := stream.NewHalfCloser(options...)
 	if err != nil {
 		return nil, err
 	}
-	w := WrappedPipe{netConn: Wrap(h), halfCloser: h}
+	w := WrappedPipe{netConn: Wrap(halfCloser), halfCloser: halfCloser}
 	return &w, nil
 }
 
