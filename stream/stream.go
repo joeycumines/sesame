@@ -52,6 +52,10 @@ var (
 
 // Pair is a convenience function that may be used to build a connected bidirectional pipe, e.g. like
 // `local, remote := stream.Pair(io.Pipe())(io.Pipe())`.
+//
+// Depending on use case, it may be desirable to "synchronise" either or both of the sender and receiver pipes, using
+// SyncPipe, the results of which can be used directly in each closure. Similar behavior can also be achieved by
+// implementations which implement io.WriterTo in a way that blocks writes until the end of read, e.g. ionet.Pipe.
 func Pair(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeReader, receiveWriter PipeWriter) (local, remote Pipe) {
 	return func(receiveReader PipeReader, receiveWriter PipeWriter) (local, remote Pipe) {
 		local = Pipe{
@@ -67,13 +71,30 @@ func Pair(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeR
 }
 
 // Wrap is a convenience function that wraps a raw stream (io.ReadWriteCloser) in pipes, e.g. to support
-// cancellation, while retaining roughly the same semantics. It is compatible with HalfCloser.
-// See also ionet.Wrap.
+// cancellation, while retaining roughly the same semantics. Both pipes are optional, although not providing either is
+// obviously rather pointless.
+//
+// Note that the pipe directions are named relative to the internal Handler (Join), which copies to and from stream.
+// As such, the "send" pipe corresponds to reading from the result, while the "receive" pipe corresponds to writes to
+// the result.
+//
+// If the "receive" pipe was provided, and receiveReader does not implement io.WriterTo, then the "receive" pipe will
+// be synchronised using SyncPipe. This is intended as sensible default behavior, as, depending on the pipe
+// implementation, it maybe necessary to facilitate close after writing, w/o prematurely closing / dropping data written
+// to receiveWriter then read from receiveReader, but not yet written to stream. The io.WriterTo special case is in
+// order to support implementations with their own (presumably more effective) solutions, to the problem which SyncPipe
+// aims to solve. N.B. neither io.Pipe or net.Pipe implement io.WriterTo, though it is implemented by ionet.Pipe.
+//
+// This implementation is compatible with HalfCloser.
+//
+// See also ionet.Wrap and ionet.WrapPipe.
 func Wrap(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeReader, receiveWriter PipeWriter) func(stream io.ReadWriteCloser) Pipe {
 	return func(receiveReader PipeReader, receiveWriter PipeWriter) func(stream io.ReadWriteCloser) Pipe {
 		return func(stream io.ReadWriteCloser) Pipe {
 			if receiveReader != nil || receiveWriter != nil {
-				receiveReader, receiveWriter = SyncPipe(receiveReader, receiveWriter)
+				if _, ok := receiveReader.(io.WriterTo); !ok {
+					receiveReader, receiveWriter = SyncPipe(receiveReader, receiveWriter)
+				}
 			}
 			return Handle(sendReader, sendWriter)(receiveReader, receiveWriter)(Join(stream))
 		}
@@ -103,6 +124,12 @@ func Handle(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader Pip
 // error from stream takes priority (in the returned closer).
 func Join(stream io.ReadWriteCloser) Handler {
 	return HandlerFunc(func(reader PipeReader, writer PipeWriter) (closer io.Closer) {
+		// ensure stream doesn't implement io.WriterTo or io.ReaderFrom, as the bidirectional copying + nested
+		// blocking behavior may introduce deadlocks
+		type ioReadWriteCloser1 io.ReadWriteCloser
+		type ioReadWriteCloser2 struct{ ioReadWriteCloser1 }
+		stream = ioReadWriteCloser2{stream}
+
 		var wg sync.WaitGroup
 
 		// initial add to prevent done before init, and to avoid panic if both reader and writer are nil

@@ -22,6 +22,8 @@ type (
 		mu   sync.Mutex
 		rand *rand.Rand
 	}
+
+	naiveHalfCloser struct{ Pipe }
 )
 
 func trackReadWriteCloserSize(p io.ReadWriteCloser, r, w *int64) io.ReadWriteCloser {
@@ -92,20 +94,22 @@ func (x atomicWriterSize) Write(b []byte) (n int, err error) {
 	return
 }
 
-func (r *lockedRand) Seed(seed int64) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.rand.Seed(seed)
+func (x *lockedRand) Seed(seed int64) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	x.rand.Seed(seed)
 }
 
-func (r *lockedRand) Read(p []byte) (n int, err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.rand.Read(p)
+func (x *lockedRand) Read(p []byte) (n int, err error) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	return x.rand.Read(p)
 }
 
-func (r *lockedRand) Intn(n int) int {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.rand.Intn(n)
+func (x *lockedRand) Intn(n int) int {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	return x.rand.Intn(n)
 }
+
+func (x naiveHalfCloser) Close() error { return x.Pipe.Writer.Close() }

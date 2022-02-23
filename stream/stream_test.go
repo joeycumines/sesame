@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"context"
 	"errors"
 	"github.com/joeycumines/sesame/internal/testutil"
 	"io"
@@ -323,8 +322,8 @@ func TestWrap_basicIO(t *testing.T) {
 				localHalfCloserR, localHalfCloserW int64
 				localPipeR, localPipeW             int64
 			)
-			local, remote := Pair(io.Pipe())(io.Pipe())
-			localHalfCloser, err := NewHalfCloser(context.Background(), fn(Pipe{
+			local, remote := Pair(SyncPipe(io.Pipe()))(SyncPipe(io.Pipe()))
+			localHalfCloser, err := NewHalfCloser(fn(Pipe{
 				Reader: trackPipeReaderSize(local.Reader, &localR),
 				Writer: trackPipeWriterSize(local.Writer, &localW),
 				Closer: local.Closer,
@@ -354,6 +353,31 @@ func TestWrap_basicIO(t *testing.T) {
 		Name string
 		Init func(t *testing.T) (io.ReadWriteCloser, io.ReadWriteCloser, func())
 	}{
+		{
+			Name: `wrap io pipe pair`,
+			Init: func(t *testing.T) (io.ReadWriteCloser, io.ReadWriteCloser, func()) {
+				var (
+					localR, localW         int64
+					remoteR, remoteW       int64
+					localPipeR, localPipeW int64
+				)
+				local, remote := Pair(SyncPipe(io.Pipe()))(SyncPipe(io.Pipe()))
+				localPipe := Wrap(io.Pipe())(io.Pipe())(trackReadWriteCloserSize(naiveHalfCloser{local}, &localR, &localW))
+				if localPipe.Closer == nil {
+					t.Fatal()
+				}
+				return trackReadWriteCloserSize(localPipe, &localPipeR, &localPipeW),
+					trackReadWriteCloserSize(remote, &remoteR, &remoteW),
+					func() {
+						t.Logf(
+							"localR, localW = %d, %d\nremoteR, remoteW = %d, %d\nlocalPipeR, localPipeW = %d, %d",
+							atomic.LoadInt64(&localR), atomic.LoadInt64(&localW),
+							atomic.LoadInt64(&remoteR), atomic.LoadInt64(&remoteW),
+							atomic.LoadInt64(&localPipeR), atomic.LoadInt64(&localPipeW),
+						)
+					}
+			},
+		},
 		{
 			Name: `half closer default`,
 			Init: initHalfCloser(func(pipe Pipe) []HalfCloserOption {

@@ -26,7 +26,7 @@ func TestProxy_bidirectionalHalfClose(t *testing.T) {
 	// -> remote (and vice versa)
 	b1, b2 := Pair(io.Pipe())(io.Pipe())
 
-	halfCloser, err := NewHalfCloser(context.Background(), OptHalfCloser.Pipe(b1))
+	halfCloser, err := NewHalfCloser(OptHalfCloser.Pipe(b1))
 	if err != nil {
 		t.Fatal(err)
 	}

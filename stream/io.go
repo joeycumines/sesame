@@ -66,6 +66,11 @@ func SyncPipe(r PipeReader, w PipeWriter) (PipeReader, PipeWriter) {
 	if r == nil || w == nil {
 		panic(`sesame/stream: expected non-nil pipes`)
 	}
+	if rs, ok := r.(syncPipeReader); ok {
+		if ws, ok := w.(syncPipeWriter); ok && rs.syncPipe == ws.syncPipe {
+			return r, w
+		}
+	}
 	p := syncPipe{
 		r: r,
 		w: w,

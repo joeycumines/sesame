@@ -1,7 +1,6 @@
 package stream
 
 import (
-	"context"
 	"errors"
 	"io"
 	"sync"
@@ -11,21 +10,19 @@ import (
 
 type (
 	// HalfCloser may be used to support patterns involving sending of EOF, e.g. to emulate unix-style IO redirection.
-	// Only half-closing of send (a PipeWriter) is supported. This is a non-trivial implementation that addresses the
-	// problem case where the act of closing the send side of the pipe (PipeWriter) must be synchronised with writes,
-	// without making the io.Closer unsafe to call concurrently, e.g. as required for implementations of net.Conn.
-	// See also ClosePolicy and it's implementations.
+	//
+	// This implementation addresses multiple aspects of the target problem case. Firstly, it provides controls around
+	// half-close behavior, configured via ClosePolicy implementations. Secondly, it provides support for
+	// implementations where the act of closing, for send side of the pipe (PipeWriter), must be synchronised with
+	// writes. An example scenario for this case is where EOF is implemented as part of an underlying (transport)
+	// stream. This allows the HalfCloser.Close to be called concurrently with writes, e.g. as required for
+	// implementations of net.Conn.
 	HalfCloser struct {
 		// pipe is the underlying Pipe, used to model the full connection, and exposed via HalfCloser.Pipe
 		pipe Pipe
 		// closePolicy configures the strategy for half-close support.
 		// E.g. may be configured with a timeout (to close it completely after a given duration).
 		closePolicy ClosePolicy
-		// ctx and cancel are initialised with the HalfCloser, and are used to free resources associated with the
-		// ClosePolicy implementations.
-		ctx context.Context
-		// cancel is for ctx.
-		cancel context.CancelFunc
 		// writeMu synchronises Write and the actual half-close part of Close.
 		writeMu sync.Mutex
 		// writingCh will be sent on write, and together with writingCount can be used to reliably determine if
@@ -44,12 +41,14 @@ type (
 	// HalfCloserOption is an option that may be provided to NewHalfCloser.
 	HalfCloserOption func(c *halfCloserConfig)
 
+	// HalfCloserOptions exposes HalfCloserOption implementations as methods, which are available via the OptHalfCloser
+	// package variable.
+	HalfCloserOptions struct{}
+
 	halfCloserConfig struct {
 		pipe        *Pipe
 		closePolicy ClosePolicy
 	}
-
-	optHalfCloser struct{}
 
 	// ClosePolicy models one of the available close behaviors, usable with HalfCloser, implemented by this package.
 	ClosePolicy interface {
@@ -75,7 +74,7 @@ type (
 
 var (
 	// OptHalfCloser exposes all the options for NewHalfCloser, available as methods.
-	OptHalfCloser optHalfCloser
+	OptHalfCloser HalfCloserOptions
 
 	// DefaultClosePolicy is the default behavior used by HalfCloser.
 	DefaultClosePolicy ClosePolicy = WaitRemote{}
@@ -88,7 +87,7 @@ var (
 	_ ClosePolicy = WaitRemoteTimeout(0)
 )
 
-func NewHalfCloser(ctx context.Context, options ...HalfCloserOption) (*HalfCloser, error) {
+func NewHalfCloser(options ...HalfCloserOption) (*HalfCloser, error) {
 	var c halfCloserConfig
 	for _, o := range options {
 		o(&c)
@@ -109,7 +108,6 @@ func NewHalfCloser(ctx context.Context, options ...HalfCloserOption) (*HalfClose
 
 	r.closePolicy = UnwrapClosePolicy(c.closePolicy)
 	r.writingCh = make(chan struct{}, 1)
-	r.ctx, r.cancel = context.WithCancel(ctx)
 
 	return &r, nil
 }
@@ -157,11 +155,21 @@ func (x *HalfCloser) Close() error { return x.CloseWithError(nil) }
 
 func (x *HalfCloser) CloseWithError(err error) error {
 	x.once.Do(func() {
-		defer x.cancel()
+		closePipe := func() func(force bool) {
+			var once sync.Once
+			return func(force bool) {
+				once.Do(func() {
+					if force || x.err != nil {
+						_ = x.pipe.Close()
+					}
+				})
+			}
+		}()
+		defer closePipe(false)
 
 		var success bool
 		defer func() {
-			if !success && x.err == nil {
+			if !success {
 				x.err = ErrPanic
 			}
 		}()
@@ -175,19 +183,22 @@ func (x *HalfCloser) CloseWithError(err error) error {
 			timeout = -1
 		}
 
-		// cancel if there is either no timeout or if the were/are any writes in progress
+		// calls x.pipe.Close if there is either no timeout or if the were/are any writes in progress
 		// this is necessary to avoid a deadlock involving the write mutex
 		select {
 		case <-x.writingCh:
 		default:
 		}
 		if atomic.LoadInt32(&x.writingCount) != 0 || timeout == 0 {
-			x.cancel()
+			closePipe(true)
 		} else {
+			// note: the below is basically an escape hatch for the x.writeMu.Lock call
 			var (
 				timer   *time.Timer
 				timerCh <-chan time.Time
+				done    = make(chan struct{})
 			)
+			defer close(done)
 			if timeout > 0 {
 				timer = time.NewTimer(timeout)
 				timerCh = timer.C
@@ -196,12 +207,18 @@ func (x *HalfCloser) CloseWithError(err error) error {
 				if timer != nil {
 					defer timer.Stop()
 				}
-				defer x.cancel()
 				select {
-				case <-x.ctx.Done():
+				case <-done:
 				case <-x.writingCh:
 				case <-timerCh:
 				}
+				select {
+				case <-done:
+					// we don't need to close, we've already stopped trying to send EOF
+					return
+				default:
+				}
+				closePipe(true)
 			}()
 		}
 
@@ -210,23 +227,25 @@ func (x *HalfCloser) CloseWithError(err error) error {
 
 		x.writeClosed = true
 
-		if err := x.pipe.Writer.CloseWithError(err); err != nil && x.ctx.Err() == nil {
-			x.err = err
-		}
-
+		x.err = x.pipe.Writer.CloseWithError(err)
 		success = true
 	})
 
 	return x.err
 }
 
-// TODO document and finish adding to optHalfCloser
-
-func (optHalfCloser) Pipe(pipe Pipe) HalfCloserOption {
+// Pipe provides an underlying Pipe for the HalfCloser, note that Pipe.Writer is required.
+//
+// This method may be accessed via the OptHalfCloser package variable.
+func (HalfCloserOptions) Pipe(pipe Pipe) HalfCloserOption {
 	return func(c *halfCloserConfig) { c.pipe = &pipe }
 }
 
-func (optHalfCloser) ClosePolicy(policy ClosePolicy) HalfCloserOption {
+// ClosePolicy configures the ClosePolicy for the HalfCloser, note that, like the Context option, unless
+// ContextWithCancel or/and CloseOnCancel are set, it will not have any significant impact on behavior.
+//
+// This method may be accessed via the OptHalfCloser package variable.
+func (HalfCloserOptions) ClosePolicy(policy ClosePolicy) HalfCloserOption {
 	return func(c *halfCloserConfig) { c.closePolicy = policy }
 }
 

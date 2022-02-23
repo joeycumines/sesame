@@ -210,7 +210,7 @@ func (*ConnPipe) RemoteAddr() net.Addr { return pipeAddr{} }
 func (p *ConnPipe) WriteTo(w io.Writer) (n int64, err error) {
 	for err == nil {
 		var nr int64
-		nr, err = p.read(func(b []byte) (int64, error) { return io.Copy(w, bytes.NewReader(b)) })
+		nr, err = p.read(func(b []byte) (int64, error) { return bytes.NewReader(b).WriteTo(w) })
 		n += nr
 	}
 	if err == io.EOF {
