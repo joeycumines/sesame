@@ -17,6 +17,12 @@ type (
 	// writes. An example scenario for this case is where EOF is implemented as part of an underlying (transport)
 	// stream. This allows the HalfCloser.Close to be called concurrently with writes, e.g. as required for
 	// implementations of net.Conn.
+	//
+	// WARNING: Though the above description of the behavior is accurate, and while this implementation explicitly
+	//          synchronises closing both the Pipe and Pipe.Writer (which will therefore only be closed at most once,
+	//          by this implementation), edge cases exist where Pipe.Writer may be closed in a way that operates
+	//          concurrently with writes. If it is important to prevent this behavior, then a guard should be
+	//          implemented, triggered by Pipe.Closer, to prevent Pipe.Writer from performing the problematic operation.
 	HalfCloser struct {
 		// pipe is the underlying Pipe, used to model the full connection, and exposed via HalfCloser.Pipe
 		pipe Pipe
@@ -70,6 +76,14 @@ type (
 	// close of the full pipe (e.g. Pipe) also triggered by the specified timeout from the start of the first half-close
 	// attempt, if not otherwise closed prior.
 	WaitRemoteTimeout time.Duration
+
+	pipeWriterCloseOnce struct {
+		pipeWriterI
+		once sync.Once
+		err  error
+	}
+
+	pipeWriterI PipeWriter
 )
 
 var (
@@ -85,6 +99,7 @@ var (
 	_ PipeWriter  = (*HalfCloser)(nil)
 	_ ClosePolicy = WaitRemote{}
 	_ ClosePolicy = WaitRemoteTimeout(0)
+	_ PipeWriter  = (*pipeWriterCloseOnce)(nil)
 )
 
 func NewHalfCloser(options ...HalfCloserOption) (*HalfCloser, error) {
@@ -155,23 +170,22 @@ func (x *HalfCloser) Close() error { return x.CloseWithError(nil) }
 
 func (x *HalfCloser) CloseWithError(err error) error {
 	x.once.Do(func() {
-		var success bool
+		pipe := x.pipe
+		pipe.Writer = &pipeWriterCloseOnce{pipeWriterI: pipe.Writer}
+
 		closePipe := func() func(force bool) {
 			var once sync.Once
 			return func(force bool) {
 				once.Do(func() {
 					if force || x.err != nil {
-						// note: we only TRY to avoid calling x.pipe.Writer.CloseWithError twice
-						pipe := x.pipe
-						if success {
-							pipe.Writer = nil
-						}
 						_ = pipe.Close()
 					}
 				})
 			}
 		}()
 		defer closePipe(false)
+
+		var success bool
 		defer func() {
 			if !success {
 				x.err = ErrPanic
@@ -231,7 +245,7 @@ func (x *HalfCloser) CloseWithError(err error) error {
 
 		x.writeClosed = true
 
-		x.err = x.pipe.Writer.CloseWithError(err)
+		x.err = pipe.Writer.CloseWithError(err)
 		success = true
 	})
 
@@ -256,3 +270,13 @@ func (HalfCloserOptions) ClosePolicy(policy ClosePolicy) HalfCloserOption {
 func (x WaitRemoteTimeout) closePolicy() ClosePolicy { return x }
 
 func (x WaitRemote) closePolicy() ClosePolicy { return x }
+
+func (x *pipeWriterCloseOnce) Close() error {
+	x.once.Do(func() { x.err = x.pipeWriterI.Close() })
+	return x.err
+}
+
+func (x *pipeWriterCloseOnce) CloseWithError(err error) error {
+	x.once.Do(func() { x.err = x.pipeWriterI.CloseWithError(err) })
+	return x.err
+}
