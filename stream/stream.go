@@ -33,6 +33,12 @@ type (
 		Closer io.Closer
 	}
 
+	// Piper models a stream that exposes an "underlying pipe", which may be used to indicate the contents and type
+	// of the stream (e.g. bidirectional vs unidirectional, which direction, etc).
+	Piper interface {
+		Pipe() Pipe
+	}
+
 	// HandlerFunc implements Handler.
 	HandlerFunc func(r PipeReader, w PipeWriter) io.Closer
 )
@@ -85,12 +91,28 @@ func Pair(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeR
 // order to support implementations with their own (presumably more effective) solutions, to the problem which SyncPipe
 // aims to solve. N.B. neither io.Pipe or net.Pipe implement io.WriterTo, though it is implemented by ionet.Pipe.
 //
+// If stream implements Piper, and has no reader (Pipe.Reader), any provided send pipe will be pre-emptively closed,
+// and omitted from the result. A nil Pipe.Writer is handled in the same manner. Note that Pipe implements default
+// behavior for reading and writing even without setting those fields. This is to avoid premature closing as a result
+// of the end-of-stream behavior.
+//
 // This implementation is compatible with HalfCloser.
 //
 // See also ionet.Wrap and ionet.WrapPipe.
 func Wrap(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeReader, receiveWriter PipeWriter) func(stream io.ReadWriteCloser) Pipe {
 	return func(receiveReader PipeReader, receiveWriter PipeWriter) func(stream io.ReadWriteCloser) Pipe {
 		return func(stream io.ReadWriteCloser) Pipe {
+			if piper, ok := stream.(Piper); ok {
+				pipe := piper.Pipe()
+				if pipe.Reader == nil && (sendReader != nil || sendWriter != nil) {
+					_ = sendWriter.Close()
+					sendReader, sendWriter = nil, nil
+				}
+				if pipe.Writer == nil && (receiveReader != nil || receiveWriter != nil) {
+					_ = receiveWriter.Close()
+					receiveReader, receiveWriter = nil, nil
+				}
+			}
 			if receiveReader != nil || receiveWriter != nil {
 				if _, ok := receiveReader.(io.WriterTo); !ok {
 					receiveReader, receiveWriter = SyncPipe(receiveReader, receiveWriter)
@@ -187,6 +209,9 @@ func joinCopy(wg interface{ Done() }, stream io.Closer, pipe PipeCloser, dst io.
 		alwaysCallClosersOrdered(&err, s)
 	}
 }
+
+// Pipe implements Piper.
+func (x Pipe) Pipe() Pipe { return x }
 
 // Read passes through to Reader, or returns io.EOF if Reader is nil.
 func (x Pipe) Read(p []byte) (n int, err error) {

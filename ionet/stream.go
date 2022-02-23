@@ -28,9 +28,11 @@ var (
 
 // Wrap uses stream.Wrap to implement net.Conn using an io.ReadWriteCloser.
 //
-// If conn is a stream.Pipe or implements `interface{ Pipe() stream.Pipe }`, and has no reader (stream.Pipe.Reader),
-// the returned conn will correctly match the io.EOF behavior. A nil stream.Pipe.Writer is handled in a similar manner,
-// though that case will result in io.ErrClosedPipe.
+// If conn is a stream.Pipe or implements `interface{ Pipe() stream.Pipe }` (stream.Piper), and has no reader
+// (stream.Pipe.Reader), the returned conn will correctly match the io.EOF behavior. A nil stream.Pipe.Writer is
+// handled in a similar manner, though that case will result in io.ErrClosedPipe.
+//
+// See also stream.Wrap.
 func Wrap(conn io.ReadWriteCloser) net.Conn {
 	if conn == nil {
 		panic(`sesame/ionet: expected non-nil conn`)
@@ -44,38 +46,16 @@ func Wrap(conn io.ReadWriteCloser) net.Conn {
 			ioReadWriteCloser
 		}
 	)
-	var (
-		c1, c2                    = Pipe()
-		sendReader, receiveReader stream.PipeReader
-		sendWriter, receiveWriter stream.PipeWriter
-	)
-	sendReader, sendWriter = c2.SendPipe()
-	receiveReader, receiveWriter = c2.ReceivePipe()
-	{
-		pipe, ok := conn.(stream.Pipe)
-		if !ok {
-			if wrapper, okWrapper := conn.(piperI); okWrapper {
-				pipe, ok = wrapper.Pipe(), true
-			}
-		}
-		if ok {
-			if pipe.Reader == nil {
-				_ = sendWriter.Close()
-				sendReader, sendWriter = nil, nil
-			}
-			if pipe.Writer == nil {
-				_ = receiveWriter.Close()
-				receiveReader, receiveWriter = nil, nil
-			}
-		}
-	}
+	c1, c2 := Pipe()
 	return &netStream{
 		nestedConnPipe2:   nestedConnPipe2{nestedConnPipe1{netConn: c1}},
-		ioReadWriteCloser: stream.Wrap(sendReader, sendWriter)(receiveReader, receiveWriter)(conn),
+		ioReadWriteCloser: stream.Wrap(c2.SendPipe())(c2.ReceivePipe())(conn),
 	}
 }
 
 // WrapPipe extends Wrap with support for stream.HalfCloser.
+//
+// See also stream.Wrap.
 func WrapPipe(conn stream.Pipe, options ...stream.HalfCloserOption) (*WrappedPipe, error) {
 	const c = 1
 	o := make([]stream.HalfCloserOption, c, len(options)+c)
