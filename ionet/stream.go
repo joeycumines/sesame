@@ -70,14 +70,14 @@ func (x *WrappedPipe) Pipe() stream.Pipe { return x.halfCloser.Pipe() }
 
 func (x *WrappedPipe) Close() (err error) {
 	defer func() {
-		pipe := x.Pipe()
-		// avoid multiple closes, grab any cached error
-		// note it should always have been called prior to this
-		pipe.Writer = x.halfCloser
-		if e := pipe.Close(); err == nil {
+		if e := x.netConn.Close(); err == nil {
 			err = e
 		}
 	}()
-	err = x.netConn.Close()
+	pipe := x.Pipe()
+	// avoid multiple closes, grab any cached error
+	// note it should always have been called prior to this
+	pipe.Writer = x.halfCloser
+	err = pipe.Close()
 	return
 }
