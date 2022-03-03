@@ -312,6 +312,12 @@ func (p *ConnPipe) write(b []byte) (n int, err error) {
 		p.wrMsg = nil
 	}
 
+	{
+		c := make([]byte, len(b))
+		copy(c, b)
+		b = c
+	}
+
 	for once := true; err == nil && (once || len(b) > 0); once = false {
 		p.wrMsg = &wrMsg{
 			wr:   b,
