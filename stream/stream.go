@@ -61,7 +61,8 @@ var (
 //
 // Depending on use case, it may be desirable to "synchronise" either or both of the sender and receiver pipes, using
 // SyncPipe, the results of which can be used directly in each closure. Similar behavior can also be achieved by
-// implementations which implement io.WriterTo in a way that blocks writes until the end of read, e.g. ionet.Pipe.
+// implementations which implement io.WriterTo in a way that blocks writes until EITHER the end of read OR close of the
+// write side of the pipe, e.g. ionet.Pipe.
 func Pair(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeReader, receiveWriter PipeWriter) (local, remote Pipe) {
 	return func(receiveReader PipeReader, receiveWriter PipeWriter) (local, remote Pipe) {
 		local = Pipe{
@@ -146,12 +147,6 @@ func Handle(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader Pip
 // error from stream takes priority (in the returned closer).
 func Join(stream io.ReadWriteCloser) Handler {
 	return HandlerFunc(func(reader PipeReader, writer PipeWriter) (closer io.Closer) {
-		// ensure stream doesn't implement io.WriterTo or io.ReaderFrom, as the bidirectional copying + nested
-		// blocking behavior may introduce deadlocks
-		type ioReadWriteCloser1 io.ReadWriteCloser
-		type ioReadWriteCloser2 struct{ ioReadWriteCloser1 }
-		stream = ioReadWriteCloser2{stream}
-
 		var wg sync.WaitGroup
 
 		// initial add to prevent done before init, and to avoid panic if both reader and writer are nil

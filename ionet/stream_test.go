@@ -20,9 +20,17 @@ func TestWrapPipe_pipeWriterSafe(t *testing.T) {
 			Name: `racey`,
 			Init: func() (add func(v string), get func() []string) {
 				var (
+					mu     sync.RWMutex
 					values []string
 				)
 				add = func(v string) {
+					if v == `c` {
+						mu.Lock()
+						defer mu.Unlock()
+					} else {
+						mu.RLock()
+						defer mu.RUnlock()
+					}
 					values = append(values, v)
 				}
 				get = func() []string {
@@ -160,7 +168,11 @@ func TestWrapPipe_pipeWriterSafe(t *testing.T) {
 				}
 			}
 			if last != `c` {
-				t.Error(last)
+				var recent []string
+				for i := len(values) - 1; i >= 0 && len(recent) < 5; i-- {
+					recent = append(recent, values[i])
+				}
+				t.Errorf(`unexpected last value %q in recent values: %q`, last, recent)
 			}
 		})
 	}

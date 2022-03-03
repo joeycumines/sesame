@@ -104,6 +104,8 @@ type (
 
 var (
 	_ net.Conn          = (*ConnPipe)(nil)
+	_ io.WriterTo       = (*ConnPipe)(nil)
+	_ io.WriterTo       = (*ConnPipeReader)(nil)
 	_ stream.PipeReader = (*ConnPipeReader)(nil)
 	_ stream.PipeWriter = (*ConnPipeWriter)(nil)
 )
@@ -208,13 +210,38 @@ func (*ConnPipe) LocalAddr() net.Addr  { return pipeAddr{} }
 func (*ConnPipe) RemoteAddr() net.Addr { return pipeAddr{} }
 
 func (p *ConnPipe) WriteTo(w io.Writer) (n int64, err error) {
-	for err == nil {
-		var nr int64
-		nr, err = p.read(func(b []byte) (int64, error) { return bytes.NewReader(b).WriteTo(w) })
-		n += nr
+	type R struct {
+		N   int64
+		Err error
 	}
-	if err == io.EOF {
-		err = nil
+	ch := make(chan R)
+	for err == nil {
+		var (
+			nr int64
+			ok bool
+		)
+		nr, err = p.read(func(b []byte) (int64, error) {
+			ok = true
+			go func() {
+				r := R{0, stream.ErrPanic}
+				defer func() { ch <- r }()
+				r.N, r.Err = bytes.NewReader(b).WriteTo(w)
+			}()
+			select {
+			case <-p.remote.done:
+				// the write side of the pipe is closed - there's no more data to be sent, so we need to immediately
+				// unblock the writer, otherwise it may deadlock
+				return int64(len(b)), nil
+			case r := <-ch:
+				ok = false
+				return r.N, r.Err
+			}
+		})
+		if ok {
+			r := <-ch
+			nr, err = r.N, r.Err
+		}
+		n += nr
 	}
 	return
 }
