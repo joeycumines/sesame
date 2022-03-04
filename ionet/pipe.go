@@ -53,10 +53,9 @@ import (
 
 type (
 	ConnPipe struct {
-		wrMu  sync.Mutex
-		wrMsg *wrMsg
-		wrCh  chan []byte
-		rdCh  chan rdMsg
+		wrMu sync.Mutex
+		wrCh chan wrMsg
+		rdCh chan rdMsg
 
 		once sync.Once // Protects closing done
 		done chan struct{}
@@ -96,9 +95,8 @@ type (
 	}
 
 	wrMsg struct {
-		wr   []byte
-		rd   rdMsg
-		done chan struct{}
+		wr       []byte
+		deadline chan struct{}
 	}
 )
 
@@ -117,14 +115,14 @@ var (
 // buffering.
 func Pipe() (c1 *ConnPipe, c2 *ConnPipe) {
 	c1 = &ConnPipe{
-		wrCh:          make(chan []byte),
+		wrCh:          make(chan wrMsg),
 		rdCh:          make(chan rdMsg),
 		done:          make(chan struct{}),
 		readDeadline:  makePipeDeadline(),
 		writeDeadline: makePipeDeadline(),
 	}
 	c2 = &ConnPipe{
-		wrCh:          make(chan []byte),
+		wrCh:          make(chan wrMsg),
 		rdCh:          make(chan rdMsg),
 		done:          make(chan struct{}),
 		readDeadline:  makePipeDeadline(),
@@ -220,18 +218,21 @@ func (p *ConnPipe) WriteTo(w io.Writer) (n int64, err error) {
 			nr int64
 			ok bool
 		)
-		nr, err = p.read(func(b []byte) (int64, error) {
+		nr, err = p.read(func(msg wrMsg) (int64, error) {
 			ok = true
 			go func() {
 				r := R{0, stream.ErrPanic}
 				defer func() { ch <- r }()
-				r.N, r.Err = bytes.NewReader(b).WriteTo(w)
+				r.N, r.Err = bytes.NewReader(msg.wr).WriteTo(w)
 			}()
 			select {
 			case <-p.remote.done:
 				// the write side of the pipe is closed - there's no more data to be sent, so we need to immediately
 				// unblock the writer, otherwise it may deadlock
-				return int64(len(b)), nil
+				return int64(len(msg.wr)), nil
+			case <-msg.deadline:
+				// same deal as above
+				return int64(len(msg.wr)), nil
 			case r := <-ch:
 				ok = false
 				return r.N, r.Err
@@ -247,12 +248,12 @@ func (p *ConnPipe) WriteTo(w io.Writer) (n int64, err error) {
 }
 
 func (p *ConnPipe) Read(b []byte) (int, error) {
-	n, err := p.read(func(bw []byte) (int64, error) { return int64(copy(b, bw)), nil })
+	n, err := p.read(func(msg wrMsg) (int64, error) { return int64(copy(b, msg.wr)), nil })
 	return int(n), err
 }
 
 // read is implemented on the opposite side, due to the way the deadline and pipe state is structured
-func (p *ConnPipe) read(fn func(b []byte) (int64, error)) (n int64, err error) {
+func (p *ConnPipe) read(fn func(msg wrMsg) (int64, error)) (n int64, err error) {
 	var noWrap bool
 	defer func() {
 		if !noWrap && err != nil && err != io.EOF && err != io.ErrClosedPipe {
@@ -268,8 +269,8 @@ func (p *ConnPipe) read(fn func(b []byte) (int64, error)) (n int64, err error) {
 	}
 
 	select {
-	case b := <-p.remote.wrCh:
-		n, err = fn(b)
+	case msg := <-p.remote.wrCh:
+		n, err = fn(msg)
 		if err != nil {
 			noWrap = true
 		}
@@ -301,17 +302,7 @@ func (p *ConnPipe) write(b []byte) (n int, err error) {
 	p.wrMu.Lock() // Ensure entirety of b is written together
 	defer p.wrMu.Unlock()
 
-	if p.wrMsg != nil {
-		select {
-		case <-p.done:
-			return 0, p.localWriteError()
-		case <-p.writeDeadline.wait():
-			return 0, os.ErrDeadlineExceeded
-		case <-p.wrMsg.done:
-		}
-		p.wrMsg = nil
-	}
-
+	// TODO move this to WriteTo
 	{
 		c := make([]byte, len(b))
 		copy(c, b)
@@ -319,54 +310,24 @@ func (p *ConnPipe) write(b []byte) (n int, err error) {
 	}
 
 	for once := true; err == nil && (once || len(b) > 0); once = false {
-		p.wrMsg = &wrMsg{
-			wr:   b,
-			done: make(chan struct{}),
+		msg := wrMsg{
+			wr:       b,
+			deadline: p.writeDeadline.wait(),
 		}
-		go p.handleWrite(p.wrMsg)
 		select {
-		case <-p.wrMsg.done:
-			b = b[p.wrMsg.rd.n:]
-			n += p.wrMsg.rd.n
-			err = p.wrMsg.rd.err
-			p.wrMsg = nil
+		case p.wrCh <- msg:
+			msg := <-p.rdCh
+			b = b[msg.n:]
+			n += msg.n
+			err = msg.err
 		case <-p.done:
-			// if the other end is also closing, we can wait for that as well
-			select {
-			case <-p.remote.done:
-				select {
-				case <-p.wrMsg.done:
-					b = b[p.wrMsg.rd.n:]
-					n += p.wrMsg.rd.n
-					err = p.wrMsg.rd.err
-					p.wrMsg = nil
-				case <-p.writeDeadline.wait():
-					err = os.ErrDeadlineExceeded
-				}
-			default:
-				err = p.localWriteError()
-			}
-		case <-p.writeDeadline.wait():
+			err = p.localWriteError()
+		case <-msg.deadline:
 			err = os.ErrDeadlineExceeded
 		}
 	}
 
 	return
-}
-
-func (p *ConnPipe) handleWrite(msg *wrMsg) {
-	defer func() {
-		msg.wr = nil
-		close(msg.done)
-	}()
-	select {
-	case p.wrCh <- msg.wr:
-		msg.rd = <-p.rdCh
-	case <-p.done:
-		msg.rd = rdMsg{0, p.localWriteError()}
-	case <-p.writeDeadline.wait():
-		msg.rd = rdMsg{0, os.ErrDeadlineExceeded}
-	}
 }
 
 func (p *ConnPipe) SetDeadline(t time.Time) (err error) {
@@ -399,26 +360,35 @@ func (p *ConnPipe) SetWriteDeadline(t time.Time) error {
 func (p *ConnPipe) Close() error {
 	// close local write and remote read
 	// (closes pipes in both directions)
-	// NOTE it's important to close remote read first, due to the behavior of write
-	_ = p.remote.closeRemoteRead(nil)
-	_ = p.closeLocalWrite(nil)
+	p.storeLocalWriteError(nil)
+	p.remote.storeRemoteReadError(nil)
+	p.closeDone()
+	p.remote.closeDone()
 	return nil
 }
 
-func (p *ConnPipe) closeLocalWrite(err error) error {
+func (p *ConnPipe) storeLocalWriteError(err error) {
 	if err == nil {
 		err = io.EOF
 	}
 	p.werr.Store(err)
+}
+
+func (p *ConnPipe) storeRemoteReadError(err error) {
+	if err == nil {
+		err = io.ErrClosedPipe
+	}
+	p.rerr.Store(err)
+}
+
+func (p *ConnPipe) closeLocalWrite(err error) error {
+	p.storeLocalWriteError(err)
 	p.closeDone()
 	return nil
 }
 
 func (p *ConnPipe) closeRemoteRead(err error) error {
-	if err == nil {
-		err = io.ErrClosedPipe
-	}
-	p.rerr.Store(err)
+	p.storeRemoteReadError(err)
 	p.closeDone()
 	return nil
 }

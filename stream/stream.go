@@ -147,6 +147,13 @@ func Handle(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader Pip
 // error from stream takes priority (in the returned closer).
 func Join(stream io.ReadWriteCloser) Handler {
 	return HandlerFunc(func(reader PipeReader, writer PipeWriter) (closer io.Closer) {
+		// TODO consider re-enabling this or deleting it
+		// ensure stream doesn't implement io.WriterTo or io.ReaderFrom, as the bidirectional copying + nested
+		// blocking behavior is significantly more likely to cause deadlock issues (it's hard to implement safely)
+		//type ioReadWriteCloser1 io.ReadWriteCloser
+		//type ioReadWriteCloser2 struct{ ioReadWriteCloser1 }
+		//stream = ioReadWriteCloser2{stream}
+
 		var wg sync.WaitGroup
 
 		// initial add to prevent done before init, and to avoid panic if both reader and writer are nil
