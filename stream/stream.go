@@ -107,10 +107,12 @@ func Wrap(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeR
 				pipe := piper.Pipe()
 				if pipe.Reader == nil && (sendReader != nil || sendWriter != nil) {
 					_ = sendWriter.Close()
+					_ = sendReader.Close()
 					sendReader, sendWriter = nil, nil
 				}
 				if pipe.Writer == nil && (receiveReader != nil || receiveWriter != nil) {
 					_ = receiveWriter.Close()
+					_ = receiveReader.Close()
 					receiveReader, receiveWriter = nil, nil
 				}
 			}
