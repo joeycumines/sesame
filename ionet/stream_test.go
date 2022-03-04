@@ -103,7 +103,9 @@ func TestWrapPipe_pipeWriterSafe(t *testing.T) {
 			wg.Add(1)
 			stop := make(chan struct{})
 
-			for i := 0; i < 50; i++ {
+			const countWriters = 50
+
+			for i := 0; i < countWriters; i++ {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
@@ -183,7 +185,7 @@ func TestWrapPipe_pipeWriterSafe(t *testing.T) {
 					t.Fatal(last)
 				}
 			}
-			if offset == nil || *offset > 2 {
+			if offset == nil || *offset > countWriters+1 {
 				var ov int
 				if offset != nil {
 					ov = *offset
