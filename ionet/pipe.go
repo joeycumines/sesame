@@ -219,6 +219,12 @@ func (p *ConnPipe) WriteTo(w io.Writer) (n int64, err error) {
 			ok bool
 		)
 		nr, err = p.read(func(msg wrMsg) (int64, error) {
+			{
+				// make a copy of the input as we may use it outside the write call
+				b := make([]byte, len(msg.wr))
+				copy(b, msg.wr)
+				msg.wr = b
+			}
 			ok = true
 			go func() {
 				r := R{0, stream.ErrPanic}
@@ -301,13 +307,6 @@ func (p *ConnPipe) write(b []byte) (n int, err error) {
 
 	p.wrMu.Lock() // Ensure entirety of b is written together
 	defer p.wrMu.Unlock()
-
-	// TODO move this to WriteTo
-	{
-		c := make([]byte, len(b))
-		copy(c, b)
-		b = c
-	}
 
 	for once := true; err == nil && (once || len(b) > 0); once = false {
 		msg := wrMsg{
