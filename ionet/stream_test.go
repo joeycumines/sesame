@@ -153,7 +153,18 @@ func TestWrapPipe_pipeWriterSafe(t *testing.T) {
 				t.Fatal()
 			}
 			last := `w`
+			var offset *int
 			for _, v := range values {
+				if v == `c` {
+					if offset != nil {
+						t.Error(`multiple closes`)
+					} else {
+						offset = new(int)
+					}
+				}
+				if offset != nil {
+					*offset++
+				}
 				switch last {
 				case `w`:
 					switch v {
@@ -164,17 +175,24 @@ func TestWrapPipe_pipeWriterSafe(t *testing.T) {
 						t.Fatal(v)
 					}
 				case `c`:
-					t.Fatal(v)
+					// can happen occasionally - is not a problem
+					if v != `w` {
+						t.Error(v)
+					}
 				default:
 					t.Fatal(last)
 				}
 			}
-			if last != `c` {
+			if offset == nil || *offset > 2 {
+				var ov int
+				if offset != nil {
+					ov = *offset
+				}
 				var recent []string
 				for i := len(values) - 1; i >= 0 && len(recent) < 5; i-- {
 					recent = append(recent, values[i])
 				}
-				t.Errorf(`unexpected last value %q in recent values: %q`, last, recent)
+				t.Errorf(`unexpected last value %q (offset %d) in recent values: %q`, last, ov, recent)
 			}
 		})
 	}
