@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 )
 
 type (
@@ -30,6 +31,8 @@ type (
 		w      PipeWriter
 		mu     sync.RWMutex
 		wakeup chan<- struct{}
+		// size is used to track the data that was written but is yet to be read
+		size *int64
 	}
 
 	syncPipeReader struct {
@@ -107,7 +110,7 @@ func alwaysCallClosersOrdered(err *error, closers ...io.Closer) {
 	}
 }
 
-func (x *syncPipe) sleep() <-chan struct{} {
+func (x *syncPipe) sleep(size int64) <-chan struct{} {
 	ch := make(chan struct{}, 1)
 	x.mu.Lock()
 	defer x.mu.Unlock()
@@ -116,35 +119,91 @@ func (x *syncPipe) sleep() <-chan struct{} {
 	default:
 	}
 	x.wakeup = ch
+	x.size = &size
 	return ch
 }
 
 func (x *syncPipe) notify() {
-	x.mu.RLock()
-	defer x.mu.RUnlock()
+	if x.size != nil {
+		atomic.StoreInt64(x.size, 0)
+	}
 	select {
 	case x.wakeup <- struct{}{}:
 	default:
 	}
 }
 
+func (x *syncPipe) notifyClose() {
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	x.notify()
+}
+
+func (x *syncPipe) notifyRead() func(n int, err error) {
+	var (
+		size   *int64
+		wakeup chan<- struct{}
+	)
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	if x.size != nil && atomic.LoadInt64(x.size) > 0 {
+		// we have a write that's pending read
+		size, wakeup = x.size, x.wakeup
+	} else {
+		// notify the _previous_ write
+		x.notify()
+	}
+	return func(n int, err error) {
+		notify := func() (ok bool) {
+			if wakeup == nil {
+				return
+			}
+			ok = true
+			if size != nil {
+				if atomic.AddInt64(size, -int64(n)) <= -int64(n) {
+					// was already <= 0, we notify, and return false to also handle x.wakeup
+					// (the case where the read started prior to write)
+					ok = false
+				} else if err == nil {
+					// don't notify until the next read
+					return
+				}
+			}
+			select {
+			case wakeup <- struct{}{}:
+			default:
+			}
+			return
+		}
+		if notify() {
+			return
+		}
+		x.mu.RLock()
+		size, wakeup = x.size, x.wakeup
+		x.mu.RUnlock()
+		notify()
+	}
+}
+
 func (x syncPipeReader) Read(p []byte) (n int, err error) {
-	defer x.notify()
+	err = ErrPanic
+	notifyRead := x.notifyRead()
+	defer func() { notifyRead(n, err) }()
 	return x.r.Read(p)
 }
 
 func (x syncPipeReader) Close() error {
-	defer x.notify()
+	defer x.notifyClose()
 	return x.r.Close()
 }
 
 func (x syncPipeReader) CloseWithError(err error) error {
-	defer x.notify()
+	defer x.notifyClose()
 	return x.r.CloseWithError(err)
 }
 
 func (x syncPipeWriter) Write(p []byte) (n int, err error) {
-	sleep := x.sleep()
+	sleep := x.sleep(int64(len(p)))
 	n, err = x.w.Write(p)
 	if err == nil && n > 0 {
 		<-sleep
@@ -153,12 +212,12 @@ func (x syncPipeWriter) Write(p []byte) (n int, err error) {
 }
 
 func (x syncPipeWriter) Close() error {
-	defer x.notify()
+	defer x.notifyClose()
 	return x.w.Close()
 }
 
 func (x syncPipeWriter) CloseWithError(err error) error {
-	defer x.notify()
+	defer x.notifyClose()
 	return x.w.CloseWithError(err)
 }
 
