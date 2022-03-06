@@ -272,7 +272,7 @@ func TestWrap_basicIO(t *testing.T) {
 				localHalfCloserR, localHalfCloserW int64
 				localPipeR, localPipeW             int64
 			)
-			local, remote := Pair(SyncPipe(io.Pipe()))(SyncPipe(io.Pipe()))
+			local, remote := Pair(io.Pipe())(io.Pipe())
 			localHalfCloser, err := NewHalfCloser(fn(Pipe{
 				Reader: trackPipeReaderSize(local.Reader, &localR),
 				Writer: trackPipeWriterSize(local.Writer, &localW),
@@ -311,7 +311,7 @@ func TestWrap_basicIO(t *testing.T) {
 					remoteR, remoteW       int64
 					localPipeR, localPipeW int64
 				)
-				local, remote := Pair(SyncPipe(io.Pipe()))(SyncPipe(io.Pipe()))
+				local, remote := Pair(io.Pipe())(io.Pipe())
 				localPipe := Wrap(io.Pipe())(io.Pipe())(trackReadWriteCloserSize(naiveHalfCloser{local}, &localR, &localW))
 				if localPipe.Closer == nil {
 					t.Fatal()

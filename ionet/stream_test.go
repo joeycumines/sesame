@@ -305,7 +305,7 @@ func TestWrap_nettest(t *testing.T) {
 			Name: `stream pair io pipe`,
 			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
-					a, b := stream.Pair(stream.SyncPipe(io.Pipe()))(stream.SyncPipe(io.Pipe()))
+					a, b := stream.Pair(io.Pipe())(io.Pipe())
 					c1, c2 = Wrap(a), Wrap(b)
 					stop = func() {
 						_ = c1.Close()
@@ -319,7 +319,31 @@ func TestWrap_nettest(t *testing.T) {
 			Name: `stream pair io pipe half closer`,
 			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
-					a, b := stream.Pair(stream.SyncPipe(io.Pipe()))(stream.SyncPipe(io.Pipe()))
+					a, b := stream.Pair(io.Pipe())(io.Pipe())
+					ac, err := WrapPipe(stream.OptHalfCloser.Pipe(a))
+					if err != nil {
+						t.Fatal(err)
+					}
+					bc, err := WrapPipe(stream.OptHalfCloser.Pipe(b))
+					if err != nil {
+						t.Fatal(err)
+					}
+					c1, c2 = ac, bc
+					stop = func() {
+						_ = c1.Close()
+						_ = c2.Close()
+					}
+					return
+				}
+			},
+		},
+		{
+			// same as above just using this package's pipe impl
+			Name: `stream pair ionet pipe half closer`,
+			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+					p, _ := Pipe()
+					a, b := stream.Pair(p.SendPipe())(p.ReceivePipe())
 					ac, err := WrapPipe(stream.OptHalfCloser.Pipe(a))
 					if err != nil {
 						t.Fatal(err)
