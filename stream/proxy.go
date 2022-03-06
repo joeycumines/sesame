@@ -14,9 +14,12 @@ type (
 )
 
 // Proxy connects two bidirectional streams, where local should be the initiator of the connection.
+//
 // This implementation can support local-initiated partial close, in which case remote.Close should only close remote's
 // writer (called on io.EOF from local's reader). If remote returns io.EOF, or copying fails, then remote.Close will
 // be called, but the send operation (copying from local to remote) WILL NOT be waited for.
+//
+// The local side should be closed by the caller, after this function returns.
 func Proxy(ctx context.Context, local io.ReadWriter, remote io.ReadWriteCloser) (err error) {
 	send, receive := copyBidirectional(local, remote)
 	_, _, err = waitCopy(ctx, send, receive, remote)

@@ -70,13 +70,14 @@ func (x *WrappedPipe) Pipe() stream.Pipe { return x.halfCloser.Pipe() }
 
 func (x *WrappedPipe) Close() (err error) {
 	defer func() {
+		// closes the other sides of the pipes + x.halfCloser (again, will do nothing)
+		// then waits for copying to finish, between the underlying stream.Pipe and the wrapper pipes
 		if e := x.netConn.Close(); err == nil {
 			err = e
 		}
 	}()
 	pipe := x.Pipe()
 	// avoid multiple closes, grab any cached error
-	// note it should always have been called prior to this
 	pipe.Writer = x.halfCloser
 	err = pipe.Close()
 	return

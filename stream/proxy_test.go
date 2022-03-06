@@ -63,7 +63,7 @@ func TestProxy_bidirectionalHalfClose(t *testing.T) {
 			}
 			if len(d) > 0 {
 				if n, err := w.Write(d); err != nil || n != len(d) {
-					t.Fatal(n, err)
+					t.Fatalf(`fatal: not send: %v %v`, n, err)
 				}
 			}
 		}
@@ -72,7 +72,7 @@ func TestProxy_bidirectionalHalfClose(t *testing.T) {
 	receive := func(r *bufio.Scanner, line string) {
 		t.Helper()
 		if !r.Scan() {
-			t.Fatal(r.Err())
+			t.Fatalf(`fatal: not receive: %v`, r.Err())
 		}
 		if v := r.Text(); v != line {
 			t.Fatalf("unexpected line: %q\n%s", v, strings.TrimSpace(v))

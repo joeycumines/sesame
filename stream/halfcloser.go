@@ -150,6 +150,13 @@ func (x *HalfCloser) Pipe() Pipe { return x.pipe }
 func (x *HalfCloser) Read(b []byte) (int, error) { return x.pipe.Read(b) }
 
 func (x *HalfCloser) Write(b []byte) (int, error) {
+	x.writeMu.Lock()
+	defer x.writeMu.Unlock()
+
+	if x.writeClosed {
+		return 0, io.ErrClosedPipe
+	}
+
 	// writingCount must be on the outside, so that writingCh can be cleared
 	// prior to checking writingCount
 	atomic.AddInt32(&x.writingCount, 1)
@@ -158,11 +165,7 @@ func (x *HalfCloser) Write(b []byte) (int, error) {
 	case x.writingCh <- struct{}{}:
 	default:
 	}
-	x.writeMu.Lock()
-	defer x.writeMu.Unlock()
-	if x.writeClosed {
-		return 0, io.ErrClosedPipe
-	}
+
 	return x.pipe.Write(b)
 }
 
@@ -201,6 +204,9 @@ func (x *HalfCloser) CloseWithError(err error) error {
 			timeout = -1
 		}
 
+		// may be initialised below, in which case it'll be closed just before releasing the write mutex
+		var done chan struct{}
+
 		// calls x.pipe.Close if there is either no timeout or if the were/are any writes in progress
 		// this is necessary to avoid a deadlock involving the write mutex
 		select {
@@ -211,12 +217,11 @@ func (x *HalfCloser) CloseWithError(err error) error {
 			closePipe(true)
 		} else {
 			// note: the below is basically an escape hatch for the x.writeMu.Lock call
+			done = make(chan struct{}) // close will be deferred
 			var (
 				timer   *time.Timer
 				timerCh <-chan time.Time
-				done    = make(chan struct{})
 			)
-			defer close(done)
 			if timeout > 0 {
 				timer = time.NewTimer(timeout)
 				timerCh = timer.C
@@ -242,6 +247,11 @@ func (x *HalfCloser) CloseWithError(err error) error {
 
 		x.writeMu.Lock()
 		defer x.writeMu.Unlock()
+
+		if done != nil {
+			// important to do this prior to releasing the mutex
+			defer close(done)
+		}
 
 		x.writeClosed = true
 
