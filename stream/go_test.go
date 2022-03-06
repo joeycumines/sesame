@@ -62,9 +62,11 @@ func testBasicIO(t *testing.T, c1, c2 io.ReadWriteCloser) {
 		if err := smallChunkedCopy(c1, rd); err != nil {
 			t.Errorf("unexpected c1.Write error: %v", err)
 		}
+		t.Log(`writer finished`)
 		if err := c1.Close(); err != nil {
 			t.Errorf("unexpected c1.Close error: %v", err)
 		}
+		t.Log(`writer closed`)
 	}()
 
 	go func() {
@@ -72,9 +74,11 @@ func testBasicIO(t *testing.T, c1, c2 io.ReadWriteCloser) {
 		if err := smallChunkedCopy(wr, c2); err != nil {
 			t.Errorf("unexpected c2.Read error: %v", err)
 		}
+		t.Log(`reader finished`)
 		if err := c2.Close(); err != nil {
 			t.Errorf("unexpected c2.Close error: %v", err)
 		}
+		t.Log(`reader closed`)
 		dataCh <- wr.Bytes()
 	}()
 
