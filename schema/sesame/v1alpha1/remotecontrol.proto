@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package sesame.v1alpha1;
+
+import "google/protobuf/duration.proto";
+import "sesame/type/netaddr.proto";
+
+option go_package = "github.com/joeycumines/sesame/rc";
+
+// RemoteControl implements methods that function as proxy implementations, where the server is the remote device, the
+// proxy endpoint.
+service RemoteControl {
+    // NetConn implements a remote dialer, which may be used for a variety of purposes, including forwarding to other
+    // gRPC services running in the same (server) process.
+    //
+    // If the server doesn't support this method, it returns `UNIMPLEMENTED`.
+    //
+    // The message flow is:
+    //
+    //     1. NetConnRequest.dial
+    //     2. NetConnResponse.conn
+    //     3. Any number of NetConnRequest.bytes and NetConnResponse.bytes
+    //     4. Termination
+    //         i. Graceful (client initiated)
+    //             a. Initiated by grpc.ClientStream.CloseSend
+    //             b. After processing all received messages the server initiates (full) connection close of the
+    //                proxy target
+    //             c. All data read from the proxy target is sent to the client
+    //             d. The connection is closed by the server
+    //         ii. Proxy target initiated
+    //             a. The proxy target connection closes
+    //             b. All buffered data received from the proxy target is sent to the client
+    //             c. An error is propagated to the client
+    //         iii. Server initiated
+    //             a. The server encounters an error (e.g. due to context cancel)
+    //             b. The proxy target connection is closed
+    //             c. An error is propagated to the client (though there are common cases where it's already gone)
+    rpc NetConn (stream NetConnRequest) returns (stream NetConnResponse) {}
+}
+
+// NetConnRequest models a message sent from a RemoteControl.NetConn client to the server.
+// See also documentation of that method.
+message NetConnRequest {
+    message Dial {
+        type.NetAddr address = 1;
+        google.protobuf.Duration timeout = 2;
+    }
+    oneof data {
+        Dial dial = 1;
+        bytes bytes = 2;
+    };
+}
+
+// NetConnResponse models a message sent from a RemoteControl.NetConn server to the client.
+// See also documentation of that method.
+message NetConnResponse {
+    message Conn {
+        type.NetAddr local = 1;
+        type.NetAddr remote = 2;
+    }
+    oneof data {
+        Conn conn = 1;
+        bytes bytes = 2;
+    };
+}
