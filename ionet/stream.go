@@ -70,15 +70,25 @@ func (x *WrappedPipe) Pipe() stream.Pipe { return x.halfCloser.Pipe() }
 
 func (x *WrappedPipe) Close() (err error) {
 	defer func() {
-		// closes the other sides of the pipes + x.halfCloser (again, will do nothing)
-		// then waits for copying to finish, between the underlying stream.Pipe and the wrapper pipes
+		// Close the internal pipes (connecting to what was wrapped), then wait for copying to finish.
+		// WARNING This is AFTER closing the other (wrapped / caller provided) side due to it waiting for copying to
+		//         finish. That is, unless both sides of the copying process are closed and have net.Conn-like
+		//         semantics, it may block forever, waiting for the copying to finish.
 		if e := x.netConn.Close(); err == nil {
+			// note: this is the least interesting error
 			err = e
 		}
 	}()
-	pipe := x.Pipe()
-	// avoid multiple closes, grab any cached error
-	pipe.Writer = x.halfCloser
-	err = pipe.Close()
+	defer func() {
+		// close the remaining parts of the wrapped pipe (everything except the half closer)
+		// it's possible that this has already occurred, e.g. if the stream.PipeWriter returned an error
+		pipe := x.Pipe()
+		// avoid multiple closes, grab any cached error (will only ever propagate any error)
+		pipe.Writer = x.halfCloser
+		// note: error priority is like pipe.Writer > pipe.Reader > pipe.Closer
+		err = pipe.Close()
+	}()
+	// note we'll grab any error for this in a bit
+	_ = x.halfCloser.Close()
 	return
 }

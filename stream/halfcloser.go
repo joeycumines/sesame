@@ -19,10 +19,10 @@ type (
 	// implementations of net.Conn.
 	//
 	// WARNING: Though the above description of the behavior is accurate, and while this implementation explicitly
-	//          synchronises closing both the Pipe and Pipe.Writer (which will therefore only be closed at most once,
-	//          by this implementation), edge cases exist where Pipe.Writer may be closed in a way that operates
-	//          concurrently with writes. If it is important to prevent this behavior, then a guard should be
-	//          implemented, triggered by Pipe.Closer, to prevent Pipe.Writer from performing the problematic operation.
+	// synchronises closing both the Pipe and Pipe.Writer (which will therefore only be closed at most once, by this
+	// implementation), edge cases exist where Pipe.Writer may be closed in a way that operates concurrently with
+	// writes. If it is important to prevent this behavior, then a guard should be implemented, triggered by
+	// Pipe.Closer, to prevent Pipe.Writer's Close/CloseWithError from performing the problematic operation.
 	HalfCloser struct {
 		// pipe is the underlying Pipe, used to model the full connection, and exposed via HalfCloser.Pipe
 		pipe Pipe
