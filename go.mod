@@ -20,8 +20,8 @@ require (
 	github.com/jhump/gopoet v0.1.0 // indirect
 	github.com/joeycumines/gopoet-protogen v0.1.0 // indirect
 	github.com/yuin/goldmark v1.3.5 // indirect
-	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 // indirect
+	golang.org/x/sys v0.0.0-20220307203707-22a9840ba4d7 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	google.golang.org/genproto v0.0.0-20220304144024-325a89244dc8 // indirect
+	google.golang.org/genproto v0.0.0-20220307174427-659dce7fcb03 // indirect
 )
