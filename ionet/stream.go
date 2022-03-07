@@ -7,23 +7,35 @@ import (
 )
 
 type (
+	// WrappedConn models an io.ReadWriteCloser which has been wrapped to implement net.Conn.
+	WrappedConn struct {
+		ioReadWriteCloser
+		embeddedNetConn
+		pipe stream.Pipe
+	}
+
 	// WrappedPipe models a stream.Pipe which has been wrapped to implement net.Conn.
 	WrappedPipe struct {
 		netConn
-		halfCloser *stream.HalfCloser
+		halfCloser  *stream.HalfCloser
+		wrappedConn *WrappedConn
 	}
 
 	netConn net.Conn
 
-	piperI interface{ Pipe() stream.Pipe }
+	ioReadWriteCloser io.ReadWriteCloser
+
+	// embeddedNetConn embeds netConn for prioritisation of embedded methods
+	embeddedNetConn struct{ netConn }
 )
 
 var (
 	// compile time assertions
 
-	_ net.Conn = (*WrappedPipe)(nil)
-	_ piperI   = (*WrappedPipe)(nil)
-	_ piperI   = (*stream.HalfCloser)(nil)
+	_ net.Conn     = (*WrappedConn)(nil)
+	_ stream.Piper = (*WrappedConn)(nil)
+	_ net.Conn     = (*WrappedPipe)(nil)
+	_ stream.Piper = (*WrappedPipe)(nil)
 )
 
 // Wrap uses stream.Wrap to implement net.Conn using an io.ReadWriteCloser.
@@ -33,40 +45,38 @@ var (
 // handled in a similar manner, though that case will result in io.ErrClosedPipe.
 //
 // See also stream.Wrap.
-func Wrap(conn io.ReadWriteCloser) net.Conn {
+func Wrap(conn io.ReadWriteCloser) (w *WrappedConn) {
 	if conn == nil {
 		panic(`sesame/ionet: expected non-nil conn`)
 	}
-	type (
-		nestedConnPipe1   struct{ netConn }
-		nestedConnPipe2   struct{ nestedConnPipe1 }
-		ioReadWriteCloser io.ReadWriteCloser
-		netStream         struct {
-			nestedConnPipe2
-			ioReadWriteCloser
-		}
-	)
 	c1, c2 := Pipe()
-	return &netStream{
-		nestedConnPipe2:   nestedConnPipe2{nestedConnPipe1{netConn: c1}},
-		ioReadWriteCloser: stream.Wrap(c2.SendPipe())(c2.ReceivePipe())(conn),
+	w = &WrappedConn{
+		embeddedNetConn: embeddedNetConn{netConn: c1},
+		pipe:            stream.Wrap(c2.SendPipe())(c2.ReceivePipe())(conn),
 	}
+	w.ioReadWriteCloser = w.pipe
+	return
 }
 
 // WrapPipe extends Wrap with support for stream.HalfCloser.
 //
 // See also stream.Wrap.
-func WrapPipe(options ...stream.HalfCloserOption) (*WrappedPipe, error) {
-	halfCloser, err := stream.NewHalfCloser(options...)
+func WrapPipe(options ...stream.HalfCloserOption) (w *WrappedPipe, err error) {
+	w = new(WrappedPipe)
+	w.halfCloser, err = stream.NewHalfCloser(options...)
 	if err != nil {
 		return nil, err
 	}
-	w := WrappedPipe{netConn: Wrap(halfCloser), halfCloser: halfCloser}
-	return &w, nil
+	w.wrappedConn = Wrap(w.halfCloser)
+	w.netConn = w.wrappedConn
+	return
 }
 
-// Pipe exposes the stream.Pipe that the receiver is wrapping.
-func (x *WrappedPipe) Pipe() stream.Pipe { return x.halfCloser.Pipe() }
+// Pipe exposes the stream.Pipe for the receiver (writes and reads to it are equivalent to the receiver).
+func (x *WrappedConn) Pipe() stream.Pipe { return x.pipe.Pipe() }
+
+// Pipe exposes the stream.Pipe for the receiver (writes and reads to it are equivalent to the receiver).
+func (x *WrappedPipe) Pipe() stream.Pipe { return x.wrappedConn.Pipe() }
 
 func (x *WrappedPipe) Close() (err error) {
 	defer func() {
