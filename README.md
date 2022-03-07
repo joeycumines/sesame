@@ -27,3 +27,26 @@ bidirectional streaming. Similarly, 3. will likely be a gRPC API.
 It's quite likely that a basic standalone server will be provided, to implement 2-4.
 
 There are notable gaps in the above architecture, but they will need to be filled in over time.
+
+## Development
+
+### Conventions
+
+These will be added/updated as they're adopted or change... that's the hope, anyway.
+
+1. Build process
+2. Protobuf, gRPC, and Google API conventions
+    1. Make an effort to adopt relevant conventions from the Google API space
+        1. [Google API design guide](https://cloud.google.com/apis/design)
+        2. [Google API schemas](https://github.com/googleapis/googleapis)
+        3. [GAPIC (Generated API Client) showcase](https://github.com/googleapis/gapic-showcase)
+           TODO evaluate this
+    2. Packages under `genproto` should be entirely auto-generated
+    3. Generating all Protobuf and gRPC source under `genproto` is not required, but should be considered
+        1. The top-level `genproto` path/structure is ok
+        2. Similar `genproto` paths/structures (under other path(s)) are ok
+        3. Leaf `genproto` packages are ok
+        4. No `genproto` path segment at all is ok
+3. General codegen
+    1. As Go (unlike Python) doesn't implicitly import packages, it's fine to generate code above other code which
+       doesn't import it, though it should be at least related

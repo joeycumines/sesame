@@ -48,9 +48,15 @@ staticcheck:
 .PHONY: tools
 tools:
 	export CGO_ENABLED=0 && \
+		run_command() { echo "$$@" && "$$@"; } && \
 		grep -P '^\t_' tools.go | \
 		cut -d '"' -f 2 | \
-		while read -r line; do go install "$$line" || exit 1; done
+		while read -r line; do run_command go install "$$line" || exit 1; done
+
+# this won't work on all systems
+.PHONY: generate
+generate:
+	hack/generate.sh
 
 .PHONY: fmt
 fmt:

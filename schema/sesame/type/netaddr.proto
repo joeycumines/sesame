@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package sesame.type;
+
+option go_package = "github.com/joeycumines/sesame/genproto/type/netaddr";
+
+// NetAddr represents a network end point address.
+//
+// The two fields network and address are conventionally strings that can be passed as the arguments to Go's net.Dial,
+// but the exact form and meaning of the strings is up to the implementation.
+//
+// See also Go's net.Addr interface.
+message NetAddr {
+    string network = 1;
+    string address = 2;
+}
