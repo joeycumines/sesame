@@ -92,7 +92,7 @@ func (x *WrappedPipe) Close() (err error) {
 	defer func() {
 		// close the remaining parts of the wrapped pipe (everything except the half closer)
 		// it's possible that this has already occurred, e.g. if the stream.PipeWriter returned an error
-		pipe := x.Pipe()
+		pipe := x.halfCloser.Pipe()
 		// avoid multiple closes, grab any cached error (will only ever propagate any error)
 		pipe.Writer = x.halfCloser
 		// note: error priority is like pipe.Writer > pipe.Reader > pipe.Closer
