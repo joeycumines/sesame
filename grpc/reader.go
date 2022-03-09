@@ -2,6 +2,8 @@ package grpc
 
 import (
 	"io"
+	"sync"
+	"sync/atomic"
 )
 
 type (
@@ -19,10 +21,13 @@ type (
 		// Factory is an implementation to support the stream's receive type.
 		Factory ReaderMessageFactory
 
+		// msg is the ReaderMessage.Value return value for Buffered, stored on message-based EOF
+		msg atomic.Value
+		// mu synchronises reads (it's not used for msg to avoid deadlocks)
+		mu sync.Mutex
 		// eof will be set when a ReaderMessage.Chunk returns false
 		eof bool
 		// msg is for "peeking" Stream.RecvMsg like recv(true), and is exposed via Buffered
-		msg ReaderMessage
 		// buffer is from the last (data) message, if any
 		buffer []byte
 	}
@@ -64,15 +69,13 @@ func NewReaderMessageFactory(fn func() (value interface{}, chunk func() ([]byte,
 
 // Buffered returns any buffered (unread) message from the Reader, e.g. a message that caused
 // ReaderMessage.Chunk to return false. The return value will be the result of ReaderMessage.Value, or nil.
-func (x *Reader) Buffered() interface{} {
-	if msg := x.msg; msg != nil {
-		return msg.Value()
-	}
-	return nil
-}
+func (x *Reader) Buffered() interface{} { return x.msg.Load() }
 
 // Read implements io.Reader using Stream.
 func (x *Reader) Read(b []byte) (int, error) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+
 	if x.eof {
 		return 0, io.EOF
 	}
@@ -80,7 +83,7 @@ func (x *Reader) Read(b []byte) (int, error) {
 	if len(x.buffer) == 0 {
 		x.buffer = nil
 
-		msg, err := x.recv(true)
+		msg, err := x.recv()
 		if err != nil {
 			return 0, err
 		}
@@ -88,10 +91,9 @@ func (x *Reader) Read(b []byte) (int, error) {
 		chunk, ok := msg.Chunk()
 		if !ok {
 			x.eof = true
+			x.msg.Store(msg.Value())
 			return 0, io.EOF
 		}
-
-		_, _ = x.recv(false)
 
 		x.buffer = chunk
 	}
@@ -101,25 +103,12 @@ func (x *Reader) Read(b []byte) (int, error) {
 	return n, nil
 }
 
-func (x *Reader) recv(peek bool) (msg ReaderMessage, err error) {
-	if x.msg != nil {
-		if peek {
-			panic(`sesame/grpc: possible concurrent use of grpc reader`)
-		}
-		msg, x.msg = x.msg, nil
-		return msg, nil
-	}
-
+func (x *Reader) recv() (msg ReaderMessage, err error) {
 	msg = x.Factory()
 	err = x.Stream.RecvMsg(msg.Value())
 	if err != nil {
 		return nil, err
 	}
-
-	if peek {
-		x.msg = msg
-	}
-
 	return msg, nil
 }
 
