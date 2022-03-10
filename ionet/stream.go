@@ -4,6 +4,7 @@ import (
 	"github.com/joeycumines/sesame/stream"
 	"io"
 	"net"
+	"sync"
 )
 
 type (
@@ -27,6 +28,12 @@ type (
 
 	// embeddedNetConn embeds netConn for prioritisation of embedded methods
 	embeddedNetConn struct{ netConn }
+
+	// todoCloser is a closer that isn't available yet
+	todoCloser struct {
+		once   sync.Once
+		closer io.Closer
+	}
 )
 
 var (
@@ -36,6 +43,7 @@ var (
 	_ stream.Piper = (*WrappedConn)(nil)
 	_ net.Conn     = (*WrappedPipe)(nil)
 	_ stream.Piper = (*WrappedPipe)(nil)
+	_ io.Closer    = (*todoCloser)(nil)
 )
 
 // Wrap uses stream.Wrap to implement net.Conn using an io.ReadWriteCloser.
@@ -72,6 +80,31 @@ func WrapPipe(options ...stream.HalfCloserOption) (w *WrappedPipe, err error) {
 	return
 }
 
+// WrapPipeGraceful is a convenience function that is mostly equivalent to WrapPipe, except it performs a "graceful"
+// shutdown, involving closing (and waiting for) the inner pipe (WrappedPipe.Pipe), prior to closing the caller-provided
+// (wrapped) pipe, excepting cases where stream.HalfCloser attempts to forcibly close.
+//
+// The core use case for this implementation is handling situations where there's buffering, that's tied to resources,
+// which need to be freed as part of close. Once the buffer is drained (EOF is received), the read side should also
+// terminate (in a reasonable period of time), in order to avoid breaking the contract of net.Conn.
+//
+// See also documentation for the stream.HalfCloserOptions method GracefulCloser, which this function is compatible
+// with. Note that the (inner pipe) graceful closer will run after any caller-provided graceful closers.
+func WrapPipeGraceful(options ...stream.HalfCloserOption) (w *WrappedPipe, err error) {
+	var c todoCloser
+	{
+		o := make([]stream.HalfCloserOption, len(options), len(options)+1)
+		copy(o, options)
+		options = append(o, stream.OptHalfCloser.GracefulCloser(&c))
+	}
+	w, err = WrapPipe(options...)
+	if err != nil {
+		return nil, err
+	}
+	c.set(w.Pipe())
+	return w, nil
+}
+
 // Pipe exposes the stream.Pipe for the receiver (writes and reads to it are equivalent to the receiver).
 func (x *WrappedConn) Pipe() stream.Pipe { return x.pipe.Pipe() }
 
@@ -101,4 +134,14 @@ func (x *WrappedPipe) Close() (err error) {
 	// note we'll grab any error for this in a bit
 	_ = x.halfCloser.Close()
 	return
+}
+
+func (x *todoCloser) set(closer io.Closer) { x.once.Do(func() { x.closer = closer }) }
+
+func (x *todoCloser) Close() error {
+	x.once.Do(func() {})
+	if x.closer != nil {
+		return x.closer.Close()
+	}
+	return nil
 }

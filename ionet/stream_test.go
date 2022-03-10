@@ -1,6 +1,7 @@
 package ionet
 
 import (
+	"context"
 	"errors"
 	"github.com/joeycumines/sesame/internal/testutil"
 	"github.com/joeycumines/sesame/stream"
@@ -229,6 +230,7 @@ func TestWrap_nettest(t *testing.T) {
 	}
 	for _, tc := range [...]struct {
 		Name string
+		Stop bool
 		Init func(t *testing.T) func() (c1, c2 net.Conn, stop func(), _ error)
 	}{
 		{
@@ -284,6 +286,7 @@ func TestWrap_nettest(t *testing.T) {
 		},
 		{
 			Name: `pipe rwc+writeto single`,
+			Stop: true,
 			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					type c interface {
@@ -293,10 +296,6 @@ func TestWrap_nettest(t *testing.T) {
 					type C struct{ c }
 					a, b := Pipe()
 					c1, c2 = Wrap(C{a}), b
-					stop = func() {
-						_ = c1.Close()
-						_ = c2.Close()
-					}
 					return
 				}
 			},
@@ -340,6 +339,7 @@ func TestWrap_nettest(t *testing.T) {
 		{
 			// same as above just using this package's pipe impl
 			Name: `stream pair ionet pipe half closer`,
+			Stop: true,
 			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					p, _ := Pipe()
@@ -353,10 +353,54 @@ func TestWrap_nettest(t *testing.T) {
 						t.Fatal(err)
 					}
 					c1, c2 = ac, bc
-					stop = func() {
-						_ = c1.Close()
-						_ = c2.Close()
+					return
+				}
+			},
+		},
+		{
+			Name: `wrap pipe graceful proxy`,
+			Stop: true,
+			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+					ctx, cancel := context.WithCancel(context.Background())
+					targetLocal, targetRemote := net.Pipe()
+					sendReader, sendWriter := io.Pipe()
+					receiveReader, receiveWriter := io.Pipe()
+					go func() {
+						var err error
+						defer func() {
+							_ = targetLocal.Close()
+							_ = receiveWriter.CloseWithError(err)
+							_ = sendReader.CloseWithError(err)
+						}()
+						type (
+							ioReader   io.Reader
+							ioWriter   io.Writer
+							readWriter struct {
+								ioReader
+								ioWriter
+							}
+						)
+						err = stream.Proxy(ctx, readWriter{sendReader, receiveWriter}, targetLocal)
+						if err == nil {
+							err = targetLocal.Close()
+						}
+					}()
+					wrapped, err := WrapPipeGraceful(
+						stream.OptHalfCloser.Pipe(stream.Pipe{
+							Reader: receiveReader,
+							Writer: sendWriter,
+							Closer: stream.Closer(func() error {
+								cancel()
+								return nil
+							}),
+						}),
+						stream.OptHalfCloser.CloseGuarder(func() bool { return ctx.Err() == nil }),
+					)
+					if err != nil {
+						return nil, nil, nil, err
 					}
+					c1, c2 = wrapped, targetRemote
 					return
 				}
 			},
@@ -366,15 +410,66 @@ func TestWrap_nettest(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Run(`a`, func(t *testing.T) {
 				defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
-				nettest.TestConn(t, tc.Init(t))
+				nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
+					c1, c2, stop, err = tc.Init(t)()
+					if tc.Stop {
+						if stop != nil {
+							t.Fatal(`expected nil stop`)
+						}
+						stop = func() {
+							_ = c1.Close()
+							_ = c2.Close()
+						}
+					}
+					return
+				})
 			})
 			t.Run(`b`, func(t *testing.T) {
 				defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 				nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
 					c2, c1, stop, err = tc.Init(t)()
+					if tc.Stop {
+						if stop != nil {
+							t.Fatal(`expected nil stop`)
+						}
+						stop = func() {
+							_ = c2.Close()
+							_ = c1.Close()
+						}
+					}
 					return
 				})
 			})
+			if tc.Stop {
+				t.Run(`c`, func(t *testing.T) {
+					defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
+					nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
+						c1, c2, stop, err = tc.Init(t)()
+						if stop != nil {
+							t.Fatal(`expected nil stop`)
+						}
+						stop = func() {
+							_ = c2.Close()
+							_ = c1.Close()
+						}
+						return
+					})
+				})
+				t.Run(`d`, func(t *testing.T) {
+					defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
+					nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
+						c2, c1, stop, err = tc.Init(t)()
+						if stop != nil {
+							t.Fatal(`expected nil stop`)
+						}
+						stop = func() {
+							_ = c1.Close()
+							_ = c2.Close()
+						}
+						return
+					})
+				})
+			}
 		})
 	}
 }
