@@ -23,9 +23,13 @@ type (
 	// implementation), edge cases exist where Pipe.Writer may be closed in a way that operates concurrently with
 	// writes. If it is important to prevent this behavior, then a guard should be implemented, triggered by
 	// Pipe.Closer, to prevent Pipe.Writer's Close/CloseWithError from performing the problematic operation.
+	// See also HalfCloserOptions.CloseGuarder.
 	HalfCloser struct {
-		// pipe is the underlying Pipe, used to model the full connection, and exposed via HalfCloser.Pipe
+		// pipe is the underlying Pipe, used to model the full connection
 		pipe Pipe
+		// gracefulCloser is pipe's closer wrapped to add a user-provided graceful closer
+		// if it's set, it'll be returned as the closer by Pipe, but won't be used internally
+		gracefulCloser io.Closer
 		// closePolicy configures the strategy for half-close support.
 		// E.g. may be configured with a timeout (to close it completely after a given duration).
 		closePolicy ClosePolicy
@@ -124,9 +128,12 @@ func NewHalfCloser(options ...HalfCloserOption) (*HalfCloser, error) {
 	}
 
 	if len(c.gracefulClosers) != 0 {
+		closer := r.pipe.Closer
 		r.pipe = NewGracefulCloser(r.pipe, Closers(c.gracefulClosers...)).
 			EnableOnWriterClose().
 			Pipe()
+		r.gracefulCloser = r.pipe.Closer
+		r.pipe.Closer = closer
 	}
 
 	if c.closeGuarder != nil {
@@ -159,8 +166,14 @@ func UnwrapClosePolicy(policy ClosePolicy) (unwrapped ClosePolicy) {
 	return
 }
 
-// Pipe exposes the "full" pipe, used internally by the receiver.
-func (x *HalfCloser) Pipe() Pipe { return x.pipe }
+// Pipe exposes the "full" pipe, which includes modifications such as those applied by HalfCloserOptions.GracefulCloser.
+func (x *HalfCloser) Pipe() (p Pipe) {
+	p = x.pipe
+	if x.gracefulCloser != nil {
+		p.Closer = x.gracefulCloser
+	}
+	return
+}
 
 func (x *HalfCloser) Read(b []byte) (int, error) { return x.pipe.Read(b) }
 
