@@ -23,7 +23,7 @@ type (
 	// implementation), edge cases exist where Pipe.Writer may be closed in a way that operates concurrently with
 	// writes. If it is important to prevent this behavior, then a guard should be implemented, triggered by
 	// Pipe.Closer, to prevent Pipe.Writer's Close/CloseWithError from performing the problematic operation.
-	// See also HalfCloserOptions.CloseGuarder.
+	// See also HalfCloserOptions.CloseGuard.
 	HalfCloser struct {
 		// pipe is the underlying Pipe, used to model the full connection
 		pipe Pipe
@@ -59,7 +59,7 @@ type (
 		pipe            *Pipe
 		closePolicy     ClosePolicy
 		gracefulClosers []io.Closer
-		closeGuarder    func() bool
+		CloseGuard      func() bool
 	}
 
 	// ClosePolicy models one of the available close behaviors, usable with HalfCloser, implemented by this package.
@@ -85,9 +85,9 @@ type (
 
 	pipeWriterCloseOnce struct {
 		pipeWriterI
-		closeGuarder func() bool
-		once         sync.Once
-		err          error
+		CloseGuard func() bool
+		once       sync.Once
+		err        error
 	}
 
 	pipeWriterI PipeWriter
@@ -143,10 +143,10 @@ func NewHalfCloser(options ...HalfCloserOption) (*HalfCloser, error) {
 		})
 	}
 
-	if c.closeGuarder != nil {
+	if c.CloseGuard != nil {
 		r.pipe.Writer = &pipeWriterCloseOnce{
-			pipeWriterI:  r.pipe.Writer,
-			closeGuarder: c.closeGuarder,
+			pipeWriterI: r.pipe.Writer,
+			CloseGuard:  c.CloseGuard,
 		}
 	}
 
@@ -211,7 +211,7 @@ func (x *HalfCloser) CloseWithError(err error) error {
 		pipe := x.pipe
 
 		// ensure the pipe close will only be called (by HalfCloser close methods) at most once
-		// we check if it's already wrapped, as the CloseGuarder option may have already wrapped it
+		// we check if it's already wrapped, as the CloseGuard option may have already wrapped it
 		if _, ok := pipe.Writer.(*pipeWriterCloseOnce); !ok {
 			pipe.Writer = &pipeWriterCloseOnce{pipeWriterI: pipe.Writer}
 		}
@@ -325,7 +325,7 @@ func (HalfCloserOptions) GracefulCloser(closer io.Closer) HalfCloserOption {
 	return func(c *halfCloserConfig) { c.gracefulClosers = append(c.gracefulClosers, closer) }
 }
 
-// CloseGuarder specifies logic to determine if the Pipe.Writer's close method should be attempted. If provided, fn
+// CloseGuard specifies logic to determine if the Pipe.Writer's close method should be attempted. If provided, fn
 // will be called just prior to calling the writer's Close or CloseWithError methods. If fn returns false, no (writer)
 // close will be performed. This check will only be performed once, and any (writer) close error will be cached.
 // Note that this also means that only one of the pipe writer's close methods will ever be called, at most once.
@@ -337,8 +337,8 @@ func (HalfCloserOptions) GracefulCloser(closer io.Closer) HalfCloserOption {
 // If multiples of this option are provided, only the last value will be used.
 //
 // This method may be accessed via the OptHalfCloser package variable.
-func (HalfCloserOptions) CloseGuarder(fn func() (attemptPipeWriterClose bool)) HalfCloserOption {
-	return func(c *halfCloserConfig) { c.closeGuarder = fn }
+func (HalfCloserOptions) CloseGuard(fn func() (attemptPipeWriterClose bool)) HalfCloserOption {
+	return func(c *halfCloserConfig) { c.CloseGuard = fn }
 }
 
 // ClosePolicy configures the ClosePolicy for the HalfCloser, note that, like the Context option, unless
@@ -367,7 +367,7 @@ func (x *pipeWriterCloseOnce) CloseWithError(err error) error {
 
 func (x *pipeWriterCloseOnce) do(fn func() error) {
 	x.once.Do(func() {
-		if x.closeGuarder == nil || x.closeGuarder() {
+		if x.CloseGuard == nil || x.CloseGuard() {
 			x.err = fn()
 		}
 	})

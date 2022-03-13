@@ -395,7 +395,7 @@ func TestWrap_nettest(t *testing.T) {
 								return nil
 							}),
 						}),
-						stream.OptHalfCloser.CloseGuarder(func() bool { return ctx.Err() == nil }),
+						stream.OptHalfCloser.CloseGuard(func() bool { return ctx.Err() == nil }),
 					)
 					if err != nil {
 						return nil, nil, nil, err
