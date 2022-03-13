@@ -610,3 +610,26 @@ func TestSyncPipe_notifyOnPanic(t *testing.T) {
 	}()
 	<-done
 }
+
+func TestClosers(t *testing.T) {
+	var calls string
+	if err := Closers(
+		&mockCloser{func() error {
+			calls += "1\n"
+			return nil
+		}},
+		&mockCloser{func() error {
+			calls += "2\n"
+			return nil
+		}},
+		&mockCloser{func() error {
+			calls += "3\n"
+			return nil
+		}},
+	).Close(); err != nil {
+		t.Error(err)
+	}
+	if calls != "1\n2\n3\n" {
+		t.Errorf("unexpected calls: %q\n%s", calls, calls)
+	}
+}

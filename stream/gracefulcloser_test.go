@@ -28,10 +28,14 @@ func TestNewGracefulCloser_empty(t *testing.T) {
 	}}
 	g := NewGracefulCloser(Pipe{}, c)
 	p := g.pipe
-	if p.Writer != nil || p.Reader != nil || p.Closer == nil {
+	if p.Writer != nil || p.Reader != nil || p.Closer != nil {
 		t.Fatal(g)
 	}
+	p.Closer = gracefulCloserWrapper{g}
 	if g.Pipe() != p {
+		t.Fatal()
+	}
+	if g.pipe != (Pipe{Writer: p.Writer, Reader: p.Reader}) {
 		t.Fatal()
 	}
 	if g.closer != c {

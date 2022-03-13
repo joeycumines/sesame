@@ -4,18 +4,20 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type (
 	// GracefulCloser provides conditional execution of a "graceful" (less aggressive) io.Closer, for use with Pipe.
 	GracefulCloser struct {
-		pipe   Pipe
-		closer io.Closer
-		ok     int32
-		once   sync.Once
+		pipe    Pipe
+		closer  io.Closer
+		timeout *time.Duration
+		ok      int32
+		once    sync.Once
 	}
 
-	gracefulCloserWrapper struct{ x *GracefulCloser }
+	gracefulCloserWrapper struct{ c *GracefulCloser }
 
 	gracefulCloserWriter struct {
 		pipeWriterI
@@ -37,24 +39,33 @@ func NewGracefulCloser(pipe Pipe, closer io.Closer) *GracefulCloser {
 	if closer == nil {
 		panic(`sesame/stream: nil closer`)
 	}
-	r := GracefulCloser{
+	return &GracefulCloser{
 		pipe:   pipe,
 		closer: closer,
 	}
-	closer = gracefulCloserWrapper{&r}
-	if r.pipe.Closer != nil {
-		closer = Closers(closer, r.pipe.Closer)
+}
+
+// WithClosePolicy applies a close policy to the graceful closer.
+// It will panic if called more than once.
+func (x *GracefulCloser) WithClosePolicy(policy ClosePolicy) *GracefulCloser {
+	if x.timeout != nil {
+		panic(`sesame/stream: graceful closer accepts at most one close policy`)
 	}
-	r.pipe.Closer = closer
-	return &r
+	timeout := closePolicyTimeout(UnwrapClosePolicy(policy))
+	x.timeout = &timeout
+	return x
 }
 
 // EnableOnWriterClose will wrap the Pipe.Writer's Close and CloseWithError methods to call GracefulCloser.Enable on
 // success (no error or panic), returning the receiver. A panic will occur if the writer is nil. The resultant Pipe
 // will be available via GracefulCloser.Pipe, which should be called only after this method, if this method is used.
+// It will panic if called more than once.
 func (x *GracefulCloser) EnableOnWriterClose() *GracefulCloser {
 	if x.pipe.Writer == nil {
 		panic(`sesame/stream: nil writer`)
+	}
+	if v, ok := x.pipe.Writer.(*gracefulCloserWriter); ok && v.ok == &x.ok {
+		panic(`sesame/stream: graceful closer already called enable on writer close`)
 	}
 	x.pipe.Writer = &gracefulCloserWriter{
 		pipeWriterI: x.pipe.Writer,
@@ -70,16 +81,52 @@ func (x *GracefulCloser) Enable() { atomic.StoreInt32(&x.ok, 1) }
 func (x *GracefulCloser) Disable() { x.once.Do(func() {}) }
 
 // Pipe returns the modified pipe, any should be called after any modifications.
-func (x *GracefulCloser) Pipe() Pipe { return x.pipe }
+func (x *GracefulCloser) Pipe() (p Pipe) {
+	p = x.pipe
+	p.Closer = gracefulCloserWrapper{x}
+	return
+}
 
-func (x gracefulCloserWrapper) Close() error {
-	// deliberately not blocking in the closure
-	var ok bool
-	x.x.once.Do(func() { ok = atomic.LoadInt32(&x.x.ok) != 0 })
-	if ok {
-		return x.x.closer.Close()
+func (x gracefulCloserWrapper) Close() (err error) {
+	var closer io.Closer
+	if x.c.pipe.Closer != nil {
+		closer = Closer(x.c.pipe.Closer.Close).Once()
 	}
-	return nil
+	alwaysCallClosersOrdered(&err, x.graceful(closer), closer)
+	return
+}
+
+func (x gracefulCloserWrapper) graceful(closer io.Closer) io.Closer {
+	return Closer(func() error {
+		// deliberately not blocking in the closure
+		var ok bool
+		if x.c.timeout == nil || *x.c.timeout != 0 {
+			// note that a timeout of 0 disables the graceful closer
+			x.c.once.Do(func() { ok = atomic.LoadInt32(&x.c.ok) != 0 })
+		}
+		if !ok {
+			return nil
+		}
+		if closer != nil && x.c.timeout != nil && *x.c.timeout > 0 {
+			timer := time.NewTimer(*x.c.timeout)
+			defer timer.Stop()
+			done := make(chan struct{})
+			defer close(done)
+			go func() {
+				select {
+				case <-done:
+				case <-timer.C:
+					select {
+					case <-done:
+					default:
+						// any error will be cached / this will be synchronised with the following call
+						_ = closer.Close()
+					}
+				}
+			}()
+		}
+		return x.c.closer.Close()
+	})
 }
 
 func (x *gracefulCloserWriter) Close() (err error) {

@@ -115,7 +115,10 @@ func NewHalfCloser(options ...HalfCloserOption) (*HalfCloser, error) {
 		o(&c)
 	}
 
-	var r HalfCloser
+	r := HalfCloser{
+		closePolicy: UnwrapClosePolicy(c.closePolicy),
+		writingCh:   make(chan struct{}, 1),
+	}
 
 	// TODO consider adding support for more options that can configure r.pipe
 	switch {
@@ -130,6 +133,7 @@ func NewHalfCloser(options ...HalfCloserOption) (*HalfCloser, error) {
 	if len(c.gracefulClosers) != 0 {
 		closer := r.pipe.Closer
 		gc := NewGracefulCloser(r.pipe, SequentialClosers(c.gracefulClosers)).
+			WithClosePolicy(r.closePolicy).
 			EnableOnWriterClose()
 		r.pipe = gc.Pipe()
 		r.gracefulCloser = r.pipe.Closer
@@ -149,9 +153,6 @@ func NewHalfCloser(options ...HalfCloserOption) (*HalfCloser, error) {
 			CloseGuard:  c.CloseGuard,
 		}
 	}
-
-	r.closePolicy = UnwrapClosePolicy(c.closePolicy)
-	r.writingCh = make(chan struct{}, 1)
 
 	return &r, nil
 }
@@ -235,14 +236,7 @@ func (x *HalfCloser) CloseWithError(err error) error {
 			}
 		}()
 
-		var timeout time.Duration
-		if policy, ok := x.closePolicy.(WaitRemoteTimeout); ok {
-			if policy > 0 {
-				timeout = time.Duration(policy)
-			}
-		} else {
-			timeout = -1
-		}
+		timeout := closePolicyTimeout(x.closePolicy)
 
 		// may be initialised below, in which case it'll be closed just before releasing the write mutex
 		var done chan struct{}
@@ -371,4 +365,15 @@ func (x *pipeWriterCloseOnce) do(fn func() error) {
 			x.err = fn()
 		}
 	})
+}
+
+func closePolicyTimeout(policy ClosePolicy) (timeout time.Duration) {
+	if policy, ok := policy.(WaitRemoteTimeout); ok {
+		if policy > 0 {
+			timeout = time.Duration(policy)
+		}
+	} else {
+		timeout = -1
+	}
+	return
 }
