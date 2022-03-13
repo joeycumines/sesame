@@ -129,11 +129,18 @@ func NewHalfCloser(options ...HalfCloserOption) (*HalfCloser, error) {
 
 	if len(c.gracefulClosers) != 0 {
 		closer := r.pipe.Closer
-		r.pipe = NewGracefulCloser(r.pipe, Closers(c.gracefulClosers...)).
-			EnableOnWriterClose().
-			Pipe()
+		gc := NewGracefulCloser(r.pipe, SequentialClosers(c.gracefulClosers)).
+			EnableOnWriterClose()
+		r.pipe = gc.Pipe()
 		r.gracefulCloser = r.pipe.Closer
-		r.pipe.Closer = closer
+		r.pipe.Closer = Closer(func() error {
+			// we still want "full close" calls to prevent subsequent graceful closes
+			gc.Disable()
+			if closer != nil {
+				return closer.Close()
+			}
+			return nil
+		})
 	}
 
 	if c.closeGuarder != nil {
@@ -311,7 +318,7 @@ func (HalfCloserOptions) Pipe(pipe Pipe) HalfCloserOption {
 //
 // This option modifies the resultant HalfCloser.Pipe fields Pipe.Writer and Pipe.Closer.
 //
-// If multiples of this option are provided, they will be combined in the order provided, using Closers.
+// If multiples of this option are provided, they will be combined in the order provided, using SequentialClosers.
 //
 // This method may be accessed via the OptHalfCloser package variable.
 func (HalfCloserOptions) GracefulCloser(closer io.Closer) HalfCloserOption {

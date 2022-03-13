@@ -26,6 +26,18 @@ type (
 		PipeCloser
 	}
 
+	// Closer implements io.Closer, also supporting wrapping to be idempotent/cached, via the Once method.
+	Closer func() error
+
+	// SequentialClosers implements io.Closer and will call it's values in order, bailing out on the first error.
+	// See also Closers, which implements similar behavior, except it guarantees all closers will be attempted.
+	// Unlike Closers, nil values are not ignored / handled, and will result in a panic.
+	SequentialClosers []io.Closer
+
+	// ChunkWriter implements io.Writer by wrapping another writer (e.g. io.Writer.Write), such that calls will be
+	// chunked, at a maximum of ChunkSize bytes per chunk.
+	ChunkWriter func(b []byte) (int, error)
+
 	syncPipe struct {
 		r      PipeReader
 		w      PipeWriter
@@ -43,13 +55,6 @@ type (
 		*syncPipe
 	}
 
-	// Closer implements io.Closer, also supporting wrapping to be idempotent/cached, via the Once method.
-	Closer func() error
-
-	// ChunkWriter implements io.Writer by wrapping another writer (e.g. io.Writer.Write), such that calls will be
-	// chunked, at a maximum of ChunkSize bytes per chunk.
-	ChunkWriter func(b []byte) (int, error)
-
 	ioCloser io.Closer
 
 	comparableCloser struct{ ioCloser }
@@ -60,6 +65,8 @@ var (
 
 	_ PipeReader = syncPipeReader{}
 	_ PipeWriter = syncPipeWriter{}
+	_ io.Closer  = Closer(nil)
+	_ io.Closer  = SequentialClosers(nil)
 )
 
 // SyncPipe may be used to block writes until the reader requests additional data, or indicates that they are done (by
@@ -242,6 +249,15 @@ func (x Closer) Once() Closer {
 
 // Comparable wraps the receiver so that it is comparable.
 func (x Closer) Comparable() io.Closer { return &comparableCloser{x} }
+
+func (x SequentialClosers) Close() error {
+	for _, v := range x {
+		if err := v.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // Write implements io.Writer, calling the receiver.
 // Note that it will panic if the receiver's results are not sane.

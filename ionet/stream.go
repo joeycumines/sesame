@@ -89,7 +89,8 @@ func WrapPipe(options ...stream.HalfCloserOption) (w *WrappedPipe, err error) {
 // terminate (in a reasonable period of time), in order to avoid breaking the contract of net.Conn.
 //
 // See also documentation for the stream.HalfCloserOptions method GracefulCloser, which this function is compatible
-// with. Note that the (inner pipe) graceful closer will run after any caller-provided graceful closers.
+// with. Note that the (inner pipe) graceful closer will run after any caller-provided graceful closers. As such,
+// a graceful closer, returning a non-nil error, may be used to conditionally prevent the provided wait logic.
 func WrapPipeGraceful(options ...stream.HalfCloserOption) (w *WrappedPipe, err error) {
 	var c todoCloser
 	{
