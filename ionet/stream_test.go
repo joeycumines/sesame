@@ -228,6 +228,62 @@ func TestWrap_nettest(t *testing.T) {
 		}
 		return
 	}
+	wrapPipeGracefulProxy := func(cancelOnStop bool) func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+		return func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+			return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+				ctx, cancel := context.WithCancel(context.Background())
+				targetLocal, targetRemote := net.Pipe()
+				sendReader, sendWriter := io.Pipe()
+				receiveReader, receiveWriter := io.Pipe()
+				go func() {
+					var err error
+					defer func() {
+						_ = targetLocal.Close()
+						_ = receiveWriter.CloseWithError(err)
+						_ = sendReader.CloseWithError(err)
+					}()
+					type (
+						ioReader   io.Reader
+						ioWriter   io.Writer
+						readWriter struct {
+							ioReader
+							ioWriter
+						}
+					)
+					err = stream.Proxy(ctx, readWriter{sendReader, receiveWriter}, targetLocal)
+					if err == nil {
+						err = targetLocal.Close()
+					}
+				}()
+				options := []stream.HalfCloserOption{
+					stream.OptHalfCloser.Pipe(stream.Pipe{
+						Reader: receiveReader,
+						Writer: sendWriter,
+						Closer: stream.Closer(func() error {
+							cancel()
+							return nil
+						}),
+					}),
+					stream.OptHalfCloser.CloseGuard(func() bool { return ctx.Err() == nil }),
+				}
+
+				// deal with some tests, particularly b/RacyRead, not necessarily draining targetRemote, and therefore
+				// at risk of not actually processing write being closed
+				if cancelOnStop {
+					stop = cancel
+				} else {
+					options = append(options, stream.OptHalfCloser.ClosePolicy(stream.WaitRemoteTimeout(time.Second*30)))
+				}
+
+				wrapped, err := WrapPipeGraceful(options...)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				c1, c2 = wrapped, targetRemote
+				return
+			}
+		}
+	}
 	for _, tc := range [...]struct {
 		Name string
 		Stop bool
@@ -360,50 +416,12 @@ func TestWrap_nettest(t *testing.T) {
 		{
 			Name: `wrap pipe graceful proxy`,
 			Stop: true,
-			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
-				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
-					ctx, cancel := context.WithCancel(context.Background())
-					targetLocal, targetRemote := net.Pipe()
-					sendReader, sendWriter := io.Pipe()
-					receiveReader, receiveWriter := io.Pipe()
-					go func() {
-						var err error
-						defer func() {
-							_ = targetLocal.Close()
-							_ = receiveWriter.CloseWithError(err)
-							_ = sendReader.CloseWithError(err)
-						}()
-						type (
-							ioReader   io.Reader
-							ioWriter   io.Writer
-							readWriter struct {
-								ioReader
-								ioWriter
-							}
-						)
-						err = stream.Proxy(ctx, readWriter{sendReader, receiveWriter}, targetLocal)
-						if err == nil {
-							err = targetLocal.Close()
-						}
-					}()
-					wrapped, err := WrapPipeGraceful(
-						stream.OptHalfCloser.Pipe(stream.Pipe{
-							Reader: receiveReader,
-							Writer: sendWriter,
-							Closer: stream.Closer(func() error {
-								cancel()
-								return nil
-							}),
-						}),
-						stream.OptHalfCloser.CloseGuard(func() bool { return ctx.Err() == nil }),
-					)
-					if err != nil {
-						return nil, nil, nil, err
-					}
-					c1, c2 = wrapped, targetRemote
-					return
-				}
-			},
+			Init: wrapPipeGracefulProxy(true),
+		},
+		{
+			Name: `wrap pipe graceful proxy no cancel`,
+			Stop: true,
+			Init: wrapPipeGracefulProxy(false),
 		},
 	} {
 		tc := tc
@@ -413,12 +431,17 @@ func TestWrap_nettest(t *testing.T) {
 				nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
 					c1, c2, stop, err = tc.Init(t)()
 					if tc.Stop {
-						if stop != nil {
-							t.Fatal(`expected nil stop`)
-						}
+						s := stop
 						stop = func() {
-							_ = c1.Close()
-							_ = c2.Close()
+							if s != nil {
+								s()
+							}
+							if err := c1.Close(); err != nil {
+								t.Error(err)
+							}
+							if err := c2.Close(); err != nil {
+								t.Error(err)
+							}
 						}
 					}
 					return
@@ -429,12 +452,17 @@ func TestWrap_nettest(t *testing.T) {
 				nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
 					c2, c1, stop, err = tc.Init(t)()
 					if tc.Stop {
-						if stop != nil {
-							t.Fatal(`expected nil stop`)
-						}
+						s := stop
 						stop = func() {
-							_ = c2.Close()
-							_ = c1.Close()
+							if s != nil {
+								s()
+							}
+							if err := c2.Close(); err != nil {
+								t.Error(err)
+							}
+							if err := c1.Close(); err != nil {
+								t.Error(err)
+							}
 						}
 					}
 					return
@@ -444,13 +472,18 @@ func TestWrap_nettest(t *testing.T) {
 				t.Run(`c`, func(t *testing.T) {
 					defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 					nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-						c1, c2, stop, err = tc.Init(t)()
-						if stop != nil {
-							t.Fatal(`expected nil stop`)
-						}
+						var s func()
+						c1, c2, s, err = tc.Init(t)()
 						stop = func() {
-							_ = c2.Close()
-							_ = c1.Close()
+							if s != nil {
+								s()
+							}
+							if err := c2.Close(); err != nil {
+								t.Error(err)
+							}
+							if err := c1.Close(); err != nil {
+								t.Error(err)
+							}
 						}
 						return
 					})
@@ -458,13 +491,18 @@ func TestWrap_nettest(t *testing.T) {
 				t.Run(`d`, func(t *testing.T) {
 					defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 					nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-						c2, c1, stop, err = tc.Init(t)()
-						if stop != nil {
-							t.Fatal(`expected nil stop`)
-						}
+						var s func()
+						c2, c1, s, err = tc.Init(t)()
 						stop = func() {
-							_ = c1.Close()
-							_ = c2.Close()
+							if s != nil {
+								s()
+							}
+							if err := c1.Close(); err != nil {
+								t.Error(err)
+							}
+							if err := c2.Close(); err != nil {
+								t.Error(err)
+							}
 						}
 						return
 					})
