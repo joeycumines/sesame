@@ -228,8 +228,8 @@ func TestWrap_nettest(t *testing.T) {
 		}
 		return
 	}
-	wrapPipeGracefulProxy := func(cancelOnStop bool) func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
-		return func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+	wrapPipeGracefulProxy := func(cancelOnStop bool) func(t *testing.T) nettest.MakePipe {
+		return func(t *testing.T) nettest.MakePipe {
 			return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 				ctx, cancel := context.WithCancel(context.Background())
 				targetLocal, targetRemote := net.Pipe()
@@ -272,7 +272,7 @@ func TestWrap_nettest(t *testing.T) {
 				if cancelOnStop {
 					stop = cancel
 				} else {
-					options = append(options, stream.OptHalfCloser.ClosePolicy(stream.WaitRemoteTimeout(time.Second*30)))
+					options = append(options, stream.OptHalfCloser.ClosePolicy(stream.WaitRemoteTimeout(time.Second*5)))
 				}
 
 				wrapped, err := WrapPipeGraceful(options...)
@@ -287,11 +287,11 @@ func TestWrap_nettest(t *testing.T) {
 	for _, tc := range [...]struct {
 		Name string
 		Stop bool
-		Init func(t *testing.T) func() (c1, c2 net.Conn, stop func(), _ error)
+		Init func(t *testing.T) nettest.MakePipe
 	}{
 		{
 			Name: `pipe rwc`,
-			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+			Init: func(t *testing.T) nettest.MakePipe {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					type c interface {
 						io.ReadWriteCloser
@@ -309,7 +309,7 @@ func TestWrap_nettest(t *testing.T) {
 		},
 		{
 			Name: `pipe dual deep nested`,
-			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+			Init: func(t *testing.T) nettest.MakePipe {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					a, b := Pipe()
 					c1, c2 = wrapN(a, 20), wrapN(b, 50)
@@ -323,7 +323,7 @@ func TestWrap_nettest(t *testing.T) {
 		},
 		{
 			Name: `pipe rwc+writeto dual`,
-			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+			Init: func(t *testing.T) nettest.MakePipe {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					type c interface {
 						io.ReadWriteCloser
@@ -343,7 +343,7 @@ func TestWrap_nettest(t *testing.T) {
 		{
 			Name: `pipe rwc+writeto single`,
 			Stop: true,
-			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+			Init: func(t *testing.T) nettest.MakePipe {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					type c interface {
 						io.ReadWriteCloser
@@ -358,7 +358,7 @@ func TestWrap_nettest(t *testing.T) {
 		},
 		{
 			Name: `stream pair io pipe`,
-			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+			Init: func(t *testing.T) nettest.MakePipe {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					a, b := stream.Pair(io.Pipe())(io.Pipe())
 					c1, c2 = Wrap(a), Wrap(b)
@@ -372,7 +372,7 @@ func TestWrap_nettest(t *testing.T) {
 		},
 		{
 			Name: `stream pair io pipe half closer`,
-			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+			Init: func(t *testing.T) nettest.MakePipe {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					a, b := stream.Pair(io.Pipe())(io.Pipe())
 					ac, err := WrapPipe(stream.OptHalfCloser.Pipe(a))
@@ -396,7 +396,7 @@ func TestWrap_nettest(t *testing.T) {
 			// same as above just using this package's pipe impl
 			Name: `stream pair ionet pipe half closer`,
 			Stop: true,
-			Init: func(t *testing.T) func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
+			Init: func(t *testing.T) nettest.MakePipe {
 				return func() (c1 net.Conn, c2 net.Conn, stop func(), _ error) {
 					p, _ := Pipe()
 					a, b := stream.Pair(p.SendPipe())(p.ReceivePipe())
@@ -424,90 +424,8 @@ func TestWrap_nettest(t *testing.T) {
 			Init: wrapPipeGracefulProxy(false),
 		},
 	} {
-		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
-			t.Run(`a`, func(t *testing.T) {
-				defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
-				nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-					c1, c2, stop, err = tc.Init(t)()
-					if tc.Stop {
-						s := stop
-						stop = func() {
-							if s != nil {
-								s()
-							}
-							if err := c1.Close(); err != nil {
-								t.Error(err)
-							}
-							if err := c2.Close(); err != nil {
-								t.Error(err)
-							}
-						}
-					}
-					return
-				})
-			})
-			t.Run(`b`, func(t *testing.T) {
-				defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
-				nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-					c2, c1, stop, err = tc.Init(t)()
-					if tc.Stop {
-						s := stop
-						stop = func() {
-							if s != nil {
-								s()
-							}
-							if err := c2.Close(); err != nil {
-								t.Error(err)
-							}
-							if err := c1.Close(); err != nil {
-								t.Error(err)
-							}
-						}
-					}
-					return
-				})
-			})
-			if tc.Stop {
-				t.Run(`c`, func(t *testing.T) {
-					defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
-					nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-						var s func()
-						c1, c2, s, err = tc.Init(t)()
-						stop = func() {
-							if s != nil {
-								s()
-							}
-							if err := c2.Close(); err != nil {
-								t.Error(err)
-							}
-							if err := c1.Close(); err != nil {
-								t.Error(err)
-							}
-						}
-						return
-					})
-				})
-				t.Run(`d`, func(t *testing.T) {
-					defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
-					nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-						var s func()
-						c2, c1, s, err = tc.Init(t)()
-						stop = func() {
-							if s != nil {
-								s()
-							}
-							if err := c1.Close(); err != nil {
-								t.Error(err)
-							}
-							if err := c2.Close(); err != nil {
-								t.Error(err)
-							}
-						}
-						return
-					})
-				})
-			}
+			testutil.TestConn(t, tc.Stop, tc.Init)
 		})
 	}
 }

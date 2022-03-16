@@ -63,6 +63,10 @@ func CheckNumGoroutines(t *testing.T, start int, increase bool, wait time.Durati
 	}
 }
 
+func CleanupCheckNumGoroutines(t *testing.T, start int, increase bool, wait time.Duration) {
+	t.Cleanup(func() { CheckNumGoroutines(t, start, increase, wait) })
+}
+
 func DumpGoroutineStacktrace() string {
 	var b bytes.Buffer
 	_ = pprof.Lookup("goroutine").WriteTo(&b, 1)
