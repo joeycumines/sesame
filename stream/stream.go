@@ -172,8 +172,8 @@ func Join(stream io.ReadWriteCloser) Handler {
 			// (they are all separate entities)
 			alwaysCallClosersOrdered(
 				&err,
-				writer,
-				reader,
+				closeWithErrPipeCloser(writer, io.ErrClosedPipe),
+				closeWithErrPipeCloser(reader, io.ErrClosedPipe),
 				stream,
 			)
 			wg.Wait()
@@ -265,3 +265,10 @@ func (x Pipe) close(override error) (err error) {
 
 // Handle implements Handler using the receiver.
 func (x HandlerFunc) Handle(r PipeReader, w PipeWriter) io.Closer { return x(r, w) }
+
+func closeWithErrPipeCloser(p PipeCloser, err error) io.Closer {
+	if p != nil {
+		return Closer(func() error { return p.CloseWithError(err) })
+	}
+	return nil
+}
