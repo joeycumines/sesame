@@ -90,9 +90,9 @@ func ExampleNewReaderMessageFactory() {
 
 // ExampleReader demonstrates how to use Reader by partially implementing the NetConn method of rc.RemoteControlServer.
 func ExampleReader() {
-	defer testutil.CheckNumGoroutines(nil, runtime.NumGoroutine(), false, time.Second*3)
+	defer testutil.CheckNumGoroutines(nil, runtime.NumGoroutine(), false, time.Second*15)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*3)
 	defer cancel()
 
 	// this will be our target, that the server will proxy to (via targetConn)
@@ -104,7 +104,7 @@ func ExampleReader() {
 		scanner := bufio.NewScanner(targetListener)
 		for ctx.Err() == nil {
 			// poll (until cancel)
-			if targetListener.SetReadDeadline(time.Now().Add(time.Millisecond*250)) != nil {
+			if targetListener.SetReadDeadline(time.Now().Add(time.Second*5)) != nil {
 				return
 			}
 			if !scanner.Scan() {
