@@ -16,23 +16,36 @@ import (
 type (
 	// Server implements rc.RemoteControlServer's NetConn method.
 	Server struct {
-		rc.UnimplementedRemoteControlServer
+		unimplementedRemoteControlServer
 		Dialer DialerFactory
 	}
 
+	// ServerAPI models a subset of rc.RemoteControlServer, as implemented by Server.
+	ServerAPI interface {
+		NetConn(stream rc.RemoteControl_NetConnServer) error
+	}
+
+	// DialerFactory prepares a Dialer based on a dial request.
+	// See also DefaultDialer.
 	DialerFactory func(req *rc.NetConnRequest_Dial) (Dialer, error)
 
+	// Dialer models an implementation like net.Dialer.
+	// See also DialerFactory.
 	Dialer interface {
 		DialContext(ctx context.Context, network, address string) (net.Conn, error)
 	}
+
+	unimplementedRemoteControlServer = rc.UnimplementedRemoteControlServer
 )
 
 var (
+	// DefaultDialer will be used by Server.NetConn if Server.Dialer is nil.
 	DefaultDialer DialerFactory = defaultDialer
 
 	// compile time assertions
 
 	_ rc.RemoteControlServer = (*Server)(nil)
+	_ ServerAPI              = (*Server)(nil)
 )
 
 func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {

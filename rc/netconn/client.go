@@ -20,13 +20,13 @@ import (
 type (
 	// Client implements Dialer using rc.RemoteControlClient's NetConn method.
 	Client struct {
-		API         API
+		API         ClientAPI
 		Timeout     time.Duration
 		ClosePolicy streamutil.ClosePolicy
 	}
 
-	// API models a subset of rc.RemoteControlClient.
-	API interface {
+	// ClientAPI models a subset of rc.RemoteControlClient, as used by Client.
+	ClientAPI interface {
 		NetConn(ctx context.Context, opts ...grpc.CallOption) (rc.RemoteControl_NetConnClient, error)
 	}
 
