@@ -94,12 +94,13 @@ func generate(gen *protogen.Plugin) error {
 			return err
 		}
 
-		for _, fileSuffix := range [...]string{
-			`.pb.go`,
-			`_grpc.pb.go`,
-			`_copy.pb.go`,
+		for _, fileSuffix := range [...][2]string{
+			{`.pb.go`},
+			{`_grpc.pb.go`},
+			{`_copy.pb.go`},
+			{`.pb.gw.go`, `_gw.pb.go`},
 		} {
-			filePath := file.GeneratedFilenamePrefix + fileSuffix
+			filePath := file.GeneratedFilenamePrefix + fileSuffix[0]
 
 			stat, err := os.Stat(filePath)
 			switch {
@@ -111,7 +112,15 @@ func generate(gen *protogen.Plugin) error {
 				return fmt.Errorf(`file is dir: %s`, filePath)
 			}
 
-			err = os.Rename(filePath, filepath.Join(fileDir, filepath.Base(filePath)))
+			targetName := filepath.Base(filePath)
+			if fileSuffix[1] != `` {
+				if !strings.HasSuffix(targetName, fileSuffix[0]) {
+					panic(fmt.Errorf(`expected file suffix %q but got %q`, fileSuffix[0], targetName))
+				}
+				targetName = targetName[:len(targetName)-len(fileSuffix[0])] + fileSuffix[1]
+			}
+
+			err = os.Rename(filePath, filepath.Join(fileDir, targetName))
 			switch {
 			case errors.Is(err, fs.ErrNotExist):
 				continue
