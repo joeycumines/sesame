@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package sesame.type;
+
+option go_package = "github.com/joeycumines/sesame/genproto/type/grpcmetadata";
+
+// GrpcMetadata represents gRPC request or response (header, trailer) metadata.
+message GrpcMetadata {
+  map <string, Value> data = 1;
+  message Value {
+    oneof data {
+      Str str = 1;
+      Bin bin = 2;
+    };
+  }
+  message Str {
+    repeated string values = 1;
+  }
+  message Bin {
+    repeated bytes values = 1;
+  }
+}

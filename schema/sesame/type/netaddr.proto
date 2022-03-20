@@ -11,6 +11,6 @@ option go_package = "github.com/joeycumines/sesame/genproto/type/netaddr";
 //
 // See also Go's net.Addr interface.
 message NetAddr {
-    string network = 1;
-    string address = 2;
+  string network = 1;
+  string address = 2;
 }

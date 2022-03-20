@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package sesame.v1alpha1;
+
+option go_package = "github.com/joeycumines/sesame/tun";
+
+service TunnelService {
+  rpc Tunnel (stream TunnelRequest) returns (stream TunnelResponse) {}
+}
+
+message TunnelRequest {
+  oneof data {
+    Connect connect = 1; // ping
+  };
+  message Connect {
+  }
+}
+
+message TunnelResponse {
+  oneof data {
+    Connect connect = 1; // pong
+  };
+  message Connect {
+  }
+}

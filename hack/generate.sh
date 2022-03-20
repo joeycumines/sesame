@@ -33,14 +33,17 @@ command -v protoc-gen-sesame >/dev/null 2>&1
 
 cmd=(
     bash -c '
+common=(-I . -I ./api-common-protos) &&
 set -x &&
 protoc \
+    "${common[@]}" \
     --go_out=. --go_opt=paths=source_relative \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     --go-copy_out=. --go-copy_opt=paths=source_relative \
     "$@" \
 &&
 protoc \
+    "${common[@]}" \
     --sesame_out=. --sesame_opt=paths=source_relative \
     "$@"'
     -
@@ -49,4 +52,4 @@ protoc \
 cd "$script_path/../schema"
 echo "Schema path: $(pwd)"
 
-find . -type f -name '*.proto' -exec "${cmd[@]}" {} +
+find ./sesame -type f -name '*.proto' -exec "${cmd[@]}" {} +

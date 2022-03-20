@@ -186,6 +186,7 @@ func (*NetConnResponse_Conn_) isNetConnResponse_Data() {}
 
 func (*NetConnResponse_Bytes) isNetConnResponse_Data() {}
 
+// Dial models the initial request.
 type NetConnRequest_Dial struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -241,6 +242,7 @@ func (x *NetConnRequest_Dial) GetTimeout() *durationpb.Duration {
 	return nil
 }
 
+// Conn models the initial response.
 type NetConnResponse_Conn struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package sesame.v1alpha1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/any.proto";
+import "google/rpc/status.proto";
+import "google/api/annotations.proto";
+import "sesame/type/grpcmetadata.proto";
+
+option go_package = "github.com/joeycumines/sesame/genproto/api";
+
+// Sesame is the core management and registration API, used to configure and orchestrate access to remotes.
+service Sesame {
+  rpc CreateRemote (CreateRemoteRequest) returns (Remote) {
+    option (google.api.http) = {
+      post: "/v1alpha1/{parent=namespaces/*}/remotes"
+      body: "remote"
+    };
+  }
+
+  rpc GetRemote (GetRemoteRequest) returns (Remote) {
+    option (google.api.http) = {
+      get: "/v1alpha1/{name=namespaces/*/remotes/*}"
+    };
+  }
+
+  rpc DeleteRemote (DeleteRemoteRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/v1alpha1/{name=namespaces/*/remotes/*}"
+    };
+  }
+
+  rpc UpdateRemote (UpdateRemoteRequest) returns (Remote) {
+    option (google.api.http) = {
+      patch: "/v1alpha1/{remote.name=namespaces/*/remotes/*}"
+      body: "remote"
+    };
+  }
+
+  rpc ListRemotes (ListRemotesRequest) returns (ListRemotesResponse) {
+    option (google.api.http) = {
+      get: "/v1alpha1/{parent=namespaces/*}/remotes"
+    };
+  }
+
+  rpc CallMethod (stream CallMethodRequest) returns (stream CallMethodResponse) {
+  }
+
+  // TODO namespace methods
+}
+
+// Remote is a network device or other resource that may be accessed by Sesame clients.
+message Remote {
+  string name = 1;
+  string display_name = 2;
+  string description = 3;
+  google.protobuf.Timestamp create_time = 6;
+}
+
+// Namespace scopes resources in the Sesame API, and is intended to (eventually) facilitate scoped simple auth.
+message Namespace {
+  string name = 1;
+}
+
+message CreateRemoteRequest {
+  // parent for the remote, note that the remote.name MUST NOT be set
+  // generated names may be based on the other input
+  string parent = 1;
+  Remote remote = 11;
+}
+
+message GetRemoteRequest {
+  string name = 1;
+}
+
+message DeleteRemoteRequest {
+  string name = 1;
+}
+
+message UpdateRemoteRequest {
+  Remote remote = 1;
+  // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#fieldmask
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message ListRemotesRequest {
+  string parent = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListRemotesResponse {
+  repeated Remote remotes = 1;
+  string next_page_token = 2;
+}
+
+message CallMethodRequest {
+  oneof data {
+    Dial dial = 1;
+    type.GrpcMetadata header = 2;
+    google.protobuf.Any content = 3;
+  };
+  // Dial models the initial request routing of a method call.
+  message Dial {
+    // name is remote+"/"+service+"/"+method
+    string name = 1;
+  }
+}
+
+message CallMethodResponse {
+  oneof data {
+    Conn conn = 1;
+    // error models an error from the inner call, and may be received any time after conn
+    google.rpc.Status error = 2;
+    type.GrpcMetadata header = 3;
+    google.protobuf.Any content = 4;
+    type.GrpcMetadata trailer = 5;
+  };
+  // Conn is the response to Dial.
+  message Conn {
+    // TODO could expose details about the remote / service / method here
+  }
+}
