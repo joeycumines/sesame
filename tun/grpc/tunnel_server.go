@@ -18,13 +18,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fullstorydev/grpchan"
-	"github.com/golang/protobuf/proto"
 	"github.com/joeycumines/sesame/genproto/type/grpcmetadata"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"strings"
 	"sync"
@@ -93,7 +93,9 @@ func serveTunnel(stream tunnelStreamServer, handlers grpchan.HandlerMap) error {
 }
 
 type tunnelStreamServer interface {
-	grpc.Stream
+	Context() context.Context
+	SendMsg(m interface{}) error
+	RecvMsg(m interface{}) error
 	Send(*ServerToClient) error
 	Recv() (*ClientToServer, error)
 }
@@ -120,7 +122,7 @@ func (s *tunnelServer) serve() error {
 		}
 
 		if f, ok := in.Frame.(*ClientToServer_NewStream); ok {
-			if err, ok := s.createStream(ctx, in.StreamId, f.NewStream); err != nil {
+			if ok, err := s.createStream(ctx, in.StreamId, f.NewStream); err != nil {
 				if !ok {
 					return err
 				} else {
@@ -146,17 +148,17 @@ func (s *tunnelServer) serve() error {
 	}
 }
 
-func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *NewStream) (error, bool) {
+func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *NewStream) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	_, ok := s.streams[streamID]
 	if ok {
 		// stream already active!
-		return fmt.Errorf("cannot create stream ID %d: already exists", streamID), false
+		return false, fmt.Errorf("cannot create stream ID %d: already exists", streamID)
 	}
 	if streamID <= s.lastSeen {
-		return fmt.Errorf("cannot create stream ID %d: that ID has already been used", streamID), false
+		return false, fmt.Errorf("cannot create stream ID %d: that ID has already been used", streamID)
 	}
 	s.lastSeen = streamID
 
@@ -165,7 +167,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *
 	}
 	parts := strings.SplitN(frame.MethodName, "/", 2)
 	if len(parts) != 2 {
-		return status.Errorf(codes.InvalidArgument, "%s is not a well-formed method name", frame.MethodName), true
+		return true, status.Errorf(codes.InvalidArgument, "%s is not a well-formed method name", frame.MethodName)
 	}
 	var md interface{}
 	sd, svc := s.services.QueryService(parts[0])
@@ -179,7 +181,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *
 
 	if md == nil {
 		delete(s.streams, streamID)
-		return status.Errorf(codes.Unimplemented, "%s not implemented", frame.MethodName), true
+		return true, status.Errorf(codes.Unimplemented, "%s not implemented", frame.MethodName)
 	}
 
 	ctx = metadata.NewIncomingContext(ctx, fromProto(frame.RequestHeaders))
@@ -199,7 +201,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *
 	s.streams[streamID] = str
 	str.ctx = grpc.NewContextWithServerTransportStream(str.ctx, (*tunnelServerTransportStream)(str))
 	go str.serveStream(md, svc)
-	return nil, true
+	return true, nil
 }
 
 func (s *tunnelServer) getStream(streamID int64) (*tunnelServerStream, error) {

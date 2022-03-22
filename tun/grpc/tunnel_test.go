@@ -19,6 +19,7 @@ import (
 	"github.com/fullstorydev/grpchan/grpchantesting"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"runtime"
 	"testing"
@@ -40,7 +41,7 @@ func TestTunnelServer(t *testing.T) {
 			}
 		},
 	}
-	grpchantesting.RegisterHandlerTestService(&ts, &svr)
+	grpchantesting.RegisterTestServiceServer(&ts, &svr)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -51,7 +52,7 @@ func TestTunnelServer(t *testing.T) {
 	go gs.Serve(l)
 	defer gs.Stop()
 
-	cc, err := grpc.Dial(l.Addr().String(), grpc.WithBlock(), grpc.WithInsecure())
+	cc, err := grpc.Dial(l.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -82,7 +83,7 @@ func TestTunnelServer(t *testing.T) {
 
 			// client now acts as the server
 			handlerMap := grpchan.HandlerMap{}
-			grpchantesting.RegisterHandlerTestService(handlerMap, &svr)
+			grpchantesting.RegisterTestServiceServer(handlerMap, &svr)
 			errs := make(chan error)
 			go func() {
 				errs <- ServeReverseTunnel(tunnel, handlerMap)

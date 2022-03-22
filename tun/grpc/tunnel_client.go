@@ -17,7 +17,6 @@ package grpc
 import (
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -25,6 +24,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"sync"
 )
@@ -51,7 +51,9 @@ type ReverseTunnelChannel struct {
 }
 
 type tunnelStreamClient interface {
-	grpc.Stream
+	Context() context.Context
+	SendMsg(m interface{}) error
+	RecvMsg(m interface{}) error
 	Send(*ClientToServer) error
 	Recv() (*ServerToClient, error)
 }
@@ -471,7 +473,7 @@ func (st *tunnelClientStream) SendMsg(m interface{}) error {
 }
 
 func (st *tunnelClientStream) RecvMsg(m interface{}) error {
-	data, err, ok := st.readMsg()
+	data, ok, err := st.readMsg()
 	if err != nil {
 		if !ok {
 			st.cancel(err)
@@ -482,31 +484,31 @@ func (st *tunnelClientStream) RecvMsg(m interface{}) error {
 	return proto.Unmarshal(data, m.(proto.Message))
 }
 
-func (st *tunnelClientStream) readMsg() (data []byte, err error, ok bool) {
+func (st *tunnelClientStream) readMsg() (data []byte, ok bool, err error) {
 	st.readMu.Lock()
 	defer st.readMu.Unlock()
 
-	data, err, ok = st.readMsgLocked()
+	data, ok, err = st.readMsgLocked()
 	if err == nil && !st.isServerStream {
 		// no stream; so eagerly see if there's another message
 		// and fail RPC if so (due to bad input)
-		_, err, ok := st.readMsgLocked()
+		_, ok, err := st.readMsgLocked()
 		if err == nil {
 			err = status.Errorf(codes.Internal, "Server sent multiple responses for non-server-stream method %q", st.method)
 			st.readErr = err
-			return nil, err, false
+			return nil, false, err
 		}
 		if err != io.EOF || !ok {
-			return nil, err, ok
+			return nil, ok, err
 		}
 	}
 
-	return data, err, ok
+	return data, ok, err
 }
 
-func (st *tunnelClientStream) readMsgLocked() (data []byte, err error, ok bool) {
+func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) {
 	if st.readErr != nil {
-		return nil, st.readErr, true
+		return nil, true, st.readErr
 	}
 
 	defer func() {
@@ -522,37 +524,37 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, err error, ok bool) 
 		if !ok {
 			// don't need lock to read st.done; observing
 			// input channel close provides safe visibility
-			return nil, st.done, true
+			return nil, true, st.done
 		}
 
 		switch in := in.(type) {
 		case *ServerToClient_ResponseMessage:
 			if msgLen != -1 {
-				return nil, status.Errorf(codes.Internal, "server sent redundant response message envelope"), false
+				return nil, false, status.Errorf(codes.Internal, "server sent redundant response message envelope")
 			}
 			msgLen = int(in.ResponseMessage.Size)
 			b = in.ResponseMessage.Data
 			if len(b) > msgLen {
-				return nil, status.Errorf(codes.Internal, "server sent more data than indicated by response message envelope"), false
+				return nil, false, status.Errorf(codes.Internal, "server sent more data than indicated by response message envelope")
 			}
 			if len(b) == msgLen {
-				return b, nil, true
+				return b, true, nil
 			}
 
 		case *ServerToClient_MoreResponseData:
 			if msgLen == -1 {
-				return nil, status.Errorf(codes.Internal, "server never sent envelope for response message"), false
+				return nil, false, status.Errorf(codes.Internal, "server never sent envelope for response message")
 			}
 			b = append(b, in.MoreResponseData...)
 			if len(b) > msgLen {
-				return nil, status.Errorf(codes.Internal, "server sent more data than indicated by response message envelope"), false
+				return nil, false, status.Errorf(codes.Internal, "server sent more data than indicated by response message envelope")
 			}
 			if len(b) == msgLen {
-				return b, nil, true
+				return b, true, nil
 			}
 
 		default:
-			return nil, status.Errorf(codes.Internal, "unrecognized frame type: %T", in), false
+			return nil, false, status.Errorf(codes.Internal, "unrecognized frame type: %T", in)
 		}
 	}
 }
