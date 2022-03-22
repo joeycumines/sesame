@@ -5,6 +5,11 @@ This package is a hard fork of the project linked above.
 There weren't any existing copyright notices, aside from the LICENSE file, so I've added the license header (to the
 original files), for clarity.
 
+Other notable changes:
+
+- Deleted
+  [stream_adapter.go](https://github.com/jhump/grpctunnel/blob/525f1361e55b62188ee09dedceed5b12a6fdb0f3/stream_adapter.go)
+
 ## From the original readme
 
 This library enables carrying gRPC over gRPC. There are a few niche use cases where this could be useful, but the most
