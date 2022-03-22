@@ -261,10 +261,10 @@ message ClientToServer {
     // Sends a message on the RPC stream. If the message is larger than 16k,
     // the rest of the message should be sent in chunks using the
     // more_request_data field (up to 16kb of data in each chunk).
-    MessageData request_message = 3;
+    EncodedMessage message = 3;
     // Sends a chunk of request data, for a request message that could not
     // wholly fit in a request_message field (e.g. > 16kb).
-    bytes more_request_data = 4;
+    bytes message_data = 4;
     // Half-closes the stream, signaling that no more request messages will
     // be sent. No other messages, other than one with the cancel field set,
     // should be sent for this stream (at least not until it is terminated
@@ -274,6 +274,11 @@ message ClientToServer {
     // (unless the ID is being re-used after the stream is terminated on the
     // server side).
     google.protobuf.Empty cancel = 6;
+  }
+
+  message NewStream {
+    string method = 1;
+    type.GrpcMetadata header = 2;
   }
 }
 
@@ -296,28 +301,29 @@ message ServerToClient {
   oneof frame {
     // Sends response headers for this stream. If headers are sent at all,
     // they must be sent before any response message data.
-    type.GrpcMetadata response_headers = 2;
+    type.GrpcMetadata header = 2;
     // Sends a message on the RPC stream. If the message is larger than 16k,
     // the rest of the message should be sent in chunks using the
     // more_response_data field (up to 16kb of data in each chunk).
-    MessageData response_message = 3;
+    EncodedMessage message = 3;
     // Sends a chunk of response data, for a response message that could not
     // wholly fit in a response_message field (e.g. > 16kb).
-    bytes more_response_data = 4;
+    bytes message_data = 4;
     // Terminates the stream and communicates the final disposition to the
     // client. After the stream is closed, no other messages should use the
     // given stream ID until the ID is re-used (e.g. a NewStream message is
     // received that creates another stream with the same ID).
     CloseStream close_stream = 5;
   }
+
+  message CloseStream {
+    type.GrpcMetadata trailer = 1;
+    google.rpc.Status status = 2;
+  }
 }
 
-message NewStream {
-  string method_name = 1;
-  type.GrpcMetadata request_headers = 2;
-}
-
-message MessageData {
+// EncodedMessage models a binary gRPC message, and is used to frame tunneled messages.
+message EncodedMessage {
   // The full size of the message.
   int32 size = 1;
   // The message data. This field should not be longer than 16kb (16,384
@@ -328,9 +334,4 @@ message MessageData {
   // head-of-line blocking and starvation when multiple streams need to send
   // data on the one underlying gRPC stream.
   bytes data = 2;
-}
-
-message CloseStream {
-  type.GrpcMetadata response_trailers = 1;
-  google.rpc.Status status = 2;
 }

@@ -24,23 +24,25 @@ func (x *ClientToServer) Proto_ShallowCopy(v interface{}) {
 			x.Frame = v.GetFrame()
 		} else {
 			func() {
-				if v, ok := v.(interface{ GetNewStream() *NewStream }); ok {
-					var defaultValue *NewStream
+				if v, ok := v.(interface {
+					GetNewStream() *ClientToServer_NewStream
+				}); ok {
+					var defaultValue *ClientToServer_NewStream
 					if v := v.GetNewStream(); v != defaultValue {
-						x.Frame = &ClientToServer_NewStream{NewStream: v}
+						x.Frame = &ClientToServer_NewStream_{NewStream: v}
 						return
 					}
 				}
-				if v, ok := v.(interface{ GetRequestMessage() *MessageData }); ok {
-					var defaultValue *MessageData
-					if v := v.GetRequestMessage(); v != defaultValue {
-						x.Frame = &ClientToServer_RequestMessage{RequestMessage: v}
+				if v, ok := v.(interface{ GetMessage() *EncodedMessage }); ok {
+					var defaultValue *EncodedMessage
+					if v := v.GetMessage(); v != defaultValue {
+						x.Frame = &ClientToServer_Message{Message: v}
 						return
 					}
 				}
-				if v, ok := v.(interface{ GetMoreRequestData() []byte }); ok {
-					if v := v.GetMoreRequestData(); v != nil {
-						x.Frame = &ClientToServer_MoreRequestData{MoreRequestData: v}
+				if v, ok := v.(interface{ GetMessageData() []byte }); ok {
+					if v := v.GetMessageData(); v != nil {
+						x.Frame = &ClientToServer_MessageData{MessageData: v}
 						return
 					}
 				}
@@ -77,6 +79,37 @@ func (x *ClientToServer) Proto_ShallowClone() (c *ClientToServer) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+func (x *ClientToServer_NewStream) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ClientToServer_NewStream:
+		x.Method = v.GetMethod()
+		x.Header = v.GetHeader()
+	default:
+		if v, ok := v.(interface{ GetMethod() string }); ok {
+			x.Method = v.GetMethod()
+		}
+		if v, ok := v.(interface {
+			GetHeader() *grpcmetadata.GrpcMetadata
+		}); ok {
+			x.Header = v.GetHeader()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *ClientToServer_NewStream) Proto_ShallowClone() (c *ClientToServer_NewStream) {
+	if x != nil {
+		c = new(ClientToServer_NewStream)
+		c.Method = x.Method
+		c.Header = x.Header
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
 func (x *ServerToClient) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *ServerToClient:
@@ -91,31 +124,33 @@ func (x *ServerToClient) Proto_ShallowCopy(v interface{}) {
 		} else {
 			func() {
 				if v, ok := v.(interface {
-					GetResponseHeaders() *grpcmetadata.GrpcMetadata
+					GetHeader() *grpcmetadata.GrpcMetadata
 				}); ok {
 					var defaultValue *grpcmetadata.GrpcMetadata
-					if v := v.GetResponseHeaders(); v != defaultValue {
-						x.Frame = &ServerToClient_ResponseHeaders{ResponseHeaders: v}
+					if v := v.GetHeader(); v != defaultValue {
+						x.Frame = &ServerToClient_Header{Header: v}
 						return
 					}
 				}
-				if v, ok := v.(interface{ GetResponseMessage() *MessageData }); ok {
-					var defaultValue *MessageData
-					if v := v.GetResponseMessage(); v != defaultValue {
-						x.Frame = &ServerToClient_ResponseMessage{ResponseMessage: v}
+				if v, ok := v.(interface{ GetMessage() *EncodedMessage }); ok {
+					var defaultValue *EncodedMessage
+					if v := v.GetMessage(); v != defaultValue {
+						x.Frame = &ServerToClient_Message{Message: v}
 						return
 					}
 				}
-				if v, ok := v.(interface{ GetMoreResponseData() []byte }); ok {
-					if v := v.GetMoreResponseData(); v != nil {
-						x.Frame = &ServerToClient_MoreResponseData{MoreResponseData: v}
+				if v, ok := v.(interface{ GetMessageData() []byte }); ok {
+					if v := v.GetMessageData(); v != nil {
+						x.Frame = &ServerToClient_MessageData{MessageData: v}
 						return
 					}
 				}
-				if v, ok := v.(interface{ GetCloseStream() *CloseStream }); ok {
-					var defaultValue *CloseStream
+				if v, ok := v.(interface {
+					GetCloseStream() *ServerToClient_CloseStream
+				}); ok {
+					var defaultValue *ServerToClient_CloseStream
 					if v := v.GetCloseStream(); v != defaultValue {
-						x.Frame = &ServerToClient_CloseStream{CloseStream: v}
+						x.Frame = &ServerToClient_CloseStream_{CloseStream: v}
 						return
 					}
 				}
@@ -138,29 +173,29 @@ func (x *ServerToClient) Proto_ShallowClone() (c *ServerToClient) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
-func (x *NewStream) Proto_ShallowCopy(v interface{}) {
+func (x *ServerToClient_CloseStream) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *NewStream:
-		x.MethodName = v.GetMethodName()
-		x.RequestHeaders = v.GetRequestHeaders()
+	case *ServerToClient_CloseStream:
+		x.Trailer = v.GetTrailer()
+		x.Status = v.GetStatus()
 	default:
-		if v, ok := v.(interface{ GetMethodName() string }); ok {
-			x.MethodName = v.GetMethodName()
-		}
 		if v, ok := v.(interface {
-			GetRequestHeaders() *grpcmetadata.GrpcMetadata
+			GetTrailer() *grpcmetadata.GrpcMetadata
 		}); ok {
-			x.RequestHeaders = v.GetRequestHeaders()
+			x.Trailer = v.GetTrailer()
+		}
+		if v, ok := v.(interface{ GetStatus() *status.Status }); ok {
+			x.Status = v.GetStatus()
 		}
 	}
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *NewStream) Proto_ShallowClone() (c *NewStream) {
+func (x *ServerToClient_CloseStream) Proto_ShallowClone() (c *ServerToClient_CloseStream) {
 	if x != nil {
-		c = new(NewStream)
-		c.MethodName = x.MethodName
-		c.RequestHeaders = x.RequestHeaders
+		c = new(ServerToClient_CloseStream)
+		c.Trailer = x.Trailer
+		c.Status = x.Status
 	}
 	return
 }
@@ -169,9 +204,9 @@ func (x *NewStream) Proto_ShallowClone() (c *NewStream) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
-func (x *MessageData) Proto_ShallowCopy(v interface{}) {
+func (x *EncodedMessage) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *MessageData:
+	case *EncodedMessage:
 		x.Size = v.GetSize()
 		x.Data = v.GetData()
 	default:
@@ -185,42 +220,11 @@ func (x *MessageData) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *MessageData) Proto_ShallowClone() (c *MessageData) {
+func (x *EncodedMessage) Proto_ShallowClone() (c *EncodedMessage) {
 	if x != nil {
-		c = new(MessageData)
+		c = new(EncodedMessage)
 		c.Size = x.Size
 		c.Data = x.Data
-	}
-	return
-}
-
-// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
-// Note that v is of an arbitrary type, which may implement any number of the
-// field getters, which are defined as any methods of the same signature as those
-// generated for the receiver type, with a name starting with Get.
-func (x *CloseStream) Proto_ShallowCopy(v interface{}) {
-	switch v := v.(type) {
-	case *CloseStream:
-		x.ResponseTrailers = v.GetResponseTrailers()
-		x.Status = v.GetStatus()
-	default:
-		if v, ok := v.(interface {
-			GetResponseTrailers() *grpcmetadata.GrpcMetadata
-		}); ok {
-			x.ResponseTrailers = v.GetResponseTrailers()
-		}
-		if v, ok := v.(interface{ GetStatus() *status.Status }); ok {
-			x.Status = v.GetStatus()
-		}
-	}
-}
-
-// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *CloseStream) Proto_ShallowClone() (c *CloseStream) {
-	if x != nil {
-		c = new(CloseStream)
-		c.ResponseTrailers = x.ResponseTrailers
-		c.Status = x.Status
 	}
 	return
 }

@@ -121,7 +121,7 @@ func (s *tunnelServer) serve() error {
 			return err
 		}
 
-		if f, ok := in.Frame.(*ClientToServer_NewStream); ok {
+		if f, ok := in.Frame.(*ClientToServer_NewStream_); ok {
 			if ok, err := s.createStream(ctx, in.StreamId, f.NewStream); err != nil {
 				if !ok {
 					return err
@@ -129,8 +129,8 @@ func (s *tunnelServer) serve() error {
 					st, _ := status.FromError(err)
 					s.stream.Send(&ServerToClient{
 						StreamId: in.StreamId,
-						Frame: &ServerToClient_CloseStream{
-							CloseStream: &CloseStream{
+						Frame: &ServerToClient_CloseStream_{
+							CloseStream: &ServerToClient_CloseStream{
 								Status: st.Proto(),
 							},
 						},
@@ -148,7 +148,7 @@ func (s *tunnelServer) serve() error {
 	}
 }
 
-func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *NewStream) (bool, error) {
+func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *ClientToServer_NewStream) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -162,12 +162,12 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *
 	}
 	s.lastSeen = streamID
 
-	if frame.MethodName[0] == '/' {
-		frame.MethodName = frame.MethodName[1:]
+	if frame.Method[0] == '/' {
+		frame.Method = frame.Method[1:]
 	}
-	parts := strings.SplitN(frame.MethodName, "/", 2)
+	parts := strings.SplitN(frame.Method, "/", 2)
 	if len(parts) != 2 {
-		return true, status.Errorf(codes.InvalidArgument, "%s is not a well-formed method name", frame.MethodName)
+		return true, status.Errorf(codes.InvalidArgument, "%s is not a well-formed method name", frame.Method)
 	}
 	var md interface{}
 	sd, svc := s.services.QueryService(parts[0])
@@ -181,17 +181,17 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *
 
 	if md == nil {
 		delete(s.streams, streamID)
-		return true, status.Errorf(codes.Unimplemented, "%s not implemented", frame.MethodName)
+		return true, status.Errorf(codes.Unimplemented, "%s not implemented", frame.Method)
 	}
 
-	ctx = metadata.NewIncomingContext(ctx, fromProto(frame.RequestHeaders))
+	ctx = metadata.NewIncomingContext(ctx, fromProto(frame.Header))
 
 	ch := make(chan isClientToServer_Frame, 1)
 	str := &tunnelServerStream{
 		ctx:            ctx,
 		svr:            s,
 		streamID:       streamID,
-		method:         frame.MethodName,
+		method:         frame.Method,
 		stream:         s.stream,
 		isClientStream: isClientStream,
 		isServerStream: isServerStream,
@@ -330,8 +330,8 @@ func (st *tunnelServerStream) setHeader(md metadata.MD, send bool) error {
 func (st *tunnelServerStream) sendHeadersLocked() error {
 	err := st.stream.Send(&ServerToClient{
 		StreamId: st.streamID,
-		Frame: &ServerToClient_ResponseHeaders{
-			ResponseHeaders: toProto(st.headers),
+		Frame: &ServerToClient_Header{
+			Header: toProto(st.headers),
 		},
 	})
 	st.sentHeaders = true
@@ -436,8 +436,8 @@ func (st *tunnelServerStream) SendMsg(m interface{}) error {
 		if i == 0 {
 			err = st.stream.Send(&ServerToClient{
 				StreamId: st.streamID,
-				Frame: &ServerToClient_ResponseMessage{
-					ResponseMessage: &MessageData{
+				Frame: &ServerToClient_Message{
+					Message: &EncodedMessage{
 						Size: int32(len(b)),
 						Data: chunk,
 					},
@@ -446,8 +446,8 @@ func (st *tunnelServerStream) SendMsg(m interface{}) error {
 		} else {
 			err = st.stream.Send(&ServerToClient{
 				StreamId: st.streamID,
-				Frame: &ServerToClient_MoreResponseData{
-					MoreResponseData: chunk,
+				Frame: &ServerToClient_MessageData{
+					MessageData: chunk,
 				},
 			})
 		}
@@ -534,12 +534,12 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 			}
 
 			switch in := in.(type) {
-			case *ClientToServer_RequestMessage:
+			case *ClientToServer_Message:
 				if msgLen != -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "received redundant request message envelope")
 				}
-				msgLen = int(in.RequestMessage.Size)
-				b = in.RequestMessage.Data
+				msgLen = int(in.Message.Size)
+				b = in.Message.Data
 				if len(b) > msgLen {
 					return nil, false, status.Errorf(codes.InvalidArgument, "received more data than indicated by request message envelope")
 				}
@@ -547,11 +547,11 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 					return b, true, nil
 				}
 
-			case *ClientToServer_MoreRequestData:
+			case *ClientToServer_MessageData:
 				if msgLen == -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "never received envelope for request message")
 				}
-				b = append(b, in.MoreRequestData...)
+				b = append(b, in.MessageData...)
 				if len(b) > msgLen {
 					return nil, false, status.Errorf(codes.InvalidArgument, "received more data than indicated by request message envelope")
 				}
@@ -612,10 +612,10 @@ func (st *tunnelServerStream) finishStream(err error) {
 	stat, _ := status.FromError(err)
 	st.stream.Send(&ServerToClient{
 		StreamId: st.streamID,
-		Frame: &ServerToClient_CloseStream{
-			CloseStream: &CloseStream{
-				Status:           stat.Proto(),
-				ResponseTrailers: toProto(st.trailers),
+		Frame: &ServerToClient_CloseStream_{
+			CloseStream: &ServerToClient_CloseStream{
+				Status:  stat.Proto(),
+				Trailer: toProto(st.trailers),
 			},
 		},
 	})

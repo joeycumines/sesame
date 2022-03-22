@@ -144,10 +144,10 @@ func (c *TunnelChannel) newStream(ctx context.Context, clientStreams, serverStre
 	}
 	err = c.stream.SendMsg(&ClientToServer{
 		StreamId: str.streamID,
-		Frame: &ClientToServer_NewStream{
-			NewStream: &NewStream{
-				MethodName:     methodName,
-				RequestHeaders: toProto(md),
+		Frame: &ClientToServer_NewStream_{
+			NewStream: &ClientToServer_NewStream{
+				Method: methodName,
+				Header: toProto(md),
 			},
 		},
 	})
@@ -441,8 +441,8 @@ func (st *tunnelClientStream) SendMsg(m interface{}) error {
 		if i == 0 {
 			err = st.stream.Send(&ClientToServer{
 				StreamId: st.streamID,
-				Frame: &ClientToServer_RequestMessage{
-					RequestMessage: &MessageData{
+				Frame: &ClientToServer_Message{
+					Message: &EncodedMessage{
 						Size: int32(len(b)),
 						Data: chunk,
 					},
@@ -451,8 +451,8 @@ func (st *tunnelClientStream) SendMsg(m interface{}) error {
 		} else {
 			err = st.stream.Send(&ClientToServer{
 				StreamId: st.streamID,
-				Frame: &ClientToServer_MoreRequestData{
-					MoreRequestData: chunk,
+				Frame: &ClientToServer_MessageData{
+					MessageData: chunk,
 				},
 			})
 		}
@@ -528,12 +528,12 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 		}
 
 		switch in := in.(type) {
-		case *ServerToClient_ResponseMessage:
+		case *ServerToClient_Message:
 			if msgLen != -1 {
 				return nil, false, status.Errorf(codes.Internal, "server sent redundant response message envelope")
 			}
-			msgLen = int(in.ResponseMessage.Size)
-			b = in.ResponseMessage.Data
+			msgLen = int(in.Message.Size)
+			b = in.Message.Data
 			if len(b) > msgLen {
 				return nil, false, status.Errorf(codes.Internal, "server sent more data than indicated by response message envelope")
 			}
@@ -541,11 +541,11 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 				return b, true, nil
 			}
 
-		case *ServerToClient_MoreResponseData:
+		case *ServerToClient_MessageData:
 			if msgLen == -1 {
 				return nil, false, status.Errorf(codes.Internal, "server never sent envelope for response message")
 			}
-			b = append(b, in.MoreResponseData...)
+			b = append(b, in.MessageData...)
 			if len(b) > msgLen {
 				return nil, false, status.Errorf(codes.Internal, "server sent more data than indicated by response message envelope")
 			}
@@ -578,7 +578,7 @@ func (st *tunnelClientStream) acceptServerFrame(frame isServerToClient_Frame) {
 	}
 
 	switch frame := frame.(type) {
-	case *ServerToClient_ResponseHeaders:
+	case *ServerToClient_Header:
 		st.ingestMu.Lock()
 		defer st.ingestMu.Unlock()
 		if st.gotHeaders {
@@ -586,15 +586,15 @@ func (st *tunnelClientStream) acceptServerFrame(frame isServerToClient_Frame) {
 			return
 		}
 		st.gotHeaders = true
-		st.headers = fromProto(frame.ResponseHeaders)
+		st.headers = fromProto(frame.Header)
 		for _, hdrs := range st.headersTargets {
 			*hdrs = st.headers
 		}
 		close(st.gotHeadersSignal)
 		return
 
-	case *ServerToClient_CloseStream:
-		trailers := fromProto(frame.CloseStream.ResponseTrailers)
+	case *ServerToClient_CloseStream_:
+		trailers := fromProto(frame.CloseStream.Trailer)
 		err := status.FromProto(frame.CloseStream.Status).Err()
 		st.finishStream(err, trailers)
 	}
