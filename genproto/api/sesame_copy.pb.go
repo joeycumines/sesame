@@ -52,6 +52,99 @@ func (x *Remote) Proto_ShallowClone() (c *Remote) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+func (x *Endpoint) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *Endpoint:
+		x.Name = v.GetName()
+		x.DisplayName = v.GetDisplayName()
+		x.Description = v.GetDescription()
+		x.CreateTime = v.GetCreateTime()
+		x.Spec = v.GetSpec()
+	default:
+		if v, ok := v.(interface{ GetName() string }); ok {
+			x.Name = v.GetName()
+		}
+		if v, ok := v.(interface{ GetDisplayName() string }); ok {
+			x.DisplayName = v.GetDisplayName()
+		}
+		if v, ok := v.(interface{ GetDescription() string }); ok {
+			x.Description = v.GetDescription()
+		}
+		if v, ok := v.(interface{ GetCreateTime() *timestamppb.Timestamp }); ok {
+			x.CreateTime = v.GetCreateTime()
+		}
+		if v, ok := v.(interface{ GetSpec() *Endpoint_Spec }); ok {
+			x.Spec = v.GetSpec()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *Endpoint) Proto_ShallowClone() (c *Endpoint) {
+	if x != nil {
+		c = new(Endpoint)
+		c.Name = x.Name
+		c.DisplayName = x.DisplayName
+		c.Description = x.Description
+		c.CreateTime = x.CreateTime
+		c.Spec = x.Spec
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+func (x *Endpoint_Spec) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *Endpoint_Spec:
+		x.Data = v.GetData()
+	default:
+		if v, ok := v.(interface{ GetData() isEndpoint_Spec_Data }); ok {
+			x.Data = v.GetData()
+		} else {
+			func() {
+				if v, ok := v.(interface{ GetTunnel() *Endpoint_Tunnel }); ok {
+					var defaultValue *Endpoint_Tunnel
+					if v := v.GetTunnel(); v != defaultValue {
+						x.Data = &Endpoint_Spec_Tunnel{Tunnel: v}
+						return
+					}
+				}
+			}()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *Endpoint_Spec) Proto_ShallowClone() (c *Endpoint_Spec) {
+	if x != nil {
+		c = new(Endpoint_Spec)
+		c.Data = x.Data
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+func (x *Endpoint_Tunnel) Proto_ShallowCopy(v interface{}) {
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *Endpoint_Tunnel) Proto_ShallowClone() (c *Endpoint_Tunnel) {
+	if x != nil {
+		c = new(Endpoint_Tunnel)
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
 func (x *Namespace) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *Namespace:
@@ -80,10 +173,14 @@ func (x *CreateRemoteRequest) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *CreateRemoteRequest:
 		x.Parent = v.GetParent()
+		x.ResourceId = v.GetResourceId()
 		x.Remote = v.GetRemote()
 	default:
 		if v, ok := v.(interface{ GetParent() string }); ok {
 			x.Parent = v.GetParent()
+		}
+		if v, ok := v.(interface{ GetResourceId() string }); ok {
+			x.ResourceId = v.GetResourceId()
 		}
 		if v, ok := v.(interface{ GetRemote() *Remote }); ok {
 			x.Remote = v.GetRemote()
@@ -96,6 +193,7 @@ func (x *CreateRemoteRequest) Proto_ShallowClone() (c *CreateRemoteRequest) {
 	if x != nil {
 		c = new(CreateRemoteRequest)
 		c.Parent = x.Parent
+		c.ResourceId = x.ResourceId
 		c.Remote = x.Remote
 	}
 	return
@@ -245,52 +343,32 @@ func (x *ListRemotesResponse) Proto_ShallowClone() (c *ListRemotesResponse) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
-func (x *CallMethodRequest) Proto_ShallowCopy(v interface{}) {
+func (x *CreateEndpointRequest) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *CallMethodRequest:
-		x.Data = v.GetData()
+	case *CreateEndpointRequest:
+		x.Parent = v.GetParent()
+		x.ResourceId = v.GetResourceId()
+		x.Endpoint = v.GetEndpoint()
 	default:
-		if v, ok := v.(interface {
-			GetData() isCallMethodRequest_Data
-		}); ok {
-			x.Data = v.GetData()
-		} else {
-			func() {
-				if v, ok := v.(interface {
-					GetDial() *CallMethodRequest_Dial
-				}); ok {
-					var defaultValue *CallMethodRequest_Dial
-					if v := v.GetDial(); v != defaultValue {
-						x.Data = &CallMethodRequest_Dial_{Dial: v}
-						return
-					}
-				}
-				if v, ok := v.(interface {
-					GetHeader() *grpcmetadata.GrpcMetadata
-				}); ok {
-					var defaultValue *grpcmetadata.GrpcMetadata
-					if v := v.GetHeader(); v != defaultValue {
-						x.Data = &CallMethodRequest_Header{Header: v}
-						return
-					}
-				}
-				if v, ok := v.(interface{ GetContent() *anypb.Any }); ok {
-					var defaultValue *anypb.Any
-					if v := v.GetContent(); v != defaultValue {
-						x.Data = &CallMethodRequest_Content{Content: v}
-						return
-					}
-				}
-			}()
+		if v, ok := v.(interface{ GetParent() string }); ok {
+			x.Parent = v.GetParent()
+		}
+		if v, ok := v.(interface{ GetResourceId() string }); ok {
+			x.ResourceId = v.GetResourceId()
+		}
+		if v, ok := v.(interface{ GetEndpoint() *Endpoint }); ok {
+			x.Endpoint = v.GetEndpoint()
 		}
 	}
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *CallMethodRequest) Proto_ShallowClone() (c *CallMethodRequest) {
+func (x *CreateEndpointRequest) Proto_ShallowClone() (c *CreateEndpointRequest) {
 	if x != nil {
-		c = new(CallMethodRequest)
-		c.Data = x.Data
+		c = new(CreateEndpointRequest)
+		c.Parent = x.Parent
+		c.ResourceId = x.ResourceId
+		c.Endpoint = x.Endpoint
 	}
 	return
 }
@@ -299,9 +377,9 @@ func (x *CallMethodRequest) Proto_ShallowClone() (c *CallMethodRequest) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
-func (x *CallMethodRequest_Dial) Proto_ShallowCopy(v interface{}) {
+func (x *GetEndpointRequest) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *CallMethodRequest_Dial:
+	case *GetEndpointRequest:
 		x.Name = v.GetName()
 	default:
 		if v, ok := v.(interface{ GetName() string }); ok {
@@ -311,9 +389,9 @@ func (x *CallMethodRequest_Dial) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *CallMethodRequest_Dial) Proto_ShallowClone() (c *CallMethodRequest_Dial) {
+func (x *GetEndpointRequest) Proto_ShallowClone() (c *GetEndpointRequest) {
 	if x != nil {
-		c = new(CallMethodRequest_Dial)
+		c = new(GetEndpointRequest)
 		c.Name = x.Name
 	}
 	return
@@ -323,30 +401,135 @@ func (x *CallMethodRequest_Dial) Proto_ShallowClone() (c *CallMethodRequest_Dial
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
-func (x *CallMethodResponse) Proto_ShallowCopy(v interface{}) {
+func (x *DeleteEndpointRequest) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *CallMethodResponse:
+	case *DeleteEndpointRequest:
+		x.Name = v.GetName()
+	default:
+		if v, ok := v.(interface{ GetName() string }); ok {
+			x.Name = v.GetName()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *DeleteEndpointRequest) Proto_ShallowClone() (c *DeleteEndpointRequest) {
+	if x != nil {
+		c = new(DeleteEndpointRequest)
+		c.Name = x.Name
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+func (x *UpdateEndpointRequest) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *UpdateEndpointRequest:
+		x.Endpoint = v.GetEndpoint()
+		x.UpdateMask = v.GetUpdateMask()
+	default:
+		if v, ok := v.(interface{ GetEndpoint() *Endpoint }); ok {
+			x.Endpoint = v.GetEndpoint()
+		}
+		if v, ok := v.(interface{ GetUpdateMask() *fieldmaskpb.FieldMask }); ok {
+			x.UpdateMask = v.GetUpdateMask()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *UpdateEndpointRequest) Proto_ShallowClone() (c *UpdateEndpointRequest) {
+	if x != nil {
+		c = new(UpdateEndpointRequest)
+		c.Endpoint = x.Endpoint
+		c.UpdateMask = x.UpdateMask
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+func (x *ListEndpointsRequest) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ListEndpointsRequest:
+		x.Parent = v.GetParent()
+		x.PageSize = v.GetPageSize()
+		x.PageToken = v.GetPageToken()
+	default:
+		if v, ok := v.(interface{ GetParent() string }); ok {
+			x.Parent = v.GetParent()
+		}
+		if v, ok := v.(interface{ GetPageSize() rune }); ok {
+			x.PageSize = v.GetPageSize()
+		}
+		if v, ok := v.(interface{ GetPageToken() string }); ok {
+			x.PageToken = v.GetPageToken()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *ListEndpointsRequest) Proto_ShallowClone() (c *ListEndpointsRequest) {
+	if x != nil {
+		c = new(ListEndpointsRequest)
+		c.Parent = x.Parent
+		c.PageSize = x.PageSize
+		c.PageToken = x.PageToken
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+func (x *ListEndpointsResponse) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ListEndpointsResponse:
+		x.Endpoints = v.GetEndpoints()
+		x.NextPageToken = v.GetNextPageToken()
+	default:
+		if v, ok := v.(interface{ GetEndpoints() []*Endpoint }); ok {
+			x.Endpoints = v.GetEndpoints()
+		}
+		if v, ok := v.(interface{ GetNextPageToken() string }); ok {
+			x.NextPageToken = v.GetNextPageToken()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *ListEndpointsResponse) Proto_ShallowClone() (c *ListEndpointsResponse) {
+	if x != nil {
+		c = new(ListEndpointsResponse)
+		c.Endpoints = x.Endpoints
+		c.NextPageToken = x.NextPageToken
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+func (x *ProxyRequest) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ProxyRequest:
 		x.Data = v.GetData()
 	default:
-		if v, ok := v.(interface {
-			GetData() isCallMethodResponse_Data
-		}); ok {
+		if v, ok := v.(interface{ GetData() isProxyRequest_Data }); ok {
 			x.Data = v.GetData()
 		} else {
 			func() {
-				if v, ok := v.(interface {
-					GetConn() *CallMethodResponse_Conn
-				}); ok {
-					var defaultValue *CallMethodResponse_Conn
-					if v := v.GetConn(); v != defaultValue {
-						x.Data = &CallMethodResponse_Conn_{Conn: v}
-						return
-					}
-				}
-				if v, ok := v.(interface{ GetError() *status.Status }); ok {
-					var defaultValue *status.Status
-					if v := v.GetError(); v != defaultValue {
-						x.Data = &CallMethodResponse_Error{Error: v}
+				if v, ok := v.(interface{ GetDial() *ProxyRequest_Dial }); ok {
+					var defaultValue *ProxyRequest_Dial
+					if v := v.GetDial(); v != defaultValue {
+						x.Data = &ProxyRequest_Dial_{Dial: v}
 						return
 					}
 				}
@@ -355,23 +538,14 @@ func (x *CallMethodResponse) Proto_ShallowCopy(v interface{}) {
 				}); ok {
 					var defaultValue *grpcmetadata.GrpcMetadata
 					if v := v.GetHeader(); v != defaultValue {
-						x.Data = &CallMethodResponse_Header{Header: v}
+						x.Data = &ProxyRequest_Header{Header: v}
 						return
 					}
 				}
 				if v, ok := v.(interface{ GetContent() *anypb.Any }); ok {
 					var defaultValue *anypb.Any
 					if v := v.GetContent(); v != defaultValue {
-						x.Data = &CallMethodResponse_Content{Content: v}
-						return
-					}
-				}
-				if v, ok := v.(interface {
-					GetTrailer() *grpcmetadata.GrpcMetadata
-				}); ok {
-					var defaultValue *grpcmetadata.GrpcMetadata
-					if v := v.GetTrailer(); v != defaultValue {
-						x.Data = &CallMethodResponse_Trailer{Trailer: v}
+						x.Data = &ProxyRequest_Content{Content: v}
 						return
 					}
 				}
@@ -381,9 +555,9 @@ func (x *CallMethodResponse) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *CallMethodResponse) Proto_ShallowClone() (c *CallMethodResponse) {
+func (x *ProxyRequest) Proto_ShallowClone() (c *ProxyRequest) {
 	if x != nil {
-		c = new(CallMethodResponse)
+		c = new(ProxyRequest)
 		c.Data = x.Data
 	}
 	return
@@ -393,13 +567,132 @@ func (x *CallMethodResponse) Proto_ShallowClone() (c *CallMethodResponse) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
-func (x *CallMethodResponse_Conn) Proto_ShallowCopy(v interface{}) {
+func (x *ProxyRequest_Dial) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ProxyRequest_Dial:
+		x.Endpoint = v.GetEndpoint()
+		x.Method = v.GetMethod()
+		x.ConnMask = v.GetConnMask()
+	default:
+		if v, ok := v.(interface{ GetEndpoint() string }); ok {
+			x.Endpoint = v.GetEndpoint()
+		}
+		if v, ok := v.(interface{ GetMethod() string }); ok {
+			x.Method = v.GetMethod()
+		}
+		if v, ok := v.(interface{ GetConnMask() *fieldmaskpb.FieldMask }); ok {
+			x.ConnMask = v.GetConnMask()
+		}
+	}
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *CallMethodResponse_Conn) Proto_ShallowClone() (c *CallMethodResponse_Conn) {
+func (x *ProxyRequest_Dial) Proto_ShallowClone() (c *ProxyRequest_Dial) {
 	if x != nil {
-		c = new(CallMethodResponse_Conn)
+		c = new(ProxyRequest_Dial)
+		c.Endpoint = x.Endpoint
+		c.Method = x.Method
+		c.ConnMask = x.ConnMask
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+func (x *ProxyResponse) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ProxyResponse:
+		x.Data = v.GetData()
+	default:
+		if v, ok := v.(interface{ GetData() isProxyResponse_Data }); ok {
+			x.Data = v.GetData()
+		} else {
+			func() {
+				if v, ok := v.(interface{ GetConn() *ProxyResponse_Conn }); ok {
+					var defaultValue *ProxyResponse_Conn
+					if v := v.GetConn(); v != defaultValue {
+						x.Data = &ProxyResponse_Conn_{Conn: v}
+						return
+					}
+				}
+				if v, ok := v.(interface{ GetError() *status.Status }); ok {
+					var defaultValue *status.Status
+					if v := v.GetError(); v != defaultValue {
+						x.Data = &ProxyResponse_Error{Error: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetHeader() *grpcmetadata.GrpcMetadata
+				}); ok {
+					var defaultValue *grpcmetadata.GrpcMetadata
+					if v := v.GetHeader(); v != defaultValue {
+						x.Data = &ProxyResponse_Header{Header: v}
+						return
+					}
+				}
+				if v, ok := v.(interface{ GetContent() *anypb.Any }); ok {
+					var defaultValue *anypb.Any
+					if v := v.GetContent(); v != defaultValue {
+						x.Data = &ProxyResponse_Content{Content: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetTrailer() *grpcmetadata.GrpcMetadata
+				}); ok {
+					var defaultValue *grpcmetadata.GrpcMetadata
+					if v := v.GetTrailer(); v != defaultValue {
+						x.Data = &ProxyResponse_Trailer{Trailer: v}
+						return
+					}
+				}
+			}()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *ProxyResponse) Proto_ShallowClone() (c *ProxyResponse) {
+	if x != nil {
+		c = new(ProxyResponse)
+		c.Data = x.Data
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+func (x *ProxyResponse_Conn) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ProxyResponse_Conn:
+		x.Namespace = v.GetNamespace()
+		x.Remote = v.GetRemote()
+		x.Endpoint = v.GetEndpoint()
+	default:
+		if v, ok := v.(interface{ GetNamespace() *Namespace }); ok {
+			x.Namespace = v.GetNamespace()
+		}
+		if v, ok := v.(interface{ GetRemote() *Remote }); ok {
+			x.Remote = v.GetRemote()
+		}
+		if v, ok := v.(interface{ GetEndpoint() *Endpoint }); ok {
+			x.Endpoint = v.GetEndpoint()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *ProxyResponse_Conn) Proto_ShallowClone() (c *ProxyResponse_Conn) {
+	if x != nil {
+		c = new(ProxyResponse_Conn)
+		c.Namespace = x.Namespace
+		c.Remote = x.Remote
+		c.Endpoint = x.Endpoint
 	}
 	return
 }

@@ -22,7 +22,10 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TunnelServiceClient interface {
+	// Orchestrates Stream connections.
 	Tunnel(ctx context.Context, opts ...grpc.CallOption) (TunnelService_TunnelClient, error)
+	// Provides dedicated bi-directional streaming (reverse dialed).
+	Stream(ctx context.Context, opts ...grpc.CallOption) (TunnelService_StreamClient, error)
 }
 
 type tunnelServiceClient struct {
@@ -64,11 +67,45 @@ func (x *tunnelServiceTunnelClient) Recv() (*TunnelResponse, error) {
 	return m, nil
 }
 
+func (c *tunnelServiceClient) Stream(ctx context.Context, opts ...grpc.CallOption) (TunnelService_StreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &TunnelService_ServiceDesc.Streams[1], "/sesame.v1alpha1.TunnelService/Stream", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &tunnelServiceStreamClient{stream}
+	return x, nil
+}
+
+type TunnelService_StreamClient interface {
+	Send(*StreamRequest) error
+	Recv() (*StreamResponse, error)
+	grpc.ClientStream
+}
+
+type tunnelServiceStreamClient struct {
+	grpc.ClientStream
+}
+
+func (x *tunnelServiceStreamClient) Send(m *StreamRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *tunnelServiceStreamClient) Recv() (*StreamResponse, error) {
+	m := new(StreamResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TunnelServiceServer is the server API for TunnelService service.
 // All implementations must embed UnimplementedTunnelServiceServer
 // for forward compatibility
 type TunnelServiceServer interface {
+	// Orchestrates Stream connections.
 	Tunnel(TunnelService_TunnelServer) error
+	// Provides dedicated bi-directional streaming (reverse dialed).
+	Stream(TunnelService_StreamServer) error
 	mustEmbedUnimplementedTunnelServiceServer()
 }
 
@@ -78,6 +115,9 @@ type UnimplementedTunnelServiceServer struct {
 
 func (UnimplementedTunnelServiceServer) Tunnel(TunnelService_TunnelServer) error {
 	return status.Errorf(codes.Unimplemented, "method Tunnel not implemented")
+}
+func (UnimplementedTunnelServiceServer) Stream(TunnelService_StreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method Stream not implemented")
 }
 func (UnimplementedTunnelServiceServer) mustEmbedUnimplementedTunnelServiceServer() {}
 
@@ -118,6 +158,32 @@ func (x *tunnelServiceTunnelServer) Recv() (*TunnelRequest, error) {
 	return m, nil
 }
 
+func _TunnelService_Stream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TunnelServiceServer).Stream(&tunnelServiceStreamServer{stream})
+}
+
+type TunnelService_StreamServer interface {
+	Send(*StreamResponse) error
+	Recv() (*StreamRequest, error)
+	grpc.ServerStream
+}
+
+type tunnelServiceStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *tunnelServiceStreamServer) Send(m *StreamResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *tunnelServiceStreamServer) Recv() (*StreamRequest, error) {
+	m := new(StreamRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TunnelService_ServiceDesc is the grpc.ServiceDesc for TunnelService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -129,6 +195,12 @@ var TunnelService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Tunnel",
 			Handler:       _TunnelService_Tunnel_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "Stream",
+			Handler:       _TunnelService_Stream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

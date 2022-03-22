@@ -8,6 +8,7 @@ import "google/protobuf/field_mask.proto";
 import "google/protobuf/any.proto";
 import "google/rpc/status.proto";
 import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
 import "sesame/type/grpcmetadata.proto";
 
 option go_package = "github.com/joeycumines/sesame/genproto/api";
@@ -46,7 +47,43 @@ service Sesame {
     };
   }
 
-  rpc CallMethod (stream CallMethodRequest) returns (stream CallMethodResponse) {
+  rpc CreateEndpoint (CreateEndpointRequest) returns (Endpoint) {
+    option (google.api.http) = {
+      post: "/v1alpha1/{parent=namespaces/*/remotes/*}/endpoints"
+      body: "endpoint"
+    };
+  }
+
+  rpc GetEndpoint (GetEndpointRequest) returns (Endpoint) {
+    option (google.api.http) = {
+      get: "/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"
+    };
+  }
+
+  rpc DeleteEndpoint (DeleteEndpointRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"
+    };
+  }
+
+  rpc UpdateEndpoint (UpdateEndpointRequest) returns (Endpoint) {
+    option (google.api.http) = {
+      patch: "/v1alpha1/{endpoint.name=namespaces/*/remotes/*/endpoints/*}"
+      body: "endpoint"
+    };
+  }
+
+  rpc ListEndpoints (ListEndpointsRequest) returns (ListEndpointsResponse) {
+    option (google.api.http) = {
+      get: "/v1alpha1/{parent=namespaces/*/remotes/*}/endpoints"
+    };
+  }
+
+  rpc Proxy (stream ProxyRequest) returns (stream ProxyResponse) {
+    option (google.api.http) = {
+      post: "/v1alpha1/proxy"
+      body: "*"
+    };
   }
 
   // TODO namespace methods
@@ -57,7 +94,26 @@ message Remote {
   string name = 1;
   string display_name = 2;
   string description = 3;
-  google.protobuf.Timestamp create_time = 6;
+  google.protobuf.Timestamp create_time = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Endpoint is a gRPC service available via a remote.
+message Endpoint {
+  string name = 1;
+  string display_name = 2;
+  string description = 3;
+  google.protobuf.Timestamp create_time = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
+  Spec spec = 11;
+  // Spec models the endpoint specification, containing configuration around access and usage behavior.
+  message Spec {
+    oneof data {
+      Tunnel tunnel = 1;
+    };
+  }
+  // Tunnel models an endpoint exposed directly over a tunnel provider.
+  message Tunnel {
+    // TODO might eventually make this configurable (more than one tunnel pattern)
+  }
 }
 
 // Namespace scopes resources in the Sesame API, and is intended to (eventually) facilitate scoped simple auth.
@@ -69,6 +125,8 @@ message CreateRemoteRequest {
   // parent for the remote, note that the remote.name MUST NOT be set
   // generated names may be based on the other input
   string parent = 1;
+  // May be specified to request a specific (non-trailing) resource id, note it's a single path segment, w/o any "/".
+  string resource_id = 2;
   Remote remote = 11;
 }
 
@@ -97,7 +155,40 @@ message ListRemotesResponse {
   string next_page_token = 2;
 }
 
-message CallMethodRequest {
+message CreateEndpointRequest {
+  // The name of the parent Remote, note that endpoint.name MUST NOT be set.
+  string parent = 1;
+  // May be specified to request a specific (non-trailing) resource id, note it's a single path segment, w/o any "/".
+  string resource_id = 2;
+  Endpoint endpoint = 11;
+}
+
+message GetEndpointRequest {
+  string name = 1;
+}
+
+message DeleteEndpointRequest {
+  string name = 1;
+}
+
+message UpdateEndpointRequest {
+  Endpoint endpoint = 1;
+  // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#fieldmask
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message ListEndpointsRequest {
+  string parent = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListEndpointsResponse {
+  repeated Endpoint endpoints = 1;
+  string next_page_token = 2;
+}
+
+message ProxyRequest {
   oneof data {
     Dial dial = 1;
     type.GrpcMetadata header = 2;
@@ -105,12 +196,14 @@ message CallMethodRequest {
   };
   // Dial models the initial request routing of a method call.
   message Dial {
-    // name is remote+"/"+service+"/"+method
-    string name = 1;
+    string endpoint = 1;
+    string method = 2;
+    // conn_mask is an optional field mask for ProxyResponse.conn.
+    google.protobuf.FieldMask conn_mask = 3;
   }
 }
 
-message CallMethodResponse {
+message ProxyResponse {
   oneof data {
     Conn conn = 1;
     // error models an error from the inner call, and may be received any time after conn
@@ -119,8 +212,10 @@ message CallMethodResponse {
     google.protobuf.Any content = 4;
     type.GrpcMetadata trailer = 5;
   };
-  // Conn is the response to Dial.
+  // Conn is the response to ProxyRequest.dial.
   message Conn {
-    // TODO could expose details about the remote / service / method here
+    Namespace namespace = 1;
+    Remote remote = 2;
+    Endpoint endpoint = 3;
   }
 }

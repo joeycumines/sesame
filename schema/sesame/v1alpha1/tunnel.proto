@@ -2,24 +2,72 @@ syntax = "proto3";
 
 package sesame.v1alpha1;
 
+import "google/rpc/status.proto";
+import "sesame/type/grpctunnel.proto";
+
 option go_package = "github.com/joeycumines/sesame/tun";
 
 service TunnelService {
+  // Orchestrates Stream connections.
   rpc Tunnel (stream TunnelRequest) returns (stream TunnelResponse) {}
+  // Provides dedicated bi-directional streaming (reverse dialed).
+  rpc Stream (stream StreamRequest) returns (stream StreamResponse) {}
 }
 
 message TunnelRequest {
+  uint64 id = 1;
   oneof data {
-    Connect connect = 1; // ping
+    Connect connect = 2; // request
+    Stream stream = 3; // response (only after stream successfully connected or error)
   };
   message Connect {
+    string remote = 1;
+  }
+  message Stream {
+    google.rpc.Status error = 1;
   }
 }
 
 message TunnelResponse {
+  uint64 id = 1;
   oneof data {
-    Connect connect = 1; // pong
+    Connect connect = 2; // response
+    Stream stream = 3; // request
   };
   message Connect {
+    // any error results in stream termination
+  }
+  // Models a request to initialise a new stream.
+  message Stream {
+    // The target service (e.g. URL host).
+    string service = 1;
+  }
+}
+
+message StreamRequest {
+  oneof data {
+    Connect connect = 1; // request
+    Dial dial = 2; // response
+    type.ServerToClient tunnel = 3;
+  };
+  message Connect {
+    string remote = 1;
+  }
+  message Dial {
+    // any error results in stream termination
+  }
+}
+
+message StreamResponse {
+  oneof data {
+    Connect connect = 1; // response
+    Dial dial = 2; // request
+    type.ClientToServer tunnel = 3;
+  };
+  message Connect {
+    // any error results in stream termination
+  }
+  message Dial {
+    string endpoint = 1;
   }
 }

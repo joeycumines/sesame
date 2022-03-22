@@ -28,7 +28,12 @@ type SesameClient interface {
 	DeleteRemote(ctx context.Context, in *DeleteRemoteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	UpdateRemote(ctx context.Context, in *UpdateRemoteRequest, opts ...grpc.CallOption) (*Remote, error)
 	ListRemotes(ctx context.Context, in *ListRemotesRequest, opts ...grpc.CallOption) (*ListRemotesResponse, error)
-	CallMethod(ctx context.Context, opts ...grpc.CallOption) (Sesame_CallMethodClient, error)
+	CreateEndpoint(ctx context.Context, in *CreateEndpointRequest, opts ...grpc.CallOption) (*Endpoint, error)
+	GetEndpoint(ctx context.Context, in *GetEndpointRequest, opts ...grpc.CallOption) (*Endpoint, error)
+	DeleteEndpoint(ctx context.Context, in *DeleteEndpointRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	UpdateEndpoint(ctx context.Context, in *UpdateEndpointRequest, opts ...grpc.CallOption) (*Endpoint, error)
+	ListEndpoints(ctx context.Context, in *ListEndpointsRequest, opts ...grpc.CallOption) (*ListEndpointsResponse, error)
+	Proxy(ctx context.Context, opts ...grpc.CallOption) (Sesame_ProxyClient, error)
 }
 
 type sesameClient struct {
@@ -84,31 +89,76 @@ func (c *sesameClient) ListRemotes(ctx context.Context, in *ListRemotesRequest, 
 	return out, nil
 }
 
-func (c *sesameClient) CallMethod(ctx context.Context, opts ...grpc.CallOption) (Sesame_CallMethodClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Sesame_ServiceDesc.Streams[0], "/sesame.v1alpha1.Sesame/CallMethod", opts...)
+func (c *sesameClient) CreateEndpoint(ctx context.Context, in *CreateEndpointRequest, opts ...grpc.CallOption) (*Endpoint, error) {
+	out := new(Endpoint)
+	err := c.cc.Invoke(ctx, "/sesame.v1alpha1.Sesame/CreateEndpoint", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &sesameCallMethodClient{stream}
+	return out, nil
+}
+
+func (c *sesameClient) GetEndpoint(ctx context.Context, in *GetEndpointRequest, opts ...grpc.CallOption) (*Endpoint, error) {
+	out := new(Endpoint)
+	err := c.cc.Invoke(ctx, "/sesame.v1alpha1.Sesame/GetEndpoint", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sesameClient) DeleteEndpoint(ctx context.Context, in *DeleteEndpointRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/sesame.v1alpha1.Sesame/DeleteEndpoint", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sesameClient) UpdateEndpoint(ctx context.Context, in *UpdateEndpointRequest, opts ...grpc.CallOption) (*Endpoint, error) {
+	out := new(Endpoint)
+	err := c.cc.Invoke(ctx, "/sesame.v1alpha1.Sesame/UpdateEndpoint", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sesameClient) ListEndpoints(ctx context.Context, in *ListEndpointsRequest, opts ...grpc.CallOption) (*ListEndpointsResponse, error) {
+	out := new(ListEndpointsResponse)
+	err := c.cc.Invoke(ctx, "/sesame.v1alpha1.Sesame/ListEndpoints", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sesameClient) Proxy(ctx context.Context, opts ...grpc.CallOption) (Sesame_ProxyClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Sesame_ServiceDesc.Streams[0], "/sesame.v1alpha1.Sesame/Proxy", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &sesameProxyClient{stream}
 	return x, nil
 }
 
-type Sesame_CallMethodClient interface {
-	Send(*CallMethodRequest) error
-	Recv() (*CallMethodResponse, error)
+type Sesame_ProxyClient interface {
+	Send(*ProxyRequest) error
+	Recv() (*ProxyResponse, error)
 	grpc.ClientStream
 }
 
-type sesameCallMethodClient struct {
+type sesameProxyClient struct {
 	grpc.ClientStream
 }
 
-func (x *sesameCallMethodClient) Send(m *CallMethodRequest) error {
+func (x *sesameProxyClient) Send(m *ProxyRequest) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *sesameCallMethodClient) Recv() (*CallMethodResponse, error) {
-	m := new(CallMethodResponse)
+func (x *sesameProxyClient) Recv() (*ProxyResponse, error) {
+	m := new(ProxyResponse)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -124,7 +174,12 @@ type SesameServer interface {
 	DeleteRemote(context.Context, *DeleteRemoteRequest) (*emptypb.Empty, error)
 	UpdateRemote(context.Context, *UpdateRemoteRequest) (*Remote, error)
 	ListRemotes(context.Context, *ListRemotesRequest) (*ListRemotesResponse, error)
-	CallMethod(Sesame_CallMethodServer) error
+	CreateEndpoint(context.Context, *CreateEndpointRequest) (*Endpoint, error)
+	GetEndpoint(context.Context, *GetEndpointRequest) (*Endpoint, error)
+	DeleteEndpoint(context.Context, *DeleteEndpointRequest) (*emptypb.Empty, error)
+	UpdateEndpoint(context.Context, *UpdateEndpointRequest) (*Endpoint, error)
+	ListEndpoints(context.Context, *ListEndpointsRequest) (*ListEndpointsResponse, error)
+	Proxy(Sesame_ProxyServer) error
 	mustEmbedUnimplementedSesameServer()
 }
 
@@ -147,8 +202,23 @@ func (UnimplementedSesameServer) UpdateRemote(context.Context, *UpdateRemoteRequ
 func (UnimplementedSesameServer) ListRemotes(context.Context, *ListRemotesRequest) (*ListRemotesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListRemotes not implemented")
 }
-func (UnimplementedSesameServer) CallMethod(Sesame_CallMethodServer) error {
-	return status.Errorf(codes.Unimplemented, "method CallMethod not implemented")
+func (UnimplementedSesameServer) CreateEndpoint(context.Context, *CreateEndpointRequest) (*Endpoint, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateEndpoint not implemented")
+}
+func (UnimplementedSesameServer) GetEndpoint(context.Context, *GetEndpointRequest) (*Endpoint, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEndpoint not implemented")
+}
+func (UnimplementedSesameServer) DeleteEndpoint(context.Context, *DeleteEndpointRequest) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteEndpoint not implemented")
+}
+func (UnimplementedSesameServer) UpdateEndpoint(context.Context, *UpdateEndpointRequest) (*Endpoint, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateEndpoint not implemented")
+}
+func (UnimplementedSesameServer) ListEndpoints(context.Context, *ListEndpointsRequest) (*ListEndpointsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListEndpoints not implemented")
+}
+func (UnimplementedSesameServer) Proxy(Sesame_ProxyServer) error {
+	return status.Errorf(codes.Unimplemented, "method Proxy not implemented")
 }
 func (UnimplementedSesameServer) mustEmbedUnimplementedSesameServer() {}
 
@@ -253,26 +323,116 @@ func _Sesame_ListRemotes_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Sesame_CallMethod_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(SesameServer).CallMethod(&sesameCallMethodServer{stream})
+func _Sesame_CreateEndpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateEndpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SesameServer).CreateEndpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sesame.v1alpha1.Sesame/CreateEndpoint",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SesameServer).CreateEndpoint(ctx, req.(*CreateEndpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-type Sesame_CallMethodServer interface {
-	Send(*CallMethodResponse) error
-	Recv() (*CallMethodRequest, error)
+func _Sesame_GetEndpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEndpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SesameServer).GetEndpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sesame.v1alpha1.Sesame/GetEndpoint",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SesameServer).GetEndpoint(ctx, req.(*GetEndpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Sesame_DeleteEndpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteEndpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SesameServer).DeleteEndpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sesame.v1alpha1.Sesame/DeleteEndpoint",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SesameServer).DeleteEndpoint(ctx, req.(*DeleteEndpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Sesame_UpdateEndpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateEndpointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SesameServer).UpdateEndpoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sesame.v1alpha1.Sesame/UpdateEndpoint",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SesameServer).UpdateEndpoint(ctx, req.(*UpdateEndpointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Sesame_ListEndpoints_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEndpointsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SesameServer).ListEndpoints(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sesame.v1alpha1.Sesame/ListEndpoints",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SesameServer).ListEndpoints(ctx, req.(*ListEndpointsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Sesame_Proxy_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(SesameServer).Proxy(&sesameProxyServer{stream})
+}
+
+type Sesame_ProxyServer interface {
+	Send(*ProxyResponse) error
+	Recv() (*ProxyRequest, error)
 	grpc.ServerStream
 }
 
-type sesameCallMethodServer struct {
+type sesameProxyServer struct {
 	grpc.ServerStream
 }
 
-func (x *sesameCallMethodServer) Send(m *CallMethodResponse) error {
+func (x *sesameProxyServer) Send(m *ProxyResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *sesameCallMethodServer) Recv() (*CallMethodRequest, error) {
-	m := new(CallMethodRequest)
+func (x *sesameProxyServer) Recv() (*ProxyRequest, error) {
+	m := new(ProxyRequest)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -306,11 +466,31 @@ var Sesame_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ListRemotes",
 			Handler:    _Sesame_ListRemotes_Handler,
 		},
+		{
+			MethodName: "CreateEndpoint",
+			Handler:    _Sesame_CreateEndpoint_Handler,
+		},
+		{
+			MethodName: "GetEndpoint",
+			Handler:    _Sesame_GetEndpoint_Handler,
+		},
+		{
+			MethodName: "DeleteEndpoint",
+			Handler:    _Sesame_DeleteEndpoint_Handler,
+		},
+		{
+			MethodName: "UpdateEndpoint",
+			Handler:    _Sesame_UpdateEndpoint_Handler,
+		},
+		{
+			MethodName: "ListEndpoints",
+			Handler:    _Sesame_ListEndpoints_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "CallMethod",
-			Handler:       _Sesame_CallMethod_Handler,
+			StreamName:    "Proxy",
+			Handler:       _Sesame_Proxy_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
