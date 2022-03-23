@@ -1,4 +1,4 @@
-package grpc
+package grpc_test
 
 import (
 	"bufio"
@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	grpcutil "github.com/joeycumines/sesame/grpc"
 	"github.com/joeycumines/sesame/internal/testutil"
 	"github.com/joeycumines/sesame/rc"
 	streamutil "github.com/joeycumines/sesame/stream"
@@ -25,7 +26,7 @@ import (
 // ExampleNewReaderMessageFactory demonstrates how to implement ReaderMessageFactory using NewReaderMessageFactory.
 func ExampleNewReaderMessageFactory() {
 	// construct a ReaderMessageFactory to handle sesame.v1alpha1.NetConnResponse messages
-	factory := NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
+	factory := grpcutil.NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
 		var msg rc.NetConnResponse
 		value = &msg
 		chunk = func() ([]byte, bool) {
@@ -39,7 +40,7 @@ func ExampleNewReaderMessageFactory() {
 
 	// factory would normally be used as a grpc.Reader's Factory field, but just to demonstrate the behavior...
 
-	unmarshal := func(s string) ReaderMessage {
+	unmarshal := func(s string) grpcutil.ReaderMessage {
 		msg := factory()
 		if err := protojson.Unmarshal([]byte(s), msg.Value().(proto.Message)); err != nil {
 			panic(err)
@@ -128,7 +129,7 @@ func ExampleReader() {
 		// pretend there was something useful here, that to initialised targetConn
 		defer targetConn.Close()
 
-		reader := Reader{Stream: stream, Factory: NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
+		reader := grpcutil.Reader{Stream: stream, Factory: grpcutil.NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
 			var msg rc.NetConnRequest
 			value = &msg
 			chunk = func() ([]byte, bool) {
@@ -226,7 +227,7 @@ func ExampleReader() {
 
 func TestReader_Buffered(t *testing.T) {
 	// message type is *interface{}
-	factory := NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
+	factory := grpcutil.NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
 		var msg interface{}
 		value = &msg
 		chunk = func() (b []byte, ok bool) {
@@ -263,7 +264,7 @@ func TestReader_Buffered(t *testing.T) {
 		return nil
 	}}
 
-	reader := &Reader{Stream: stream, Factory: factory}
+	reader := &grpcutil.Reader{Stream: stream, Factory: factory}
 	if v := reader.Buffered(); v != nil {
 		t.Fatal(v)
 	}
@@ -298,7 +299,7 @@ func TestReader_Buffered(t *testing.T) {
 		}
 	}
 
-	reader = &Reader{Stream: stream, Factory: factory}
+	reader = &grpcutil.Reader{Stream: stream, Factory: factory}
 
 	for i := 6; i < 8; i++ {
 		n, err := reader.Read(buf[:1])
@@ -341,7 +342,7 @@ func TestReader_Buffered(t *testing.T) {
 			}
 		}
 
-		reader = &Reader{Stream: stream, Factory: factory}
+		reader = &grpcutil.Reader{Stream: stream, Factory: factory}
 	}
 
 	for i := 0; i < 3; i++ {
