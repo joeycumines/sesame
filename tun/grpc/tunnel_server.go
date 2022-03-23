@@ -94,8 +94,6 @@ func serveTunnel(stream tunnelStreamServer, handlers grpchan.HandlerMap) error {
 
 type tunnelStreamServer interface {
 	Context() context.Context
-	SendMsg(m interface{}) error
-	RecvMsg(m interface{}) error
 	Send(*ServerToClient) error
 	Recv() (*ClientToServer, error)
 }

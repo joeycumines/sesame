@@ -52,8 +52,6 @@ type ReverseTunnelChannel struct {
 
 type tunnelStreamClient interface {
 	Context() context.Context
-	SendMsg(m interface{}) error
-	RecvMsg(m interface{}) error
 	Send(*ClientToServer) error
 	Recv() (*ServerToClient, error)
 }
@@ -142,7 +140,7 @@ func (c *TunnelChannel) newStream(ctx context.Context, clientStreams, serverStre
 	if err != nil {
 		return nil, err
 	}
-	err = c.stream.SendMsg(&ClientToServer{
+	err = c.stream.Send(&ClientToServer{
 		StreamId: str.streamID,
 		Frame: &ClientToServer_NewStream_{
 			NewStream: &ClientToServer_NewStream{
