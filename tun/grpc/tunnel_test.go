@@ -17,6 +17,7 @@ package grpc
 import (
 	"github.com/fullstorydev/grpchan"
 	"github.com/fullstorydev/grpchan/grpchantesting"
+	"github.com/joeycumines/sesame/internal/testutil"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -108,24 +109,8 @@ func TestTunnelServer(t *testing.T) {
 }
 
 func checkForGoroutineLeak(t *testing.T, fn func()) {
-	before := runtime.NumGoroutine()
-
+	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*5)
 	fn()
-
-	// check for goroutine leaks
-	deadline := time.Now().Add(time.Second * 5)
-	after := 0
-	for deadline.After(time.Now()) {
-		after = runtime.NumGoroutine()
-		if after <= before {
-			// number of goroutines returned to previous level: no leak!
-			return
-		}
-		time.Sleep(time.Millisecond * 50)
-	}
-	buf := make([]byte, 1024*1024)
-	n := runtime.Stack(buf, true)
-	t.Errorf("%d goroutines leaked:\n%s", after-before, string(buf[:n]))
 }
 
 // TODO: also need more tests around channel lifecycle, and ensuring it

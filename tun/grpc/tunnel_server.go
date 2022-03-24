@@ -86,8 +86,7 @@ func serveTunnel(stream tunnelStreamServer, handlers grpchan.HandlerMap) error {
 	svr := &tunnelServer{
 		stream:   stream,
 		services: handlers,
-		streams:  map[int64]*tunnelServerStream{},
-		lastSeen: -1,
+		streams:  make(map[uint64]*tunnelServerStream),
 	}
 	return svr.serve()
 }
@@ -103,8 +102,8 @@ type tunnelServer struct {
 	services grpchan.HandlerMap
 
 	mu       sync.RWMutex
-	streams  map[int64]*tunnelServerStream
-	lastSeen int64
+	streams  map[uint64]*tunnelServerStream
+	lastSeen uint64
 }
 
 func (s *tunnelServer) serve() error {
@@ -125,7 +124,7 @@ func (s *tunnelServer) serve() error {
 					return err
 				} else {
 					st, _ := status.FromError(err)
-					s.stream.Send(&ServerToClient{
+					_ = s.stream.Send(&ServerToClient{
 						StreamId: in.StreamId,
 						Frame: &ServerToClient_CloseStream_{
 							CloseStream: &ServerToClient_CloseStream{
@@ -146,7 +145,7 @@ func (s *tunnelServer) serve() error {
 	}
 }
 
-func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *ClientToServer_NewStream) (bool, error) {
+func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame *ClientToServer_NewStream) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -202,7 +201,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID int64, frame *
 	return true, nil
 }
 
-func (s *tunnelServer) getStream(streamID int64) (*tunnelServerStream, error) {
+func (s *tunnelServer) getStream(streamID uint64) (*tunnelServerStream, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -219,7 +218,7 @@ func (s *tunnelServer) getStream(streamID int64) (*tunnelServerStream, error) {
 	return target, nil
 }
 
-func (s *tunnelServer) removeStream(streamID int64) {
+func (s *tunnelServer) removeStream(streamID uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.streams, streamID)
@@ -242,7 +241,7 @@ func findMethod(sd *grpc.ServiceDesc, method string) interface{} {
 type tunnelServerStream struct {
 	ctx      context.Context
 	svr      *tunnelServer
-	streamID int64
+	streamID uint64
 	method   string
 	stream   tunnelStreamServer
 
@@ -383,7 +382,7 @@ func toProto(md metadata.MD) *grpcmetadata.GrpcMetadata {
 }
 
 func (st *tunnelServerStream) SetTrailer(md metadata.MD) {
-	st.setTrailer(md)
+	_ = st.setTrailer(md)
 }
 
 func (st *tunnelServerStream) setTrailer(md metadata.MD) error {
@@ -406,7 +405,7 @@ func (st *tunnelServerStream) SendMsg(m interface{}) error {
 	defer st.writeMu.Unlock()
 
 	if !st.sentHeaders {
-		st.sendHeadersLocked()
+		_ = st.sendHeadersLocked()
 	}
 
 	if !st.isServerStream && st.numSent == 1 {
@@ -604,11 +603,11 @@ func (st *tunnelServerStream) finishStream(err error) {
 	}
 
 	if !st.sentHeaders {
-		st.sendHeadersLocked()
+		_ = st.sendHeadersLocked()
 	}
 
 	stat, _ := status.FromError(err)
-	st.stream.Send(&ServerToClient{
+	_ = st.stream.Send(&ServerToClient{
 		StreamId: st.streamID,
 		Frame: &ServerToClient_CloseStream_{
 			CloseStream: &ServerToClient_CloseStream{

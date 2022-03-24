@@ -26,17 +26,18 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"io"
+	"math"
 	"sync"
 )
 
 func NewChannel(stream TunnelService_OpenTunnelClient) *TunnelChannel {
-	return newTunnelChannel(stream, stream.CloseSend)
+	return newTunnelChannel(wrapTunnelStreamClient(stream, stream.CloseSend))
 }
 
 func NewReverseChannel(stream TunnelService_OpenReverseTunnelServer) *ReverseTunnelChannel {
 	p, _ := peer.FromContext(stream.Context())
 	md, _ := metadata.FromIncomingContext(stream.Context())
-	ch := newTunnelChannel(stream, nil)
+	ch := newTunnelChannel(wrapTunnelStreamClient(stream, nil))
 	return &ReverseTunnelChannel{
 		TunnelChannel:  ch,
 		Peer:           p,
@@ -63,8 +64,8 @@ type TunnelChannel struct {
 	tearDown func() error
 
 	mu            sync.RWMutex
-	streams       map[int64]*tunnelClientStream
-	lastStreamID  int64
+	streams       map[uint64]*tunnelClientStream
+	lastStreamID  uint64
 	streamCreated bool
 	err           error
 	finished      bool
@@ -77,7 +78,7 @@ func newTunnelChannel(stream tunnelStreamClient, tearDown func() error) *TunnelC
 		ctx:      ctx,
 		cancel:   cancel,
 		tearDown: tearDown,
-		streams:  map[int64]*tunnelClientStream{},
+		streams:  make(map[uint64]*tunnelClientStream),
 	}
 	go c.recvLoop()
 	return c
@@ -113,9 +114,7 @@ func (c *TunnelChannel) Err() error {
 	}
 }
 
-func (c *TunnelChannel) Close() {
-	c.close(nil)
-}
+func (c *TunnelChannel) Close() error { return c.close(nil) }
 
 func (c *TunnelChannel) Invoke(ctx context.Context, methodName string, req, resp interface{}, opts ...grpc.CallOption) error {
 	str, err := c.newStream(ctx, false, false, methodName, opts...)
@@ -157,31 +156,12 @@ func (c *TunnelChannel) newStream(ctx context.Context, clientStreams, serverStre
 		// if context gets cancelled, make sure
 		// we shutdown the stream
 		<-str.ctx.Done()
-		str.cancel(str.ctx.Err())
+		_ = str.cancel(str.ctx.Err())
 	}()
 	return str, nil
 }
 
 func (c *TunnelChannel) allocateStream(ctx context.Context, clientStreams, serverStreams bool, methodName string, opts []grpc.CallOption) (*tunnelClientStream, metadata.MD, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.finished {
-		return nil, nil, errors.New("channel is closed")
-	}
-
-	if c.lastStreamID == -1 {
-		return nil, nil, errors.New("all stream IDs exhausted (must create a new channel)")
-	}
-
-	c.streamCreated = true
-	c.lastStreamID++
-	streamID := c.lastStreamID
-	if _, ok := c.streams[streamID]; ok {
-		// should never happen... panic?
-		return nil, nil, errors.New("next stream ID not available")
-	}
-
 	md, _ := metadata.FromOutgoingContext(ctx)
 	var hdrs, tlrs []*metadata.MD
 	pr, _ := peer.FromContext(c.ctx)
@@ -225,6 +205,25 @@ func (c *TunnelChannel) allocateStream(ctx context.Context, clientStreams, serve
 		}
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.finished {
+		return nil, nil, errors.New("channel is closed")
+	}
+
+	if c.lastStreamID == math.MaxUint64 {
+		return nil, nil, errors.New("all stream IDs exhausted (must create a new channel)")
+	}
+
+	c.streamCreated = true
+	c.lastStreamID++
+	streamID := c.lastStreamID
+	if _, ok := c.streams[streamID]; ok {
+		// should never happen
+		panic(errors.New("sesame/tun/grpc: next stream ID not available"))
+	}
+
 	ch := make(chan isServerToClient_Frame, 1)
 	ctx, cncl := context.WithCancel(ctx)
 	str := &tunnelClientStream{
@@ -252,19 +251,19 @@ func (c *TunnelChannel) recvLoop() {
 	for {
 		in, err := c.stream.Recv()
 		if err != nil {
-			c.close(err)
+			_ = c.close(err)
 			return
 		}
 		str, err := c.getStream(in.StreamId)
 		if err != nil {
-			c.close(err)
+			_ = c.close(err)
 			return
 		}
 		str.acceptServerFrame(in.Frame)
 	}
 }
 
-func (c *TunnelChannel) getStream(streamID int64) (*tunnelClientStream, error) {
+func (c *TunnelChannel) getStream(streamID uint64) (*tunnelClientStream, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -281,7 +280,7 @@ func (c *TunnelChannel) getStream(streamID int64) (*tunnelClientStream, error) {
 	return target, nil
 }
 
-func (c *TunnelChannel) removeStream(streamID int64) {
+func (c *TunnelChannel) removeStream(streamID uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.streams != nil {
@@ -289,16 +288,16 @@ func (c *TunnelChannel) removeStream(streamID int64) {
 	}
 }
 
-func (c *TunnelChannel) close(err error) bool {
+func (c *TunnelChannel) close(err error) (tearDownErr error) {
 	if c.tearDown != nil {
-		c.tearDown()
+		tearDownErr = c.tearDown()
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.finished {
-		return false
+		return
 	}
 
 	defer c.cancel()
@@ -312,14 +311,14 @@ func (c *TunnelChannel) close(err error) bool {
 		st.cncl()
 	}
 	c.streams = nil
-	return true
+	return
 }
 
 type tunnelClientStream struct {
 	ctx      context.Context
 	cncl     context.CancelFunc
 	ch       *TunnelChannel
-	streamID int64
+	streamID uint64
 	method   string
 	stream   tunnelStreamClient
 
@@ -474,7 +473,7 @@ func (st *tunnelClientStream) RecvMsg(m interface{}) error {
 	data, ok, err := st.readMsg()
 	if err != nil {
 		if !ok {
-			st.cancel(err)
+			_ = st.cancel(err)
 		}
 		return err
 	}
@@ -610,12 +609,12 @@ func (st *tunnelClientStream) acceptServerFrame(frame isServerToClient_Frame) {
 	}
 }
 
-func (st *tunnelClientStream) cancel(err error) {
+func (st *tunnelClientStream) cancel(err error) error {
 	st.finishStream(err, nil)
 	// let server know
 	st.writeMu.Lock()
 	defer st.writeMu.Unlock()
-	st.stream.Send(&ClientToServer{
+	return st.stream.Send(&ClientToServer{
 		StreamId: st.streamID,
 		Frame: &ClientToServer_Cancel{
 			Cancel: &empty.Empty{},

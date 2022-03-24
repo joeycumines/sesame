@@ -17,7 +17,7 @@ func (x *ClientToServer) Proto_ShallowCopy(v interface{}) {
 		x.StreamId = v.GetStreamId()
 		x.Frame = v.GetFrame()
 	default:
-		if v, ok := v.(interface{ GetStreamId() int64 }); ok {
+		if v, ok := v.(interface{ GetStreamId() uint64 }); ok {
 			x.StreamId = v.GetStreamId()
 		}
 		if v, ok := v.(interface{ GetFrame() isClientToServer_Frame }); ok {
@@ -116,7 +116,7 @@ func (x *ServerToClient) Proto_ShallowCopy(v interface{}) {
 		x.StreamId = v.GetStreamId()
 		x.Frame = v.GetFrame()
 	default:
-		if v, ok := v.(interface{ GetStreamId() int64 }); ok {
+		if v, ok := v.(interface{ GetStreamId() uint64 }); ok {
 			x.StreamId = v.GetStreamId()
 		}
 		if v, ok := v.(interface{ GetFrame() isServerToClient_Frame }); ok {

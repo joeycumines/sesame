@@ -248,11 +248,8 @@ service TunnelService {
 // operation.
 message ClientToServer {
   // The ID of the stream. Stream IDs must be used in increasing order and
-  // cannot be re-used. Unlike in the HTTP/2 protocol, the stream ID is 64-bit
-  // so overflow in a long-lived channel is excessively unlikely. (If the
-  // channel were used for a stream every nanosecond, it would take close to
-  // 300 years to exhaust every ID and reach an overflow situation.)
-  int64 stream_id = 1;
+  // cannot be re-used.
+  uint64 stream_id = 1;
 
   oneof frame {
     // Creates a new RPC stream, which includes request header metadata. The
@@ -267,12 +264,9 @@ message ClientToServer {
     bytes message_data = 4;
     // Half-closes the stream, signaling that no more request messages will
     // be sent. No other messages, other than one with the cancel field set,
-    // should be sent for this stream (at least not until it is terminated
-    // by the server, after which the ID can be re-used).
+    // should be sent for this stream.
     google.protobuf.Empty half_close = 5;
-    // Aborts the stream. No other messages should be sent for this stream
-    // (unless the ID is being re-used after the stream is terminated on the
-    // server side).
+    // Aborts the stream. No other messages should be sent for this stream.
     google.protobuf.Empty cancel = 6;
   }
 
@@ -292,11 +286,8 @@ message ClientToServer {
 // concludes the stream, whether it terminates successfully or with an error.
 message ServerToClient {
   // The ID of the stream. Stream IDs are defined by the client and should be
-  // used in monotonically increasing order. They cannot be re-used. Unlike
-  // HTTP/2, the ID is 64-bit, so overflow/re-use should not be an issue. (If
-  // the channel were used for a stream every nanosecond, it would take close
-  // to 300 years to exhaust every ID and reach an overflow situation.)
-  int64 stream_id = 1;
+  // used in monotonically increasing order. They cannot be re-used.
+  uint64 stream_id = 1;
 
   oneof frame {
     // Sends response headers for this stream. If headers are sent at all,
@@ -311,8 +302,7 @@ message ServerToClient {
     bytes message_data = 4;
     // Terminates the stream and communicates the final disposition to the
     // client. After the stream is closed, no other messages should use the
-    // given stream ID until the ID is re-used (e.g. a NewStream message is
-    // received that creates another stream with the same ID).
+    // given stream ID.
     CloseStream close_stream = 5;
   }
 

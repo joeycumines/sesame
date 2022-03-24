@@ -249,11 +249,8 @@ type ClientToServer struct {
 	unknownFields protoimpl.UnknownFields
 
 	// The ID of the stream. Stream IDs must be used in increasing order and
-	// cannot be re-used. Unlike in the HTTP/2 protocol, the stream ID is 64-bit
-	// so overflow in a long-lived channel is excessively unlikely. (If the
-	// channel were used for a stream every nanosecond, it would take close to
-	// 300 years to exhaust every ID and reach an overflow situation.)
-	StreamId int64 `protobuf:"varint,1,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
+	// cannot be re-used.
+	StreamId uint64 `protobuf:"varint,1,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
 	// Types that are assignable to Frame:
 	//	*ClientToServer_NewStream_
 	//	*ClientToServer_Message
@@ -295,7 +292,7 @@ func (*ClientToServer) Descriptor() ([]byte, []int) {
 	return file_sesame_type_grpctunnel_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *ClientToServer) GetStreamId() int64 {
+func (x *ClientToServer) GetStreamId() uint64 {
 	if x != nil {
 		return x.StreamId
 	}
@@ -370,15 +367,12 @@ type ClientToServer_MessageData struct {
 type ClientToServer_HalfClose struct {
 	// Half-closes the stream, signaling that no more request messages will
 	// be sent. No other messages, other than one with the cancel field set,
-	// should be sent for this stream (at least not until it is terminated
-	// by the server, after which the ID can be re-used).
+	// should be sent for this stream.
 	HalfClose *emptypb.Empty `protobuf:"bytes,5,opt,name=half_close,json=halfClose,proto3,oneof"`
 }
 
 type ClientToServer_Cancel struct {
-	// Aborts the stream. No other messages should be sent for this stream
-	// (unless the ID is being re-used after the stream is terminated on the
-	// server side).
+	// Aborts the stream. No other messages should be sent for this stream.
 	Cancel *emptypb.Empty `protobuf:"bytes,6,opt,name=cancel,proto3,oneof"`
 }
 
@@ -406,11 +400,8 @@ type ServerToClient struct {
 	unknownFields protoimpl.UnknownFields
 
 	// The ID of the stream. Stream IDs are defined by the client and should be
-	// used in monotonically increasing order. They cannot be re-used. Unlike
-	// HTTP/2, the ID is 64-bit, so overflow/re-use should not be an issue. (If
-	// the channel were used for a stream every nanosecond, it would take close
-	// to 300 years to exhaust every ID and reach an overflow situation.)
-	StreamId int64 `protobuf:"varint,1,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
+	// used in monotonically increasing order. They cannot be re-used.
+	StreamId uint64 `protobuf:"varint,1,opt,name=stream_id,json=streamId,proto3" json:"stream_id,omitempty"`
 	// Types that are assignable to Frame:
 	//	*ServerToClient_Header
 	//	*ServerToClient_Message
@@ -451,7 +442,7 @@ func (*ServerToClient) Descriptor() ([]byte, []int) {
 	return file_sesame_type_grpctunnel_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ServerToClient) GetStreamId() int64 {
+func (x *ServerToClient) GetStreamId() uint64 {
 	if x != nil {
 		return x.StreamId
 	}
@@ -519,8 +510,7 @@ type ServerToClient_MessageData struct {
 type ServerToClient_CloseStream_ struct {
 	// Terminates the stream and communicates the final disposition to the
 	// client. After the stream is closed, no other messages should use the
-	// given stream ID until the ID is re-used (e.g. a NewStream message is
-	// received that creates another stream with the same ID).
+	// given stream ID.
 	CloseStream *ServerToClient_CloseStream `protobuf:"bytes,5,opt,name=close_stream,json=closeStream,proto3,oneof"`
 }
 
@@ -719,7 +709,7 @@ var file_sesame_type_grpctunnel_proto_rawDesc = []byte{
 	0x72, 0x70, 0x63, 0x6d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x70, 0x72, 0x6f, 0x74,
 	0x6f, 0x22, 0x9f, 0x03, 0x0a, 0x0e, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x54, 0x6f, 0x53, 0x65,
 	0x72, 0x76, 0x65, 0x72, 0x12, 0x1b, 0x0a, 0x09, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x5f, 0x69,
-	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x49,
+	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x49,
 	0x64, 0x12, 0x46, 0x0a, 0x0a, 0x6e, 0x65, 0x77, 0x5f, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x18,
 	0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x25, 0x2e, 0x73, 0x65, 0x73, 0x61, 0x6d, 0x65, 0x2e, 0x74,
 	0x79, 0x70, 0x65, 0x2e, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x54, 0x6f, 0x53, 0x65, 0x72, 0x76,
@@ -745,7 +735,7 @@ var file_sesame_type_grpctunnel_proto_rawDesc = []byte{
 	0x74, 0x61, 0x52, 0x06, 0x68, 0x65, 0x61, 0x64, 0x65, 0x72, 0x42, 0x07, 0x0a, 0x05, 0x66, 0x72,
 	0x61, 0x6d, 0x65, 0x22, 0x87, 0x03, 0x0a, 0x0e, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x54, 0x6f,
 	0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d,
-	0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52, 0x08, 0x73, 0x74, 0x72, 0x65, 0x61,
+	0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x73, 0x74, 0x72, 0x65, 0x61,
 	0x6d, 0x49, 0x64, 0x12, 0x33, 0x0a, 0x06, 0x68, 0x65, 0x61, 0x64, 0x65, 0x72, 0x18, 0x02, 0x20,
 	0x01, 0x28, 0x0b, 0x32, 0x19, 0x2e, 0x73, 0x65, 0x73, 0x61, 0x6d, 0x65, 0x2e, 0x74, 0x79, 0x70,
 	0x65, 0x2e, 0x47, 0x72, 0x70, 0x63, 0x4d, 0x65, 0x74, 0x61, 0x64, 0x61, 0x74, 0x61, 0x48, 0x00,
