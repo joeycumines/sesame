@@ -12,6 +12,8 @@ GO_TEST_FLAGS ?=
 GODOC ?= godoc
 GODOC_FLAGS ?= -http=:6060
 
+LIST_TOOLS = grep -P '^\t_' tools.go | cut -d '"' -f 2
+
 .PHONY: all
 all: lint build test
 
@@ -49,9 +51,15 @@ staticcheck:
 tools:
 	export CGO_ENABLED=0 && \
 		run_command() { echo "$$@" && "$$@"; } && \
-		grep -P '^\t_' tools.go | \
-		cut -d '"' -f 2 | \
+		$(LIST_TOOLS) | \
 		while read -r line; do run_command go install "$$line" || exit 1; done
+
+# this won't work on all systems
+.PHONY: update-tools
+update-tools:
+	run_command() { echo "$$@" && "$$@"; } && \
+		$(LIST_TOOLS) | \
+		while read -r line; do run_command go get -u "$$line" || exit 1; done
 
 # this won't work on all systems
 .PHONY: generate
