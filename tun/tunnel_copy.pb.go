@@ -170,10 +170,10 @@ func (x *TunnelResponse_Connect) Proto_ShallowClone() (c *TunnelResponse_Connect
 func (x *TunnelResponse_Stream) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *TunnelResponse_Stream:
-		x.Service = v.GetService()
+		x.Endpoint = v.GetEndpoint()
 	default:
-		if v, ok := v.(interface{ GetService() string }); ok {
-			x.Service = v.GetService()
+		if v, ok := v.(interface{ GetEndpoint() string }); ok {
+			x.Endpoint = v.GetEndpoint()
 		}
 	}
 }
@@ -182,7 +182,7 @@ func (x *TunnelResponse_Stream) Proto_ShallowCopy(v interface{}) {
 func (x *TunnelResponse_Stream) Proto_ShallowClone() (c *TunnelResponse_Stream) {
 	if x != nil {
 		c = new(TunnelResponse_Stream)
-		c.Service = x.Service
+		c.Endpoint = x.Endpoint
 	}
 	return
 }

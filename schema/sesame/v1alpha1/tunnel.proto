@@ -39,8 +39,8 @@ message TunnelResponse {
   }
   // Models a request to initialise a new stream.
   message Stream {
-    // The target service (e.g. URL host).
-    string service = 1;
+    // The target endpoint.
+    string endpoint = 1;
   }
 }
 
