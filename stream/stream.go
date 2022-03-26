@@ -87,10 +87,11 @@ func Pair(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeR
 //
 // If the "receive" pipe was provided, and receiveReader does not implement io.WriterTo, then the "receive" pipe will
 // be synchronised using SyncPipe. This is intended as sensible default behavior, as, depending on the pipe
-// implementation, it maybe necessary to facilitate close after writing, w/o prematurely closing / dropping data written
-// to receiveWriter then read from receiveReader, but not yet written to stream. The io.WriterTo special case is in
-// order to support implementations with their own (presumably more effective) solutions, to the problem which SyncPipe
-// aims to solve. N.B. neither io.Pipe or net.Pipe implement io.WriterTo, though it is implemented by ionet.Pipe.
+// implementation, it may be necessary to facilitate close after writing, w/o prematurely closing / dropping data
+// written to receiveWriter then read from receiveReader, but not yet written to stream. The io.WriterTo special case
+// is in order to support implementations with their own (presumably more effective) solutions, to the problem which
+// SyncPipe aims to solve. N.B. neither io.Pipe or net.Pipe implement io.WriterTo, though it is implemented by
+// ionet.Pipe.
 //
 // If stream implements Piper, and has no reader (Pipe.Reader), any provided send pipe will be pre-emptively closed,
 // and omitted from the result. A nil Pipe.Writer is handled in the same manner. Note that Pipe implements default
@@ -99,7 +100,7 @@ func Pair(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeR
 //
 // This implementation is compatible with HalfCloser.
 //
-// See also ionet.Wrap and ionet.WrapPipe.
+// See also ionet.Wrap, ionet.WrapPipe, and ionet.WrapPipeGraceful, which are extensions of this implementation.
 func Wrap(sendReader PipeReader, sendWriter PipeWriter) func(receiveReader PipeReader, receiveWriter PipeWriter) func(stream io.ReadWriteCloser) Pipe {
 	return func(receiveReader PipeReader, receiveWriter PipeWriter) func(stream io.ReadWriteCloser) Pipe {
 		return func(stream io.ReadWriteCloser) Pipe {
