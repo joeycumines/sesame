@@ -16,8 +16,8 @@ import (
 type (
 	// Server implements rc.RemoteControlServer's NetConn method.
 	Server struct {
-		unimplementedRemoteControlServer
 		Dialer DialerFactory
+		unimplementedRemoteControlServer
 	}
 
 	// ServerAPI models a subset of rc.RemoteControlServer, as implemented by Server.

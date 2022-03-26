@@ -32,8 +32,6 @@ import (
 
 const maxChunkSize = 16384
 
-// TODO document the (lack) of safety for use of streams after ServeTunnel exits
-
 func ServeTunnel(options ...TunnelOption) error {
 	var c tunnelConfig
 	for _, o := range options {

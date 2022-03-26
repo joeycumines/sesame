@@ -51,6 +51,8 @@ type TunnelServer struct {
 	// using the server.
 	StopSignal <-chan struct{}
 
+	// TODO consider exposing mechanism to resolve additional options for NewChannel and ServeTunnel
+
 	handlers grpchan.HandlerMap
 
 	reverse reverseChannels
@@ -71,6 +73,10 @@ func (s *TunnelServer) RegisterService(desc *grpc.ServiceDesc, srv interface{}) 
 		s.handlers = grpchan.HandlerMap{}
 	}
 	s.handlers.RegisterService(desc, srv)
+}
+
+func (s *TunnelServer) GetServiceInfo() map[string]grpc.ServiceInfo {
+	return s.handlers.GetServiceInfo()
 }
 
 func (s *TunnelServer) OpenTunnel(stream TunnelService_OpenTunnelServer) error {

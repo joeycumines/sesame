@@ -16,11 +16,15 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"github.com/fullstorydev/grpchan/grpchantesting"
 	"github.com/joeycumines/sesame/internal/testutil"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+	refl "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	"google.golang.org/grpc/test/bufconn"
 	"runtime"
+	"sort"
 	"testing"
 	"time"
 )
@@ -100,6 +104,55 @@ func TestTunnelServer(t *testing.T) {
 func checkForGoroutineLeak(t *testing.T, fn func()) {
 	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*5)
 	fn()
+}
+
+// ExampleServeTunnel_reflection demonstrates how to enable the reflection API on the tunnel.
+func ExampleTunnelServer_reflection() {
+	defer testutil.CheckNumGoroutines(nil, runtime.NumGoroutine(), false, time.Second*5)
+
+	svc := new(TunnelServer)
+	reflection.Register(svc)
+	grpchantesting.RegisterTestServiceServer(svc, new(grpchantesting.TestServer))
+
+	conn := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { RegisterTunnelServiceServer(srv, svc) })
+	defer conn.Close()
+
+	tunnel, err := NewTunnelServiceClient(conn).OpenTunnel(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
+	channel, err := NewChannel(OptChannel.ClientStream(tunnel))
+	if err != nil {
+		panic(err)
+	}
+
+	stream, err := refl.NewServerReflectionClient(channel).ServerReflectionInfo(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
+	if err := stream.Send(&refl.ServerReflectionRequest{MessageRequest: &refl.ServerReflectionRequest_ListServices{}}); err != nil {
+		panic(err)
+	}
+
+	res, err := stream.Recv()
+	if err != nil {
+		panic(err)
+	}
+
+	var names []string
+	for _, svc := range res.GetListServicesResponse().GetService() {
+		names = append(names, svc.GetName())
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fmt.Println(name)
+	}
+
+	// output:
+	// grpc.reflection.v1alpha.ServerReflection
+	// grpchantesting.TestService
 }
 
 // TODO: also need more tests around channel lifecycle, and ensuring it
