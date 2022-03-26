@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io"
 	"sync"
 )
@@ -29,6 +31,13 @@ type (
 		half chan struct{}
 		full chan struct{}
 	}
+
+	// tunnelStreamServerWrapper wraps a client or server stream acting as the server (in the proxied gRPC scenario),
+	// managing send concurrency.
+	tunnelStreamServerWrapper struct {
+		stream tunnelStreamServer
+		mu     sync.Mutex
+	}
 )
 
 var (
@@ -42,6 +51,7 @@ var (
 
 	_ tunnelStreamClient = (*tunnelStreamClientWrapper)(nil)
 	_ io.Closer          = (*tunnelStreamClientWrapper)(nil)
+	_ tunnelStreamServer = (*tunnelStreamServerWrapper)(nil)
 )
 
 func wrapTunnelStreamClient(stream tunnelStreamClient, tearDown func() error) (tunnelStreamClient, func() error) {
@@ -65,7 +75,10 @@ func newTunnelStreamClientWrapper(stream tunnelStreamClient, tearDown func() err
 
 func (x *tunnelStreamClientWrapper) Context() context.Context { return x.stream.Context() }
 
-func (x *tunnelStreamClientWrapper) Recv() (*ServerToClient, error) { return x.stream.Recv() }
+func (x *tunnelStreamClientWrapper) Recv() (*ServerToClient, error) {
+	// TODO validate that we don't need to track this (shouldn't if cancel is always sent)
+	return x.stream.Recv()
+}
 
 func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 	// handle message
@@ -222,3 +235,19 @@ ControlLoop:
 		x.err = nil
 	}
 }
+
+func newTunnelStreamServerWrapper(stream tunnelStreamServer) *tunnelStreamServerWrapper {
+	return &tunnelStreamServerWrapper{stream: stream}
+}
+
+func (x *tunnelStreamServerWrapper) Context() context.Context { return x.stream.Context() }
+
+func (x *tunnelStreamServerWrapper) Send(msg *ServerToClient) error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	return x.stream.Send(msg)
+}
+
+func (x *tunnelStreamServerWrapper) Recv() (*ClientToServer, error) { return x.stream.Recv() }
+
+func errTransportClosing() error { return status.Error(codes.Unavailable, `transport is closing`) }

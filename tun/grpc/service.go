@@ -38,14 +38,18 @@ type TunnelServer struct {
 	NoReverseTunnels bool
 	// If reverse tunnels are allowed, this callback may be configured to
 	// receive information when clients open a reverse tunnel.
-	OnReverseTunnelConnect func(*ReverseTunnelChannel)
+	OnReverseTunnelConnect func(channel *Channel)
 	// If reverse tunnels are allowed, this callback may be configured to
 	// receive information when reverse tunnels are torn down.
-	OnReverseTunnelDisconnect func(*ReverseTunnelChannel)
+	OnReverseTunnelDisconnect func(channel *Channel)
 	// Optional function that accepts a reverse tunnel and returns an affinity
 	// key. The affinity key values can be used to look up outbound channels,
 	// for targeting calls to particular clients or groups of clients.
-	AffinityKey func(*ReverseTunnelChannel) interface{}
+	AffinityKey func(channel *Channel) interface{}
+	// Optional channel to signal graceful close. The channel should be closed
+	// to indicate (graceful) stop has been started. Must be set prior to
+	// using the server.
+	StopSignal <-chan struct{}
 
 	handlers grpchan.HandlerMap
 
@@ -73,8 +77,14 @@ func (s *TunnelServer) OpenTunnel(stream TunnelService_OpenTunnelServer) error {
 	if len(s.handlers) == 0 {
 		return status.Error(codes.Unimplemented, "forward tunnels not supported")
 	}
-
-	return ServeTunnel(stream, s.handlers)
+	options := []TunnelOption{
+		OptTunnel.ServerStream(stream),
+		OptTunnel.Service(func(h *HandlerMap) { s.handlers.ForEach(h.RegisterService) }),
+	}
+	if s.StopSignal != nil {
+		options = append(options, OptTunnel.StopSignal(s.StopSignal))
+	}
+	return ServeTunnel(options...)
 }
 
 func (s *TunnelServer) OpenReverseTunnel(stream TunnelService_OpenReverseTunnelServer) error {
@@ -82,7 +92,11 @@ func (s *TunnelServer) OpenReverseTunnel(stream TunnelService_OpenReverseTunnelS
 		return status.Error(codes.Unimplemented, "reverse tunnels not supported")
 	}
 
-	ch := NewReverseChannel(stream)
+	// TODO stop signal support for the reverse tunnel side
+	ch, err := NewChannel(OptChannel.ServerStream(stream))
+	if err != nil {
+		return err
+	}
 	defer ch.Close()
 
 	var key interface{}
@@ -123,15 +137,14 @@ func (s *TunnelServer) OpenReverseTunnel(stream TunnelService_OpenReverseTunnelS
 
 type reverseChannels struct {
 	mu    sync.Mutex
-	chans []*ReverseTunnelChannel
+	chans []*Channel
 	idx   int
 }
 
-func (c *reverseChannels) allChans() []*ReverseTunnelChannel {
+func (c *reverseChannels) allChans() []*Channel {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	cp := make([]*ReverseTunnelChannel, len(c.chans))
+	cp := make([]*Channel, len(c.chans))
 	copy(cp, c.chans)
 	return cp
 }
@@ -147,21 +160,23 @@ func (c *reverseChannels) pick() grpc.ClientConnInterface {
 	if len(c.chans) == 0 {
 		return nil
 	}
+
 	c.idx++
 	if c.idx >= len(c.chans) {
 		c.idx = 0
 	}
+
 	return c.chans[c.idx]
 }
 
-func (c *reverseChannels) add(ch *ReverseTunnelChannel) {
+func (c *reverseChannels) add(ch *Channel) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.chans = append(c.chans, ch)
 }
 
-func (c *reverseChannels) remove(ch *ReverseTunnelChannel) {
+func (c *reverseChannels) remove(ch *Channel) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -173,7 +188,7 @@ func (c *reverseChannels) remove(ch *ReverseTunnelChannel) {
 	}
 }
 
-func (s *TunnelServer) AllReverseTunnels() []*ReverseTunnelChannel {
+func (s *TunnelServer) AllReverseTunnels() []*Channel {
 	return s.reverse.allChans()
 }
 
@@ -188,19 +203,16 @@ func (s *TunnelServer) KeyAsChannel(key interface{}) grpc.ClientConnInterface {
 	if s.NoReverseTunnels {
 		panic("reverse tunnels not supported")
 	}
-	return multiChannel(func() grpc.ClientConnInterface {
-		return s.pickKey(key)
-	})
+	return multiChannel(func() grpc.ClientConnInterface { return s.pickKey(key) })
 }
 
-func (s *TunnelServer) FindChannel(search func(*ReverseTunnelChannel) bool) *ReverseTunnelChannel {
+func (s *TunnelServer) FindChannel(search func(*Channel) bool) *Channel {
 	if s.NoReverseTunnels {
 		panic("reverse tunnels not supported")
 	}
 	allChans := s.reverse.allChans()
-
 	for _, ch := range allChans {
-		if !ch.IsDone() && search(ch) {
+		if !ch.Canceled() && search(ch) {
 			return ch
 		}
 	}
@@ -210,7 +222,6 @@ func (s *TunnelServer) FindChannel(search func(*ReverseTunnelChannel) bool) *Rev
 func (s *TunnelServer) pickKey(key interface{}) grpc.ClientConnInterface {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
 	return s.reverseByKey[key].pick()
 }
 

@@ -9,6 +9,17 @@ Other notable changes:
 
 - Deleted
   [stream_adapter.go](https://github.com/jhump/grpctunnel/blob/525f1361e55b62188ee09dedceed5b12a6fdb0f3/stream_adapter.go)
+- Renamed and restructured a messages / fields
+- Used the Sesame gRPC metadata type (note that the one in the grpctunnel package was broken for binary header vals)
+- Renamed `tunnel_client.go` -> `channel.go`
+- Renamed `tunnel_server.go` -> `tunnel.go`
+- Renamed `tunnel_test.go` -> `service_test.go`
+- Simplified API by removing pointless `ReverseTunnelChannel` wrapper
+- Renamed `TunnelChannel` to `Channel`
+- Simplified and improved extensibility of API by removing duplicated method pairs (`ServeTunnel` vs
+  `ServeReverseTunnel`, `NewChannel` vs `NewReverseChannel`), using the option pattern instead
+- Fixed unsafe send behavior via wrapper (see `stream.go`)
+- Added graceful stop support
 
 ## From the original readme
 

@@ -51,6 +51,7 @@ func NewBufconnClient(size int, init func(lis *bufconn.Listener, srv *grpc.Serve
 
 	conn, err := grpc.Dial(
 		"",
+		grpc.WithBlock(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
 	)

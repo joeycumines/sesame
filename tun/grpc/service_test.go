@@ -15,13 +15,11 @@
 package grpc
 
 import (
-	"github.com/fullstorydev/grpchan"
+	"context"
 	"github.com/fullstorydev/grpchan/grpchantesting"
 	"github.com/joeycumines/sesame/internal/testutil"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"net"
+	"google.golang.org/grpc/test/bufconn"
 	"runtime"
 	"testing"
 	"time"
@@ -34,7 +32,7 @@ func TestTunnelServer(t *testing.T) {
 
 	ready := make(chan struct{})
 	ts := TunnelServer{
-		OnReverseTunnelConnect: func(*ReverseTunnelChannel) {
+		OnReverseTunnelConnect: func(*Channel) {
 			// don't block; just make sure there's something in the channel
 			select {
 			case ready <- struct{}{}:
@@ -44,31 +42,17 @@ func TestTunnelServer(t *testing.T) {
 	}
 	grpchantesting.RegisterTestServiceServer(&ts, &svr)
 
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
-	}
-	gs := grpc.NewServer()
-	RegisterTunnelServiceServer(gs, &ts)
-	go gs.Serve(l)
-	defer gs.Stop()
-
-	cc, err := grpc.Dial(l.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer cc.Close()
-
-	cli := NewTunnelServiceClient(cc)
-
 	t.Run("forward", func(t *testing.T) {
 		checkForGoroutineLeak(t, func() {
-			tunnel, err := cli.OpenTunnel(context.Background())
+			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { RegisterTunnelServiceServer(srv, &ts) })
+			defer cc.Close()
+
+			tunnel, err := NewTunnelServiceClient(cc).OpenTunnel(context.Background())
 			if err != nil {
 				t.Fatalf("failed to open tunnel: %v", err)
 			}
 
-			ch := NewChannel(tunnel)
+			ch, err := NewChannel(OptChannel.ClientStream(tunnel))
 			defer ch.Close()
 
 			grpchantesting.RunChannelTestCases(t, ch, true)
@@ -77,24 +61,30 @@ func TestTunnelServer(t *testing.T) {
 
 	t.Run("reverse", func(t *testing.T) {
 		checkForGoroutineLeak(t, func() {
-			tunnel, err := cli.OpenReverseTunnel(context.Background())
+			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { RegisterTunnelServiceServer(srv, &ts) })
+			defer cc.Close()
+
+			tunnel, err := NewTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
 			if err != nil {
 				t.Fatalf("failed to open reverse tunnel: %v", err)
 			}
 
-			// client now acts as the server
-			handlerMap := grpchan.HandlerMap{}
-			grpchantesting.RegisterTestServiceServer(handlerMap, &svr)
+			stop := make(chan struct{})
+
 			errs := make(chan error)
 			go func() {
-				errs <- ServeReverseTunnel(tunnel, handlerMap)
+				errs <- ServeTunnel(
+					OptTunnel.ClientStream(tunnel),
+					OptTunnel.Service(func(h *HandlerMap) { grpchantesting.RegisterTestServiceServer(h, &svr) }),
+					OptTunnel.StopSignal(stop),
+				)
 			}()
 
 			defer func() {
-				tunnel.CloseSend()
+				close(stop)
 				err := <-errs
 				// note this test appears a little dodgy, as you shouldn't call CloseSend concurrently with SendMsg
-				if err != nil && err.Error() != `rpc error: code = Internal desc = SendMsg called after CloseSend` {
+				if err != nil {
 					t.Errorf("ServeReverseTunnel returned error: %v", err)
 				}
 			}()
@@ -102,7 +92,6 @@ func TestTunnelServer(t *testing.T) {
 			// make sure server has registered client, so we can issue RPCs to it
 			<-ready
 			ch := ts.AsChannel()
-
 			grpchantesting.RunChannelTestCases(t, ch, true)
 		})
 	})

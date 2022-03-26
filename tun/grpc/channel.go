@@ -30,25 +30,15 @@ import (
 	"sync"
 )
 
-func NewChannel(stream TunnelService_OpenTunnelClient) *TunnelChannel {
-	return newTunnelChannel(wrapTunnelStreamClient(stream, stream.CloseSend))
-}
-
-func NewReverseChannel(stream TunnelService_OpenReverseTunnelServer) *ReverseTunnelChannel {
-	p, _ := peer.FromContext(stream.Context())
-	md, _ := metadata.FromIncomingContext(stream.Context())
-	ch := newTunnelChannel(wrapTunnelStreamClient(stream, nil))
-	return &ReverseTunnelChannel{
-		TunnelChannel:  ch,
-		Peer:           p,
-		RequestHeaders: md,
+func NewChannel(options ...ChannelOption) (*Channel, error) {
+	var c channelConfig
+	for _, o := range options {
+		o(&c)
 	}
-}
-
-type ReverseTunnelChannel struct {
-	*TunnelChannel
-	Peer           *peer.Peer
-	RequestHeaders metadata.MD
+	if err := c.validate(); err != nil {
+		return nil, err
+	}
+	return newChannel(wrapTunnelStreamClient(c.stream.get().stream, c.stream.get().tearDown)), nil
 }
 
 type tunnelStreamClient interface {
@@ -57,7 +47,9 @@ type tunnelStreamClient interface {
 	Recv() (*ServerToClient, error)
 }
 
-type TunnelChannel struct {
+// Channel is a tunnel client, and implements grpc.ClientConnInterface.
+// It is backed by a single stream, though this stream may be either a tunnel client, or a reverse tunnel server.
+type Channel struct {
 	stream   tunnelStreamClient
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -71,9 +63,11 @@ type TunnelChannel struct {
 	finished      bool
 }
 
-func newTunnelChannel(stream tunnelStreamClient, tearDown func() error) *TunnelChannel {
+var _ grpc.ClientConnInterface = (*Channel)(nil)
+
+func newChannel(stream tunnelStreamClient, tearDown func() error) *Channel {
 	ctx, cancel := context.WithCancel(stream.Context())
-	c := &TunnelChannel{
+	c := &Channel{
 		stream:   stream,
 		ctx:      ctx,
 		cancel:   cancel,
@@ -84,15 +78,15 @@ func newTunnelChannel(stream tunnelStreamClient, tearDown func() error) *TunnelC
 	return c
 }
 
-func (c *TunnelChannel) Context() context.Context {
+func (c *Channel) Context() context.Context {
 	return c.ctx
 }
 
-func (c *TunnelChannel) Done() <-chan struct{} {
+func (c *Channel) Done() <-chan struct{} {
 	return c.ctx.Done()
 }
 
-func (c *TunnelChannel) IsDone() bool {
+func (c *Channel) Canceled() bool {
 	if c.ctx.Err() != nil {
 		return true
 	}
@@ -101,7 +95,7 @@ func (c *TunnelChannel) IsDone() bool {
 	return c.finished
 }
 
-func (c *TunnelChannel) Err() error {
+func (c *Channel) Err() error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	switch c.err {
@@ -114,9 +108,9 @@ func (c *TunnelChannel) Err() error {
 	}
 }
 
-func (c *TunnelChannel) Close() error { return c.close(nil) }
+func (c *Channel) Close() error { return c.close(nil) }
 
-func (c *TunnelChannel) Invoke(ctx context.Context, methodName string, req, resp interface{}, opts ...grpc.CallOption) error {
+func (c *Channel) Invoke(ctx context.Context, methodName string, req, resp interface{}, opts ...grpc.CallOption) error {
 	str, err := c.newStream(ctx, false, false, methodName, opts...)
 	if err != nil {
 		return err
@@ -130,11 +124,11 @@ func (c *TunnelChannel) Invoke(ctx context.Context, methodName string, req, resp
 	return str.RecvMsg(resp)
 }
 
-func (c *TunnelChannel) NewStream(ctx context.Context, desc *grpc.StreamDesc, methodName string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+func (c *Channel) NewStream(ctx context.Context, desc *grpc.StreamDesc, methodName string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	return c.newStream(ctx, desc.ClientStreams, desc.ServerStreams, methodName, opts...)
 }
 
-func (c *TunnelChannel) newStream(ctx context.Context, clientStreams, serverStreams bool, methodName string, opts ...grpc.CallOption) (*tunnelClientStream, error) {
+func (c *Channel) newStream(ctx context.Context, clientStreams, serverStreams bool, methodName string, opts ...grpc.CallOption) (*tunnelClientStream, error) {
 	str, md, err := c.allocateStream(ctx, clientStreams, serverStreams, methodName, opts)
 	if err != nil {
 		return nil, err
@@ -161,7 +155,7 @@ func (c *TunnelChannel) newStream(ctx context.Context, clientStreams, serverStre
 	return str, nil
 }
 
-func (c *TunnelChannel) allocateStream(ctx context.Context, clientStreams, serverStreams bool, methodName string, opts []grpc.CallOption) (*tunnelClientStream, metadata.MD, error) {
+func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStreams bool, methodName string, opts []grpc.CallOption) (*tunnelClientStream, metadata.MD, error) {
 	md, _ := metadata.FromOutgoingContext(ctx)
 	var hdrs, tlrs []*metadata.MD
 	pr, _ := peer.FromContext(c.ctx)
@@ -247,7 +241,7 @@ func (c *TunnelChannel) allocateStream(ctx context.Context, clientStreams, serve
 	return str, md, nil
 }
 
-func (c *TunnelChannel) recvLoop() {
+func (c *Channel) recvLoop() {
 	for {
 		in, err := c.stream.Recv()
 		if err != nil {
@@ -263,7 +257,7 @@ func (c *TunnelChannel) recvLoop() {
 	}
 }
 
-func (c *TunnelChannel) getStream(streamID uint64) (*tunnelClientStream, error) {
+func (c *Channel) getStream(streamID uint64) (*tunnelClientStream, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -280,7 +274,7 @@ func (c *TunnelChannel) getStream(streamID uint64) (*tunnelClientStream, error) 
 	return target, nil
 }
 
-func (c *TunnelChannel) removeStream(streamID uint64) {
+func (c *Channel) removeStream(streamID uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.streams != nil {
@@ -288,7 +282,7 @@ func (c *TunnelChannel) removeStream(streamID uint64) {
 	}
 }
 
-func (c *TunnelChannel) close(err error) (tearDownErr error) {
+func (c *Channel) close(err error) (tearDownErr error) {
 	if c.tearDown != nil {
 		tearDownErr = c.tearDown()
 	}
@@ -317,7 +311,7 @@ func (c *TunnelChannel) close(err error) (tearDownErr error) {
 type tunnelClientStream struct {
 	ctx      context.Context
 	cncl     context.CancelFunc
-	ch       *TunnelChannel
+	ch       *Channel
 	streamID uint64
 	method   string
 	stream   tunnelStreamClient

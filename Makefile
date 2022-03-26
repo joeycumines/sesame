@@ -21,7 +21,8 @@ all: lint build test
 clean:
 
 .PHONY: lint
-lint: vet staticcheck
+lint: vet
+# TODO re-enable staticcheck
 
 .PHONY: build
 build:

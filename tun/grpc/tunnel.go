@@ -32,60 +32,28 @@ import (
 
 const maxChunkSize = 16384
 
-// ServeTunnel uses the given services to handle incoming RPC requests that
-// arrive via the given incoming tunnel stream.
-//
-// It returns if, in the process of reading requests, it detects invalid usage
-// of the stream (client sending references to invalid stream IDs or sending
-// frames for a stream ID in improper order) or if the stream itself fails (for
-// example, if the client cancels the tunnel or there is a network disruption).
-//
-// This is typically called from a handler that implements the TunnelService.
-// Typical usage looks like so:
-//
-//    func (h tunnelHandler) OpenTunnel(stream grpctunnel.TunnelService_OpenTunnelServer) error {
-//        return grpctunnel.ServeTunnel(stream, h.handlers)
-//    }
-//
-func ServeTunnel(stream TunnelService_OpenTunnelServer, handlers grpchan.HandlerMap) error {
-	return serveTunnel(stream, handlers)
+// TODO document the (lack) of safety for use of streams after ServeTunnel exits
+
+func ServeTunnel(options ...TunnelOption) error {
+	var c tunnelConfig
+	for _, o := range options {
+		o(&c)
+	}
+	if err := c.validate(); err != nil {
+		return err
+	}
+	return serveTunnel(
+		c.stream.get().stream,
+		c.handlers.get().val.m,
+		c.stop.get().ch,
+	)
 }
 
-// ServeReverseTunnel uses the given services to handle incoming RPC requests
-// that arrive via the given client tunnel stream. Since this is a reverse
-// tunnel, RPC requests are initiated by the server, and this end (the client)
-// processes the requests and sends responses.
-//
-// It returns if, in the process of reading requests, it detects invalid usage
-// of the stream (client sending references to invalid stream IDs or sending
-// frames for a stream ID in improper order) or if the stream itself fails (for
-// example, if the client cancels the tunnel or there is a network disruption).
-//
-// On return the provided stream should be canceled as soon as possible. Typical
-// usage looks like so:
-//
-//    ctx, cancel := context.WithCancel(ctx)
-//    defer cancel()
-//    stream, err := stub.OpenReverseTunnel(ctx)
-//    if err != nil {
-//        return err
-//    }
-//    return grpctunnel.ServeReverseTunnel(stream, handlers)
-//
-func ServeReverseTunnel(stream TunnelService_OpenReverseTunnelClient, handlers grpchan.HandlerMap) error {
-	return serveTunnel(stream, handlers)
-}
-
-// TODO: how to expose API to allow for graceful shutdown? Maybe above functions
-// should return the server, whose serve method could be exported. It could also
-// provide a Stop and GracefulStop method. If requests are received while the
-// channel is in graceful-stopping mode, it could immediately fail them with an
-// "unavailable" response code.
-
-func serveTunnel(stream tunnelStreamServer, handlers grpchan.HandlerMap) error {
+func serveTunnel(stream tunnelStreamServer, handlers grpchan.HandlerMap, stop <-chan struct{}) error {
 	svr := &tunnelServer{
-		stream:   stream,
+		stream:   newTunnelStreamServerWrapper(stream),
 		services: handlers,
+		stop:     stop,
 		streams:  make(map[uint64]*tunnelServerStream),
 	}
 	return svr.serve()
@@ -100,6 +68,7 @@ type tunnelStreamServer interface {
 type tunnelServer struct {
 	stream   tunnelStreamServer
 	services grpchan.HandlerMap
+	stop     <-chan struct{} // graceful
 
 	mu       sync.RWMutex
 	streams  map[uint64]*tunnelServerStream
@@ -109,39 +78,101 @@ type tunnelServer struct {
 func (s *tunnelServer) serve() error {
 	ctx, cancel := context.WithCancel(s.stream.Context())
 	defer cancel()
-	for {
-		in, err := s.stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
 
-		if f, ok := in.Frame.(*ClientToServer_NewStream_); ok {
-			if ok, err := s.createStream(ctx, in.StreamId, f.NewStream); err != nil {
-				if !ok {
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-s.stop:
+			if s.waitAllStreams(ctx) == nil {
+				cancel()
+			}
+		}
+	}()
+
+	// TODO tidy this up
+	out := make(chan error, 1)
+	go func() {
+		defer cancel()
+		out <- func() error {
+			for {
+				in, err := s.stream.Recv()
+				if err != nil {
+					if err == io.EOF {
+						return nil
+					}
 					return err
-				} else {
-					st, _ := status.FromError(err)
-					_ = s.stream.Send(&ServerToClient{
-						StreamId: in.StreamId,
-						Frame: &ServerToClient_CloseStream_{
-							CloseStream: &ServerToClient_CloseStream{
-								Status: st.Proto(),
-							},
-						},
-					})
 				}
-			}
-			continue
-		}
 
-		str, err := s.getStream(in.StreamId)
-		if err != nil {
+				if in.GetStreamId() == 0 || in.GetFrame() == nil {
+					return status.Error(codes.InvalidArgument, "invalid frame")
+				}
+
+				if f, ok := in.Frame.(*ClientToServer_NewStream_); ok {
+					// TODO don't block on this
+					if ok, err := s.createStream(ctx, in.StreamId, f.NewStream); err != nil {
+						if !ok {
+							return err
+						} else {
+							st, _ := status.FromError(err)
+							_ = s.stream.Send(&ServerToClient{
+								StreamId: in.StreamId,
+								Frame: &ServerToClient_CloseStream_{
+									CloseStream: &ServerToClient_CloseStream{
+										Status: st.Proto(),
+									},
+								},
+							})
+						}
+					}
+					continue
+				}
+
+				str, err := s.getStream(in.StreamId)
+				if err != nil {
+					return err
+				}
+
+				str.acceptClientFrame(in.Frame)
+			}
+		}()
+	}()
+
+	<-ctx.Done()
+	select {
+	case err := <-out:
+		return err
+	default:
+		return nil
+	}
+}
+
+func (s *tunnelServer) waitAllStreams(ctx context.Context) error {
+	for {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		str.acceptClientFrame(in.Frame)
+		var closed chan struct{}
+		s.mu.RLock()
+		for _, stream := range s.streams {
+			select {
+			case <-stream.closed:
+				continue
+			default:
+			}
+			closed = stream.closed
+			break
+		}
+		s.mu.RUnlock()
+		if closed == nil {
+			// there weren't any streams that were not closed
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-closed:
+			// we have to try again though, as we released the lock
+		}
 	}
 }
 
@@ -159,13 +190,23 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 	}
 	s.lastSeen = streamID
 
-	if frame.Method[0] == '/' {
-		frame.Method = frame.Method[1:]
+	select {
+	case <-s.stop:
+		return true, errTransportClosing()
+	default:
 	}
-	parts := strings.SplitN(frame.Method, "/", 2)
+
+	var parts []string
+	if method := frame.GetMethod(); method != `` {
+		if method[0] == '/' {
+			method = method[1:]
+		}
+		parts = strings.SplitN(method, "/", 2)
+	}
 	if len(parts) != 2 {
-		return true, status.Errorf(codes.InvalidArgument, "%s is not a well-formed method name", frame.Method)
+		return true, status.Errorf(codes.InvalidArgument, "%q is not a well-formed method name", frame.GetMethod())
 	}
+
 	var md interface{}
 	sd, svc := s.services.QueryService(parts[0])
 	if sd != nil {
@@ -177,7 +218,6 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 	}
 
 	if md == nil {
-		delete(s.streams, streamID)
 		return true, status.Errorf(codes.Unimplemented, "%s not implemented", frame.Method)
 	}
 
@@ -194,6 +234,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 		isServerStream: isServerStream,
 		readChan:       ch,
 		ingestChan:     ch,
+		closed:         make(chan struct{}),
 	}
 	s.streams[streamID] = str
 	str.ctx = grpc.NewContextWithServerTransportStream(str.ctx, (*tunnelServerTransportStream)(str))
@@ -264,7 +305,7 @@ type tunnelServerStream struct {
 	headers     metadata.MD
 	trailers    metadata.MD
 	sentHeaders bool
-	closed      bool
+	closed      chan struct{}
 }
 
 func (st *tunnelServerStream) acceptClientFrame(frame isClientToServer_Frame) {
@@ -331,8 +372,8 @@ func (st *tunnelServerStream) sendHeadersLocked() error {
 			Header: toProto(st.headers),
 		},
 	})
-	st.sentHeaders = true
 	st.headers = nil
+	st.sentHeaders = true
 	return err
 }
 
@@ -388,12 +429,13 @@ func (st *tunnelServerStream) SetTrailer(md metadata.MD) {
 func (st *tunnelServerStream) setTrailer(md metadata.MD) error {
 	st.writeMu.Lock()
 	defer st.writeMu.Unlock()
-
-	if st.closed {
+	select {
+	case <-st.closed:
 		return errors.New("already finished")
+	default:
+		st.trailers = metadata.Join(st.trailers, md)
+		return nil
 	}
-	st.trailers = metadata.Join(st.trailers, md)
-	return nil
 }
 
 func (st *tunnelServerStream) Context() context.Context {
@@ -591,15 +633,18 @@ func (st *tunnelServerStream) serveStream(md interface{}, srv interface{}) {
 }
 
 func (st *tunnelServerStream) finishStream(err error) {
-	st.svr.removeStream(st.streamID)
+	defer st.svr.removeStream(st.streamID)
 
 	st.halfClose(err)
 
 	st.writeMu.Lock()
 	defer st.writeMu.Unlock()
 
-	if st.closed {
+	select {
+	case <-st.closed:
+		// already closed
 		return
+	default:
 	}
 
 	if !st.sentHeaders {
@@ -616,20 +661,18 @@ func (st *tunnelServerStream) finishStream(err error) {
 			},
 		},
 	})
-
-	st.closed = true
 	st.trailers = nil
+
+	close(st.closed)
 }
 
 func (st *tunnelServerStream) halfClose(err error) {
 	st.ingestMu.Lock()
 	defer st.ingestMu.Unlock()
-
 	if st.halfClosed != nil {
 		// already closed
 		return
 	}
-
 	if err == nil {
 		err = io.EOF
 	}
