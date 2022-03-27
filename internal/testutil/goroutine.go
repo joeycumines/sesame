@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"runtime"
 	"runtime/pprof"
-	"testing"
 	"time"
 )
 
@@ -36,7 +35,7 @@ func WaitNumGoroutines(wait time.Duration, fn func(n int) bool) (n int) {
 	return
 }
 
-func CheckNumGoroutines(t *testing.T, start int, increase bool, wait time.Duration) {
+func CheckNumGoroutines(t TB, start int, increase bool, wait time.Duration) {
 	if t != nil {
 		t.Helper()
 	}
@@ -63,7 +62,7 @@ func CheckNumGoroutines(t *testing.T, start int, increase bool, wait time.Durati
 	}
 }
 
-func CleanupCheckNumGoroutines(t *testing.T, start int, increase bool, wait time.Duration) {
+func CleanupCheckNumGoroutines(t TB, start int, increase bool, wait time.Duration) {
 	t.Cleanup(func() { CheckNumGoroutines(t, start, increase, wait) })
 }
 

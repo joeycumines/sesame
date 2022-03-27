@@ -3,6 +3,7 @@ package testing
 
 import (
 	"testing"
+	"time"
 )
 
 type (
@@ -10,7 +11,11 @@ type (
 	T interface {
 		TB
 		Run(name string, f func(t T)) bool
+		Parallel()
+		Deadline() (deadline time.Time, ok bool)
 	}
+
+	tI = T
 
 	// TB is a copy of testing.TB w/o the unexported method.
 	TB interface {
