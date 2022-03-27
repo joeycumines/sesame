@@ -83,8 +83,8 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 
 	// 2. NetConnResponse.conn
 	if err := stream.Send(&rc.NetConnResponse{Data: &rc.NetConnResponse_Conn_{Conn: &rc.NetConnResponse_Conn{
-		Local:  protoNetAddr(conn.LocalAddr()),
-		Remote: protoNetAddr(conn.RemoteAddr()),
+		Local:  netaddr.New(conn.LocalAddr()),
+		Remote: netaddr.New(conn.RemoteAddr()),
 	}}}); err != nil {
 		// code unknown
 		return err
@@ -123,16 +123,6 @@ func defaultDialer(req *rc.NetConnRequest_Dial) (Dialer, error) {
 	return &net.Dialer{
 		Timeout: req.GetTimeout().AsDuration(),
 	}, nil
-}
-
-func protoNetAddr(v net.Addr) *netaddr.NetAddr {
-	if v != nil {
-		return &netaddr.NetAddr{
-			Network: v.Network(),
-			Address: v.String(),
-		}
-	}
-	return nil
 }
 
 func newStreamServerReader(stream rc.RemoteControl_NetConnServer) *grpcstream.Reader {

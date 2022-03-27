@@ -32,26 +32,26 @@ func mockDialFactory(network, dialer, listener string) (DialerFactory, *mockDial
 	}
 	a := &mockDialFactoryWrapper{
 		av,
-		netAddr{&netaddr.NetAddr{
+		(&netaddr.NetAddr{
 			Network: network,
 			Address: dialer,
-		}},
-		netAddr{&netaddr.NetAddr{
+		}).AsGoNetAddr(),
+		(&netaddr.NetAddr{
 			Network: network,
 			Address: listener,
-		}},
+		}).AsGoNetAddr(),
 		state,
 	}
 	b := &mockDialFactoryWrapper{
 		bv,
-		netAddr{&netaddr.NetAddr{
+		(&netaddr.NetAddr{
 			Network: network,
 			Address: listener,
-		}},
-		netAddr{&netaddr.NetAddr{
+		}).AsGoNetAddr(),
+		(&netaddr.NetAddr{
 			Network: network,
 			Address: dialer,
-		}},
+		}).AsGoNetAddr(),
 		state,
 	}
 	return a.DialFactory, b

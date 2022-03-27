@@ -36,8 +36,6 @@ type (
 		res *rc.NetConnResponse_Conn
 	}
 
-	netAddr struct{ data *netaddr.NetAddr }
-
 	clientReader struct{ ioReader }
 
 	clientWriter struct {
@@ -56,7 +54,6 @@ var (
 	// compile time assertions
 
 	_ net.Conn = (*netConn)(nil)
-	_ net.Addr = netAddr{}
 	_ Dialer   = (*Client)(nil)
 	_          = Client{API: rc.RemoteControlClient(nil)}
 )
@@ -124,9 +121,9 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 	return &conn, nil
 }
 
-func (x *netConn) LocalAddr() net.Addr { return netAddr{x.res.GetLocal()} }
+func (x *netConn) LocalAddr() net.Addr { return x.res.GetLocal().AsGoNetAddr() }
 
-func (x *netConn) RemoteAddr() net.Addr { return netAddr{x.res.GetRemote()} }
+func (x *netConn) RemoteAddr() net.Addr { return x.res.GetRemote().AsGoNetAddr() }
 
 func (x *netConn) String() string {
 	var s strings.Builder
@@ -177,10 +174,6 @@ func (x *netConn) String() string {
 	s.WriteByte(')')
 	return s.String()
 }
-
-func (x netAddr) Network() string { return x.data.GetNetwork() }
-
-func (x netAddr) String() string { return x.data.GetAddress() }
 
 func (x *clientWriter) Close() error { return x.CloseWithError(nil) }
 
