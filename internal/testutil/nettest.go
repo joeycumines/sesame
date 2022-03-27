@@ -1,13 +1,22 @@
 package testutil
 
 import (
-	"golang.org/x/net/nettest"
 	"net"
 	"runtime"
-	"testing"
 )
 
-func TestConn(t *testing.T, closeConns bool, init func(t *testing.T) nettest.MakePipe) {
+func TestConn[
+	T1 TB,
+	T2 interface {
+		TB
+		Run(name string, f func(t T1)) bool
+	},
+	T3 ~func() (c1, c2 net.Conn, stop func(), err error)](
+	t T2,
+	test func(t T1, mp T3),
+	closeConns bool,
+	init func(t T1) T3,
+) {
 	defer CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 	for _, tc := range [...]struct {
 		Name      string
@@ -36,11 +45,11 @@ func TestConn(t *testing.T, closeConns bool, init func(t *testing.T) nettest.Mak
 			// skip c and d if closeConns is false
 			continue
 		}
-		t.Run(tc.Name, func(t *testing.T) {
+		t.Run(tc.Name, func(t T1) {
 			CleanupCheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 			mp := init(t)
-			nettest.TestConn(t, func() (c1, c2 net.Conn, stop func(), err error) {
-				c1, c2, stop, err = mp()
+			test(t, func() (c1, c2 net.Conn, stop func(), err error) {
+				c1, c2, stop, err = (func() (c1, c2 net.Conn, stop func(), err error))(mp)()
 				if tc.SwapConn {
 					c1, c2 = c2, c1
 				}

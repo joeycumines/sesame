@@ -15,3 +15,14 @@ func TestClient_DialContext(t *testing.T) {
 		})
 	}
 }
+
+func Test_nettest(t *testing.T) {
+	for _, k := range testutil.CallOn(maps.Keys(testutil.ClientConnFactories), func(v []string) { sort.Strings(v) }) {
+		t.Run(k, func(t *testing.T) {
+			grpctest.RC_NetConn_Test_nettest(
+				testutil.WrapT(t),
+				testutil.ClientConnFactories[k],
+			)
+		})
+	}
+}

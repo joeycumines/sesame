@@ -10,6 +10,8 @@ type (
 
 	TB = testing.TB
 
+	TestingT = testing.TestingT
+
 	Runner = testing.Runner
 
 	RunnerOption = testing.RunnerOption

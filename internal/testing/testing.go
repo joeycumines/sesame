@@ -39,7 +39,8 @@ type (
 		TempDir() string
 	}
 
-	wrappedT struct {
+	// TestingT implements T using testing.T
+	TestingT struct {
 		*testing.T
 	}
 )
@@ -47,14 +48,13 @@ type (
 var (
 	// compile time assertions
 
-	_ T = wrappedT{}
+	_ T = TestingT{}
 )
 
-// TODO add a wrapper to get a T w/o implementing it yourself, requires (unsupported) self-referential type constraints
+// WrapT wraps testing.T to implement T.
+// TODO add support to get a T w/o implementing it yourself, requires (unsupported) self-referential type constraints
+func WrapT(t *testing.T) T { return TestingT{t} }
 
-// WrapT wraps testing.T to implement T
-func WrapT(t *testing.T) T { return wrappedT{t} }
-
-func (t wrappedT) Run(name string, f func(t T)) bool {
+func (t TestingT) Run(name string, f func(t T)) bool {
 	return t.T.Run(name, func(t *testing.T) { f(WrapT(t)) })
 }

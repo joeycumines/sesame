@@ -121,6 +121,20 @@ func Test_external_RC_NetConn_TestClient_DialContext(t *testing.T) {
 	}
 }
 
+func Test_external_RC_NetConn_nettest(t *testing.T) {
+	if true {
+		t.SkipNow()
+	}
+	for _, k := range testutil.CallOn(maps.Keys(clientConnFactories), func(v []string) { sort.Strings(v) }) {
+		t.Run(k, func(t *testing.T) {
+			grpctest.RC_NetConn_Test_nettest(
+				testutil.WrapT(t),
+				clientConnFactories[k],
+			)
+		})
+	}
+}
+
 // Test_e2e pulls in other test cases to aid in testing the tunnel implementations (in both directions) under
 // significant load, and in more "realistic" scenarios.
 //func Test_e2e(t *testing.T) {

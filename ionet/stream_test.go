@@ -425,7 +425,7 @@ func TestWrap_nettest(t *testing.T) {
 		},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
-			testutil.TestConn(t, tc.Stop, tc.Init)
+			testutil.TestConn(t, nettest.TestConn, tc.Stop, tc.Init)
 		})
 	}
 }
