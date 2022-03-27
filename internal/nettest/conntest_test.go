@@ -69,7 +69,7 @@ func TestTestConn(t *testing.T) {
 				}
 			}
 
-			TestConn(t, mp)
+			TestConn(WrapT(t), mp)
 		})
 	}
 }

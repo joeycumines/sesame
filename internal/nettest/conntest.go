@@ -13,7 +13,6 @@ import (
 	"net"
 	"runtime"
 	"sync"
-	"testing"
 	"time"
 )
 
@@ -28,23 +27,23 @@ type MakePipe func() (c1, c2 net.Conn, stop func(), err error)
 // false negatives. Thus, some issues may only be detected when the test is
 // run multiple times. For maximal effectiveness, run the tests under the
 // race detector.
-func TestConn(t *testing.T, mp MakePipe) {
-	t.Run("BasicIO", func(t *testing.T) { timeoutWrapper(t, mp, testBasicIO) })
-	t.Run("PingPong", func(t *testing.T) { timeoutWrapper(t, mp, testPingPong) })
-	t.Run("RacyRead", func(t *testing.T) { timeoutWrapper(t, mp, testRacyRead) })
-	t.Run("RacyWrite", func(t *testing.T) { timeoutWrapper(t, mp, testRacyWrite) })
-	t.Run("ReadTimeout", func(t *testing.T) { timeoutWrapper(t, mp, testReadTimeout) })
-	t.Run("WriteTimeout", func(t *testing.T) { timeoutWrapper(t, mp, testWriteTimeout) })
-	t.Run("PastTimeout", func(t *testing.T) { timeoutWrapper(t, mp, testPastTimeout) })
-	t.Run("PresentTimeout", func(t *testing.T) { timeoutWrapper(t, mp, testPresentTimeout) })
-	t.Run("FutureTimeout", func(t *testing.T) { timeoutWrapper(t, mp, testFutureTimeout) })
-	t.Run("CloseTimeout", func(t *testing.T) { timeoutWrapper(t, mp, testCloseTimeout) })
-	t.Run("ConcurrentMethods", func(t *testing.T) { timeoutWrapper(t, mp, testConcurrentMethods) })
+func TestConn(t T, mp MakePipe) {
+	t.Run("BasicIO", func(t T) { timeoutWrapper(t, mp, testBasicIO) })
+	t.Run("PingPong", func(t T) { timeoutWrapper(t, mp, testPingPong) })
+	t.Run("RacyRead", func(t T) { timeoutWrapper(t, mp, testRacyRead) })
+	t.Run("RacyWrite", func(t T) { timeoutWrapper(t, mp, testRacyWrite) })
+	t.Run("ReadTimeout", func(t T) { timeoutWrapper(t, mp, testReadTimeout) })
+	t.Run("WriteTimeout", func(t T) { timeoutWrapper(t, mp, testWriteTimeout) })
+	t.Run("PastTimeout", func(t T) { timeoutWrapper(t, mp, testPastTimeout) })
+	t.Run("PresentTimeout", func(t T) { timeoutWrapper(t, mp, testPresentTimeout) })
+	t.Run("FutureTimeout", func(t T) { timeoutWrapper(t, mp, testFutureTimeout) })
+	t.Run("CloseTimeout", func(t T) { timeoutWrapper(t, mp, testCloseTimeout) })
+	t.Run("ConcurrentMethods", func(t T) { timeoutWrapper(t, mp, testConcurrentMethods) })
 }
 
-type connTester func(t *testing.T, c1, c2 net.Conn)
+type connTester func(t T, c1, c2 net.Conn)
 
-func timeoutWrapper(t *testing.T, mp MakePipe, f connTester) {
+func timeoutWrapper(t T, mp MakePipe, f connTester) {
 	t.Helper()
 	c1, c2, stop, err := mp()
 	if err != nil {
@@ -63,7 +62,7 @@ func timeoutWrapper(t *testing.T, mp MakePipe, f connTester) {
 }
 
 // testBasicIO tests that the data sent on c1 is properly received on c2.
-func testBasicIO(t *testing.T, c1, c2 net.Conn) {
+func testBasicIO(t T, c1, c2 net.Conn) {
 	want := make([]byte, 1<<20)
 	rand.New(rand.NewSource(0)).Read(want)
 
@@ -96,7 +95,7 @@ func testBasicIO(t *testing.T, c1, c2 net.Conn) {
 
 // testPingPong tests that the two endpoints can synchronously send data to
 // each other in a typical request-response pattern.
-func testPingPong(t *testing.T, c1, c2 net.Conn) {
+func testPingPong(t T, c1, c2 net.Conn) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 
@@ -144,7 +143,7 @@ func testPingPong(t *testing.T, c1, c2 net.Conn) {
 
 // testRacyRead tests that it is safe to mutate the input Read buffer
 // immediately after cancelation has occurred.
-func testRacyRead(t *testing.T, c1, c2 net.Conn) {
+func testRacyRead(t T, c1, c2 net.Conn) {
 	go chunkedCopy(c2, rand.New(rand.NewSource(0)))
 
 	var wg sync.WaitGroup
@@ -172,7 +171,7 @@ func testRacyRead(t *testing.T, c1, c2 net.Conn) {
 
 // testRacyWrite tests that it is safe to mutate the input Write buffer
 // immediately after cancelation has occurred.
-func testRacyWrite(t *testing.T, c1, c2 net.Conn) {
+func testRacyWrite(t T, c1, c2 net.Conn) {
 	go chunkedCopy(ioutil.Discard, c2)
 
 	var wg sync.WaitGroup
@@ -199,7 +198,7 @@ func testRacyWrite(t *testing.T, c1, c2 net.Conn) {
 }
 
 // testReadTimeout tests that Read timeouts do not affect Write.
-func testReadTimeout(t *testing.T, c1, c2 net.Conn) {
+func testReadTimeout(t T, c1, c2 net.Conn) {
 	go chunkedCopy(ioutil.Discard, c2)
 
 	c1.SetReadDeadline(aLongTimeAgo)
@@ -211,7 +210,7 @@ func testReadTimeout(t *testing.T, c1, c2 net.Conn) {
 }
 
 // testWriteTimeout tests that Write timeouts do not affect Read.
-func testWriteTimeout(t *testing.T, c1, c2 net.Conn) {
+func testWriteTimeout(t T, c1, c2 net.Conn) {
 	go chunkedCopy(c2, rand.New(rand.NewSource(0)))
 
 	c1.SetWriteDeadline(aLongTimeAgo)
@@ -224,7 +223,7 @@ func testWriteTimeout(t *testing.T, c1, c2 net.Conn) {
 
 // testPastTimeout tests that a deadline set in the past immediately times out
 // Read and Write requests.
-func testPastTimeout(t *testing.T, c1, c2 net.Conn) {
+func testPastTimeout(t T, c1, c2 net.Conn) {
 	go chunkedCopy(c2, c2)
 
 	testRoundtrip(t, c1)
@@ -246,7 +245,7 @@ func testPastTimeout(t *testing.T, c1, c2 net.Conn) {
 
 // testPresentTimeout tests that a past deadline set while there are pending
 // Read and Write operations immediately times out those operations.
-func testPresentTimeout(t *testing.T, c1, c2 net.Conn) {
+func testPresentTimeout(t T, c1, c2 net.Conn) {
 	var wg sync.WaitGroup
 	defer wg.Wait()
 	wg.Add(3)
@@ -285,7 +284,7 @@ func testPresentTimeout(t *testing.T, c1, c2 net.Conn) {
 
 // testFutureTimeout tests that a future deadline will eventually time out
 // Read and Write operations.
-func testFutureTimeout(t *testing.T, c1, c2 net.Conn) {
+func testFutureTimeout(t T, c1, c2 net.Conn) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -312,7 +311,7 @@ func testFutureTimeout(t *testing.T, c1, c2 net.Conn) {
 
 // testCloseTimeout tests that calling Close immediately times out pending
 // Read and Write operations.
-func testCloseTimeout(t *testing.T, c1, c2 net.Conn) {
+func testCloseTimeout(t T, c1, c2 net.Conn) {
 	go chunkedCopy(c2, c2)
 
 	var wg sync.WaitGroup
@@ -346,7 +345,7 @@ func testCloseTimeout(t *testing.T, c1, c2 net.Conn) {
 
 // testConcurrentMethods tests that the methods of net.Conn can safely
 // be called concurrently.
-func testConcurrentMethods(t *testing.T, c1, c2 net.Conn) {
+func testConcurrentMethods(t T, c1, c2 net.Conn) {
 	if runtime.GOOS == "plan9" {
 		t.Skip("skipping on plan9; see https://golang.org/issue/20489")
 	}
@@ -394,7 +393,7 @@ func testConcurrentMethods(t *testing.T, c1, c2 net.Conn) {
 
 // checkForTimeoutError checks that the error satisfies the Error interface
 // and that Timeout returns true.
-func checkForTimeoutError(t *testing.T, err error) {
+func checkForTimeoutError(t T, err error) {
 	t.Helper()
 	if nerr, ok := err.(net.Error); ok {
 		if !nerr.Timeout() {
@@ -407,7 +406,7 @@ func checkForTimeoutError(t *testing.T, err error) {
 
 // testRoundtrip writes something into c and reads it back.
 // It assumes that everything written into c is echoed back to itself.
-func testRoundtrip(t *testing.T, c net.Conn) {
+func testRoundtrip(t T, c net.Conn) {
 	t.Helper()
 	if err := c.SetDeadline(neverTimeout); err != nil {
 		t.Errorf("roundtrip SetDeadline error: %v", err)
@@ -429,7 +428,7 @@ func testRoundtrip(t *testing.T, c net.Conn) {
 // resyncConn resynchronizes the connection into a sane state.
 // It assumes that everything written into c is echoed back to itself.
 // It assumes that 0xff is not currently on the wire or in the read buffer.
-func resyncConn(t *testing.T, c net.Conn) {
+func resyncConn(t T, c net.Conn) {
 	t.Helper()
 	c.SetDeadline(neverTimeout)
 	errCh := make(chan error)
