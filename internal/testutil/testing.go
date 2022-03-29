@@ -2,11 +2,12 @@ package testutil
 
 import (
 	"github.com/joeycumines/sesame/internal/testing"
-	stdtesting "testing"
 )
 
 type (
 	T = testing.T
+
+	TG = testing.TG
 
 	TB = testing.TB
 
@@ -19,12 +20,18 @@ type (
 	RunnerOptions = testing.RunnerOptions
 
 	RunnerTest = testing.RunnerTest
+
+	Unwrapper = testing.Unwrapper
+
+	DepthLimiter = testing.DepthLimiter
+
+	Hook = testing.Hook
 )
 
 var (
-	OptRunner = RunnerOptions{}
+	OptRunner = testing.OptRunner
+	Wrap      = testing.Wrap
+	NewRunner = testing.NewRunner
+	Parallel  = testing.Parallel
+	SkipRegex = testing.SkipRegex
 )
-
-func WrapT(t *stdtesting.T) T { return testing.WrapT(t) }
-
-func NewRunner(options ...RunnerOption) (*Runner, error) { return testing.NewRunner(options...) }

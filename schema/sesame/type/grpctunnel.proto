@@ -252,22 +252,26 @@ message ClientToServer {
   uint64 stream_id = 1;
 
   oneof frame {
+    // Per-stream flow control message, based on HTTP/2.
+    // Note that only message/message_data frames are subject to flow control.
+    // https://datatracker.ietf.org/doc/html/rfc7540#section-6.9
+    uint32 window_update = 2;
     // Creates a new RPC stream, which includes request header metadata. The
     // stream ID must not be an already active stream.
-    NewStream new_stream = 2;
+    NewStream new_stream = 3;
     // Sends a message on the RPC stream. If the message is larger than 16k,
     // the rest of the message should be sent in chunks using the
     // more_request_data field (up to 16kb of data in each chunk).
-    EncodedMessage message = 3;
+    EncodedMessage message = 4;
     // Sends a chunk of request data, for a request message that could not
     // wholly fit in a request_message field (e.g. > 16kb).
-    bytes message_data = 4;
+    bytes message_data = 5;
     // Half-closes the stream, signaling that no more request messages will
     // be sent. No other messages, other than one with the cancel field set,
     // should be sent for this stream.
-    google.protobuf.Empty half_close = 5;
+    google.protobuf.Empty half_close = 6;
     // Aborts the stream. No other messages should be sent for this stream.
-    google.protobuf.Empty cancel = 6;
+    google.protobuf.Empty cancel = 7;
   }
 
   message NewStream {
@@ -290,20 +294,24 @@ message ServerToClient {
   uint64 stream_id = 1;
 
   oneof frame {
+    // Per-stream flow control message, based on HTTP/2.
+    // Note that only message/message_data frames are subject to flow control.
+    // https://datatracker.ietf.org/doc/html/rfc7540#section-6.9
+    uint32 window_update = 2;
     // Sends response headers for this stream. If headers are sent at all,
     // they must be sent before any response message data.
-    type.GrpcMetadata header = 2;
+    type.GrpcMetadata header = 3;
     // Sends a message on the RPC stream. If the message is larger than 16k,
     // the rest of the message should be sent in chunks using the
     // more_response_data field (up to 16kb of data in each chunk).
-    EncodedMessage message = 3;
+    EncodedMessage message = 4;
     // Sends a chunk of response data, for a response message that could not
     // wholly fit in a response_message field (e.g. > 16kb).
-    bytes message_data = 4;
+    bytes message_data = 5;
     // Terminates the stream and communicates the final disposition to the
     // client. After the stream is closed, no other messages should use the
     // given stream ID.
-    CloseStream close_stream = 5;
+    CloseStream close_stream = 6;
   }
 
   message CloseStream {

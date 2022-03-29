@@ -9,13 +9,19 @@ import (
 type (
 	// T is used in place of *testing.T in order to support more fine-grained control the concurrency of the test cases.
 	T interface {
-		TB
+		TG
 		Run(name string, f func(t T)) bool
-		Parallel()
-		Deadline() (deadline time.Time, ok bool)
 	}
 
 	tI = T
+
+	// TG is all of T except the recursive method.
+	// It's to deal with Go 1.18's limited generic support.
+	TG interface {
+		TB
+		Parallel()
+		Deadline() (deadline time.Time, ok bool)
+	}
 
 	// TB is a copy of testing.TB w/o the unexported method.
 	TB interface {
@@ -51,10 +57,10 @@ var (
 	_ T = TestingT{}
 )
 
-// WrapT wraps testing.T to implement T.
+// Wrap wraps testing.T to implement T.
 // TODO add support to get a T w/o implementing it yourself, requires (unsupported) self-referential type constraints
-func WrapT(t *testing.T) T { return TestingT{t} }
+func Wrap(t *testing.T) T { return TestingT{t} }
 
 func (t TestingT) Run(name string, f func(t T)) bool {
-	return t.T.Run(name, func(t *testing.T) { f(WrapT(t)) })
+	return t.T.Run(name, func(t *testing.T) { f(Wrap(t)) })
 }

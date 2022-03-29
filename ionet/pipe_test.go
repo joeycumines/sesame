@@ -54,11 +54,11 @@ type (
 		err error
 	}
 
-	PipeFactory func() (stream.PipeReader, stream.PipeWriter)
+	streamPipeFactory func() (stream.PipeReader, stream.PipeWriter)
 )
 
 var (
-	pipeFactories = map[string]PipeFactory{
+	pipeFactories = map[string]streamPipeFactory{
 		`io.Pipe`: func() (stream.PipeReader, stream.PipeWriter) { return io.Pipe() },
 		`ConnPipe.SendPipe`: func() (stream.PipeReader, stream.PipeWriter) {
 			c, _ := Pipe()
@@ -219,7 +219,7 @@ func checkWrite(t *testing.T, w io.Writer, data []byte, c chan int) {
 	c <- 0
 }
 
-func testPipeFactories(t *testing.T, fn func(t *testing.T, factory PipeFactory)) {
+func testPipeFactories(t *testing.T, fn func(t *testing.T, factory streamPipeFactory)) {
 	for k, v := range pipeFactories {
 		v := v
 		t.Run(k, func(t *testing.T) { fn(t, v) })
@@ -227,7 +227,7 @@ func testPipeFactories(t *testing.T, fn func(t *testing.T, factory PipeFactory))
 }
 
 // Test a single read/write pair.
-func testPipe1(t *testing.T, factory PipeFactory) {
+func testPipe1(t *testing.T, factory streamPipeFactory) {
 	c := make(chan int)
 	r, w := factory()
 	var buf = make([]byte, 64)
@@ -265,7 +265,7 @@ func reader(t *testing.T, r io.Reader, c chan int) {
 }
 
 // Test a sequence of read/write pairs.
-func testPipe2(t *testing.T, factory PipeFactory) {
+func testPipe2(t *testing.T, factory streamPipeFactory) {
 	c := make(chan int)
 	r, w := factory()
 	go reader(t, r, c)
@@ -305,7 +305,7 @@ func writer(w io.WriteCloser, buf []byte, c chan pipeReturn) {
 	c <- pipeReturn{n, err}
 }
 
-func testPipe3(t *testing.T, factory PipeFactory) {
+func testPipe3(t *testing.T, factory streamPipeFactory) {
 	c := make(chan pipeReturn)
 	r, w := factory()
 	var wdat = make([]byte, 128)
@@ -391,7 +391,7 @@ func delayClose(t *testing.T, cl closer, ch chan int, tt pipeTest) {
 	ch <- 0
 }
 
-func testPipeReadClose(t *testing.T, factory PipeFactory) {
+func testPipeReadClose(t *testing.T, factory streamPipeFactory) {
 	for _, tt := range pipeTests {
 		c := make(chan int, 1)
 		r, w := factory()
@@ -422,7 +422,7 @@ func testPipeReadClose(t *testing.T, factory PipeFactory) {
 func TestPipeReadClose(t *testing.T) { testPipeFactories(t, testPipeReadClose) }
 
 // Test close on Read side during Read.
-func testPipeReadClose2(t *testing.T, factory PipeFactory) {
+func testPipeReadClose2(t *testing.T, factory streamPipeFactory) {
 	c := make(chan int, 1)
 	r, _ := factory()
 	go delayClose(t, r, c, pipeTest{})
@@ -436,7 +436,7 @@ func testPipeReadClose2(t *testing.T, factory PipeFactory) {
 func TestPipeReadClose2(t *testing.T) { testPipeFactories(t, testPipeReadClose2) }
 
 // Test write after/before reader close.
-func testPipeWriteClose(t *testing.T, factory PipeFactory) {
+func testPipeWriteClose(t *testing.T, factory streamPipeFactory) {
 	for _, tt := range pipeTests {
 		c := make(chan int, 1)
 		r, w := factory()
@@ -466,7 +466,7 @@ func testPipeWriteClose(t *testing.T, factory PipeFactory) {
 func TestPipeWriteClose(t *testing.T) { testPipeFactories(t, testPipeWriteClose) }
 
 // Test close on Write side during Write.
-func testPipeWriteClose2(t *testing.T, factory PipeFactory) {
+func testPipeWriteClose2(t *testing.T, factory streamPipeFactory) {
 	c := make(chan int, 1)
 	_, w := factory()
 	go delayClose(t, w, c, pipeTest{})
@@ -479,7 +479,7 @@ func testPipeWriteClose2(t *testing.T, factory PipeFactory) {
 
 func TestPipeWriteClose2(t *testing.T) { testPipeFactories(t, testPipeWriteClose2) }
 
-func testPipeWriteEmpty(t *testing.T, factory PipeFactory) {
+func testPipeWriteEmpty(t *testing.T, factory streamPipeFactory) {
 	r, w := factory()
 	go func() {
 		w.Write([]byte{})
@@ -492,7 +492,7 @@ func testPipeWriteEmpty(t *testing.T, factory PipeFactory) {
 
 func TestPipeWriteEmpty(t *testing.T) { testPipeFactories(t, testPipeWriteEmpty) }
 
-func testPipeWriteNil(t *testing.T, factory PipeFactory) {
+func testPipeWriteNil(t *testing.T, factory streamPipeFactory) {
 	r, w := factory()
 	go func() {
 		w.Write(nil)
@@ -505,7 +505,7 @@ func testPipeWriteNil(t *testing.T, factory PipeFactory) {
 
 func TestPipeWriteNil(t *testing.T) { testPipeFactories(t, testPipeWriteNil) }
 
-func testPipeWriteAfterWriterClose(t *testing.T, factory PipeFactory) {
+func testPipeWriteAfterWriterClose(t *testing.T, factory streamPipeFactory) {
 	r, w := factory()
 
 	done := make(chan bool)
@@ -539,7 +539,7 @@ func testPipeWriteAfterWriterClose(t *testing.T, factory PipeFactory) {
 
 func TestWriteAfterWriterClose(t *testing.T) { testPipeFactories(t, testPipeWriteAfterWriterClose) }
 
-func testPipeCloseError(t *testing.T, factory PipeFactory) {
+func testPipeCloseError(t *testing.T, factory streamPipeFactory) {
 	type testError1 struct{ error }
 	type testError2 struct{ error }
 
@@ -566,7 +566,7 @@ func testPipeCloseError(t *testing.T, factory PipeFactory) {
 
 func TestPipeCloseError(t *testing.T) { testPipeFactories(t, testPipeCloseError) }
 
-func testPipeConcurrent(t *testing.T, factory PipeFactory) {
+func testPipeConcurrent(t *testing.T, factory streamPipeFactory) {
 	const (
 		input    = "0123456789abcdef"
 		count    = 8

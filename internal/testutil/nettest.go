@@ -3,12 +3,21 @@ package testutil
 import (
 	"net"
 	"runtime"
+	"testing"
 )
 
+// TestConn runs (an implementation of) nettest.TestConn multiple times, testing different permutations of conn order
+// (swapping the roles of c1 and c2), and if closeConns is true, also the order of close (better at catching
+// close-related deadlocks). If closeConns is false, then the caller must close the two conns as part of the stop
+// closure. Any stop closure will be run before any auto-generated (closeConns) stop.
+//
+// If the nested t, provided by t.Run, is *testing.T, then the number of goroutines will be validated, to test for
+// leaks. Other types (presumably testutil.T or equivalent) should be capable of implementing the same functionality via
+// wrappers / other custom behavior.
 func TestConn[
-	T1 TB,
+	T1 TG,
 	T2 interface {
-		TB
+		TG
 		Run(name string, f func(t T1)) bool
 	},
 	T3 ~func() (c1, c2 net.Conn, stop func(), err error)](
@@ -17,7 +26,6 @@ func TestConn[
 	closeConns bool,
 	init func(t T1) T3,
 ) {
-	defer CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 	for _, tc := range [...]struct {
 		Name      string
 		SwapConn  bool
@@ -46,7 +54,11 @@ func TestConn[
 			continue
 		}
 		t.Run(tc.Name, func(t T1) {
-			CleanupCheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
+			// note: tests the underlying type
+			switch t := (interface{})(t).(type) {
+			case *testing.T:
+				defer CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
+			}
 			mp := init(t)
 			test(t, func() (c1, c2 net.Conn, stop func(), err error) {
 				c1, c2, stop, err = (func() (c1, c2 net.Conn, stop func(), err error))(mp)()

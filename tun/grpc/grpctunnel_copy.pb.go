@@ -24,6 +24,13 @@ func (x *ClientToServer) Proto_ShallowCopy(v interface{}) {
 			x.Frame = v.GetFrame()
 		} else {
 			func() {
+				if v, ok := v.(interface{ GetWindowUpdate() uint32 }); ok {
+					var defaultValue uint32
+					if v := v.GetWindowUpdate(); v != defaultValue {
+						x.Frame = &ClientToServer_WindowUpdate{WindowUpdate: v}
+						return
+					}
+				}
 				if v, ok := v.(interface {
 					GetNewStream() *ClientToServer_NewStream
 				}); ok {
@@ -123,6 +130,13 @@ func (x *ServerToClient) Proto_ShallowCopy(v interface{}) {
 			x.Frame = v.GetFrame()
 		} else {
 			func() {
+				if v, ok := v.(interface{ GetWindowUpdate() uint32 }); ok {
+					var defaultValue uint32
+					if v := v.GetWindowUpdate(); v != defaultValue {
+						x.Frame = &ServerToClient_WindowUpdate{WindowUpdate: v}
+						return
+					}
+				}
 				if v, ok := v.(interface {
 					GetHeader() *grpcmetadata.GrpcMetadata
 				}); ok {

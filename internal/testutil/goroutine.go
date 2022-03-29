@@ -15,6 +15,21 @@ const (
 	waitNumGoroutinesMin         = time.Millisecond * 50
 )
 
+type (
+	GoroutineChecker struct {
+		T
+		Increase bool
+		Wait     time.Duration
+	}
+)
+
+var (
+	// compile time assertions
+
+	_ T         = GoroutineChecker{}
+	_ Unwrapper = GoroutineChecker{}
+)
+
 func WaitNumGoroutines(wait time.Duration, fn func(n int) bool) (n int) {
 	if wait == 0 {
 		wait = waitNumGoroutinesDefault
@@ -70,4 +85,15 @@ func DumpGoroutineStacktrace() string {
 	var b bytes.Buffer
 	_ = pprof.Lookup("goroutine").WriteTo(&b, 1)
 	return b.String()
+}
+
+func (x GoroutineChecker) Unwrap() T { return x.T }
+
+func (x GoroutineChecker) Run(name string, f func(t T)) bool {
+	return x.T.Run(name, func(t T) {
+		CleanupCheckNumGoroutines(t, runtime.NumGoroutine(), x.Increase, x.Wait)
+		wt := x
+		wt.T = t
+		f(wt)
+	})
 }

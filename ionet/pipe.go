@@ -101,6 +101,8 @@ type (
 )
 
 var (
+	// compile time assertions
+
 	_ net.Conn          = (*ConnPipe)(nil)
 	_ io.WriterTo       = (*ConnPipe)(nil)
 	_ io.WriterTo       = (*ConnPipeReader)(nil)

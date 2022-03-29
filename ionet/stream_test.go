@@ -425,6 +425,7 @@ func TestWrap_nettest(t *testing.T) {
 		},
 	} {
 		t.Run(tc.Name, func(t *testing.T) {
+			defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
 			testutil.TestConn(t, nettest.TestConn, tc.Stop, tc.Init)
 		})
 	}

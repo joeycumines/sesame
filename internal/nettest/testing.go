@@ -6,8 +6,6 @@ import (
 
 type (
 	T = testing.T
-
-	TB = testing.TB
 )
 
-var WrapT = testing.WrapT
+var WrapT = testing.Wrap

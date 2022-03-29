@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/fullstorydev/grpchan"
 	"github.com/fullstorydev/grpchan/inprocgrpc"
+	"github.com/joeycumines/sesame/internal/pipelistener"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -21,11 +22,9 @@ const (
 )
 
 type (
-	// BufconnClient wraps a grpc.ClientConn to also close a bufconn.Listener and a grpc.Server, and is used by
-	// NewBufconnClient.
-	BufconnClient struct {
+	PipeClient struct {
 		*grpc.ClientConn
-		Listener *bufconn.Listener
+		Listener ListenerDialer
 		Server   *grpc.Server
 		closer   io.Closer
 	}
@@ -45,17 +44,23 @@ type (
 		mu   sync.Mutex
 		wg   sync.WaitGroup
 	}
+
+	ListenerDialer interface {
+		net.Listener
+		DialContext(ctx context.Context) (net.Conn, error)
+	}
 )
 
 var (
 	ClientConnFactories = map[string]ClientConnFactory{
 		`bufconn`: BufconnClientConnFactory,
 		`grpchan`: GrpchanClientConnFactory,
+		`netpipe`: NetpipeClientConnFactory,
 	}
 
 	// compile time assertions
 
-	_ grpc.ClientConnInterface = (*BufconnClient)(nil)
+	_ grpc.ClientConnInterface = (*PipeClient)(nil)
 )
 
 func BufconnClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
@@ -75,15 +80,57 @@ func GrpchanClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
 	return &r
 }
 
+func NetpipeClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
+	return NewNetpipeClient(net.Pipe, func(_ *pipelistener.PipeListener, srv *grpc.Server) { fn(srv) })
+}
+
 // NewBufconnClient initialises a new gRPC client for testing, using google.golang.org/grpc/test/bufconn.
 // Size will default to DefaultBufconnSize if <= 0. The init func will be called prior to serving on the listener, which
 // does not need to be implemented by the caller.
-func NewBufconnClient(size int, init func(lis *bufconn.Listener, srv *grpc.Server)) *BufconnClient {
+func NewBufconnClient(size int, init func(lis *bufconn.Listener, srv *grpc.Server)) *PipeClient {
 	if size <= 0 {
 		size = DefaultBufconnSize
 	}
+	listenerFactory := func() ListenerDialer {
+		var lis *bufconn.Listener = bufconn.Listen(size)
+		return lis
+	}
+	var initFunc func(lis net.Listener, srv *grpc.Server)
+	if init != nil {
+		initFunc = func(lis net.Listener, srv *grpc.Server) { init(lis.(*bufconn.Listener), srv) }
+	}
+	return newPipeClient(listenerFactory, initFunc)
+}
 
-	listener := bufconn.Listen(size)
+func NewNetpipeClient(factory func() (c1, c2 net.Conn), init func(lis *pipelistener.PipeListener, srv *grpc.Server)) *PipeClient {
+	if factory == nil {
+		panic(`nil factory`)
+	}
+	var f pipelistener.PipeFactory = func(context.Context) (listener, dialer net.Conn, _ error) {
+		// note: ignores the input context, it appears to be only for dial (vs being for the whole stream)
+		listener, dialer = factory()
+		return
+	}
+	return NewPipeClient(f, init)
+}
+
+// NewPipeClient initialises a new gRPC client for testing, using a net.Pipe style implementation.
+// Size will default to DefaultBufconnSize if <= 0. The init func will be called prior to serving on the listener, which
+// does not need to be implemented by the caller.
+func NewPipeClient(factory pipelistener.PipeFactory, init func(lis *pipelistener.PipeListener, srv *grpc.Server)) *PipeClient {
+	listenerFactory := func() ListenerDialer {
+		var lis *pipelistener.PipeListener = pipelistener.NewPipeListener(factory)
+		return lis
+	}
+	var initFunc func(lis net.Listener, srv *grpc.Server)
+	if init != nil {
+		initFunc = func(lis net.Listener, srv *grpc.Server) { init(lis.(*pipelistener.PipeListener), srv) }
+	}
+	return newPipeClient(listenerFactory, initFunc)
+}
+
+func newPipeClient(listenerFactory func() ListenerDialer, init func(lis net.Listener, srv *grpc.Server)) *PipeClient {
+	listener := listenerFactory()
 	server := grpc.NewServer()
 
 	if init != nil {
@@ -97,7 +144,7 @@ func NewBufconnClient(size int, init func(lis *bufconn.Listener, srv *grpc.Serve
 		"",
 		grpc.WithBlock(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }),
 	)
 	if err != nil {
 		defer listener.Close()
@@ -105,7 +152,7 @@ func NewBufconnClient(size int, init func(lis *bufconn.Listener, srv *grpc.Serve
 		panic(err)
 	}
 
-	return &BufconnClient{
+	return &PipeClient{
 		ClientConn: conn,
 		Listener:   listener,
 		Server:     server,
@@ -121,7 +168,7 @@ func NewBufconnClient(size int, init func(lis *bufconn.Listener, srv *grpc.Serve
 	}
 }
 
-func (x *BufconnClient) Close() error { return x.closer.Close() }
+func (x *PipeClient) Close() error { return x.closer.Close() }
 
 func (x *clientConnCancelCloser) Close() error {
 	x.mu.Lock()

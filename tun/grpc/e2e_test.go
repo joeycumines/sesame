@@ -9,20 +9,20 @@ import (
 	grpctun "github.com/joeycumines/sesame/tun/grpc"
 	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io"
+	"regexp"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
 )
 
-var clientConnFactories = func() (m map[string]testutil.ClientConnFactory) {
-	m = make(map[string]testutil.ClientConnFactory)
-	for k, f := range testutil.ClientConnFactories {
-		m[`tunnel_`+k] = tunnelCCFactory(f)
-		m[`reverse_tunnel_`+k] = reverseTunnelCCFactory(f)
-	}
-	return
-}()
+var clientConnFactories = map[string]testutil.ClientConnFactory{
+	`tunnel_netpipe`:         tunnelCCFactory(testutil.NetpipeClientConnFactory),
+	`reverse_tunnel_netpipe`: reverseTunnelCCFactory(testutil.NetpipeClientConnFactory),
+}
 
 func reverseTunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.ClientConnFactory {
 	return func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
@@ -46,6 +46,11 @@ func reverseTunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.Clien
 				grpctun.OptTunnel.ClientStream(st),
 				grpctun.OptTunnel.Service(func(h *grpctun.HandlerMap) { fn(h) }),
 			)
+			stat, _ := status.FromError(serveErr)
+			switch stat.Code() {
+			case codes.Unavailable, codes.Canceled:
+				serveErr = nil
+			}
 		}()
 		timer := time.NewTimer(time.Second * 5)
 		defer timer.Stop()
@@ -115,24 +120,20 @@ func replaceCCCClose(ccc testutil.ClientConnCloser, closer io.Closer) testutil.C
 
 func Test_external_RC_NetConn_TestClient_DialContext(t *testing.T) {
 	for _, k := range testutil.CallOn(maps.Keys(clientConnFactories), func(v []string) { sort.Strings(v) }) {
-		t.Run(k, func(t *testing.T) {
-			grpctest.RC_NetConn_TestClient_DialContext(t, clientConnFactories[k])
-		})
+		t.Run(k, func(t *testing.T) { grpctest.RC_NetConn_TestClient_DialContext(t, clientConnFactories[k]) })
 	}
 }
 
 func Test_external_RC_NetConn_nettest(t *testing.T) {
-	if true {
-		t.SkipNow()
-	}
-	for _, k := range testutil.CallOn(maps.Keys(clientConnFactories), func(v []string) { sort.Strings(v) }) {
-		t.Run(k, func(t *testing.T) {
-			grpctest.RC_NetConn_Test_nettest(
-				testutil.WrapT(t),
-				clientConnFactories[k],
-			)
-		})
-	}
+	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*20)
+	t.Run(`p`, func(t *testing.T) {
+		wt := testutil.Wrap(t)
+		wt = testutil.DepthLimiter{T: testutil.Parallel(wt), Depth: 2}
+		wt = testutil.SkipRegex(wt, regexp.MustCompile(`/PresentTimeout$`))
+		for _, k := range testutil.CallOn(maps.Keys(clientConnFactories), func(v []string) { sort.Strings(v) }) {
+			wt.Run(k, func(t testutil.T) { grpctest.RC_NetConn_Test_nettest(t, clientConnFactories[k]) })
+		}
+	})
 }
 
 // Test_e2e pulls in other test cases to aid in testing the tunnel implementations (in both directions) under
@@ -153,7 +154,7 @@ func Test_external_RC_NetConn_nettest(t *testing.T) {
 //			defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*5)
 //
 //			r, err := testutil.NewRunner(
-//				testutil.OptRunner.T(testutil.WrapT(t)),
+//				testutil.OptRunner.T(testutil.Wrap(t)),
 //			)
 //			if err != nil {
 //				t.Fatal(err)

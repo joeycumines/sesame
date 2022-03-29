@@ -22,9 +22,9 @@ type (
 		wrappedConn *WrappedConn
 	}
 
-	netConn net.Conn
+	netConn = net.Conn
 
-	ioReadWriteCloser io.ReadWriteCloser
+	ioReadWriteCloser = io.ReadWriteCloser
 
 	// embeddedNetConn embeds netConn for prioritisation of embedded methods
 	embeddedNetConn struct{ netConn }

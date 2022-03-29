@@ -190,7 +190,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 
 	select {
 	case <-s.stop:
-		return true, errTransportClosing()
+		return true, status.Error(codes.Unavailable, `transport is closing`)
 	default:
 	}
 

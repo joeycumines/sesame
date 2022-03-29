@@ -20,6 +20,8 @@ Other notable changes:
   `ServeReverseTunnel`, `NewChannel` vs `NewReverseChannel`), using the option pattern instead
 - Fixed unsafe send behavior via wrapper (see `stream.go`)
 - Added graceful stop support
+- Fixed CloseSend behavior (error handling)
+- Implemented flow control (deadlocks)
 
 ## From the original readme
 

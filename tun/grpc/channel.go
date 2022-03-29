@@ -337,10 +337,9 @@ type tunnelClientStream struct {
 	readChan <-chan isServerToClient_Frame
 	readErr  error
 
-	// for sending frames to server
-	writeMu    sync.Mutex
-	numSent    uint32
-	halfClosed bool
+	// for message frame to server (WARNING: unsafe to hold while sending cancelation etc)
+	writeMu sync.Mutex
+	hasSent bool
 }
 
 func (st *tunnelClientStream) Header() (metadata.MD, error) {
@@ -377,26 +376,20 @@ func (st *tunnelClientStream) Trailer() metadata.MD {
 }
 
 func (st *tunnelClientStream) CloseSend() error {
-	st.writeMu.Lock()
-	defer st.writeMu.Unlock()
-
+	// replicate the behavior of the grpc implementation...
+	// https://github.com/grpc/grpc-go/blob/e63e1230fd01bc4390afdeb27a42c8e631ee9026/stream.go#L865
 	select {
 	case <-st.doneSignal:
-		return st.done
+		return nil
 	default:
-		// don't block since we are holding writeMu
 	}
-
-	if st.halfClosed {
-		return errors.New("already half-closed")
-	}
-	st.halfClosed = true
-	return st.stream.Send(&ClientToServer{
+	_ = st.stream.Send(&ClientToServer{
 		StreamId: st.streamID,
 		Frame: &ClientToServer_HalfClose{
 			HalfClose: &empty.Empty{},
 		},
 	})
+	return nil
 }
 
 func (st *tunnelClientStream) Context() context.Context {
@@ -407,10 +400,11 @@ func (st *tunnelClientStream) SendMsg(m interface{}) error {
 	st.writeMu.Lock()
 	defer st.writeMu.Unlock()
 
-	if !st.isClientStream && st.numSent == 1 {
-		return status.Errorf(codes.Internal, "Already sent response for non-server-stream method %q", st.method)
+	if !st.hasSent {
+		st.hasSent = true
+	} else if !st.isClientStream {
+		return status.Errorf(codes.Internal, "Already sent response for non-client-stream method %q", st.method)
 	}
-	st.numSent++
 
 	// TODO: support alternate codecs, compressors, etc
 	b, err := proto.Marshal(m.(proto.Message))
@@ -606,8 +600,6 @@ func (st *tunnelClientStream) acceptServerFrame(frame isServerToClient_Frame) {
 func (st *tunnelClientStream) cancel(err error) error {
 	st.finishStream(err, nil)
 	// let server know
-	st.writeMu.Lock()
-	defer st.writeMu.Unlock()
 	return st.stream.Send(&ClientToServer{
 		StreamId: st.streamID,
 		Frame: &ClientToServer_Cancel{

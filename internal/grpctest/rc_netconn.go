@@ -419,6 +419,7 @@ func RC_NetConn_Test_nettest(
 			},
 		},
 	} {
+		tc := tc
 		t.Run(tc.Name, func(t testutil.T) {
 			testutil.TestConn(t, nettest.TestConn, tc.Close, tc.Init)
 		})

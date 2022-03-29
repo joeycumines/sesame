@@ -4,10 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io"
 	"sync"
+)
+
+const (
+	// initialWindowSize is the initial size of the per-stream per-sender flow control window.
+	// Unlike HTTP/2, this implementation does not support updating it.
+	initialWindowSize = 65535
 )
 
 type (
@@ -18,7 +22,7 @@ type (
 		tearDown  func() error
 		mu        sync.Mutex
 		streamID  uint64
-		streamMap map[uint64]*tscwStreamDone // channels closed when send is closed
+		streamMap map[uint64]*tscwStream
 		in        chan *ClientToServer
 		out       chan error
 		once      sync.Once
@@ -27,7 +31,7 @@ type (
 		err       error
 	}
 
-	tscwStreamDone struct {
+	tscwStream struct {
 		half chan struct{}
 		full chan struct{}
 	}
@@ -41,11 +45,11 @@ type (
 )
 
 var (
-	// ErrSendCanceled occurs when a message send was dropped due to another message taking precedence, e.g. a half
+	// errSendCanceled occurs when a message send was dropped due to another message taking precedence, e.g. a half
 	// close message (not yet started to send) replaced with a cancel message, or a cancel message attempted more than
 	// one. Note that this error DOES NOT imply that the message, that the send was canceled for, has been successfully
 	// sent, or has even started sending yet, just that it was scheduled.
-	ErrSendCanceled = errors.New(`sesame/tun/grpc: send canceled`)
+	errSendCanceled = errors.New(`sesame/tun/grpc: send canceled`)
 
 	// compile time assertions
 
@@ -63,7 +67,7 @@ func newTunnelStreamClientWrapper(stream tunnelStreamClient, tearDown func() err
 	r := tunnelStreamClientWrapper{
 		stream:    stream,
 		tearDown:  tearDown,
-		streamMap: make(map[uint64]*tscwStreamDone),
+		streamMap: make(map[uint64]*tscwStream),
 		in:        make(chan *ClientToServer),
 		out:       make(chan error),
 		stop:      make(chan struct{}),
@@ -100,7 +104,7 @@ func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 			}
 
 			x.streamID = streamID
-			x.streamMap[streamID] = &tscwStreamDone{
+			x.streamMap[streamID] = &tscwStream{
 				half: make(chan struct{}),
 				full: make(chan struct{}),
 			}
@@ -128,7 +132,7 @@ func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 			return nil, fmt.Errorf(`sesame/tun/grpc: expected stream id <= %d got %d`, x.streamID, streamID)
 		}
 
-		var done tscwStreamDone
+		var done tscwStream
 		if v := x.streamMap[streamID]; v != nil {
 			done = *v
 
@@ -142,14 +146,14 @@ func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 				v.full = nil
 			}
 
-			if *v == (tscwStreamDone{}) {
+			if *v == (tscwStream{}) {
 				x.streamMap[streamID] = nil
 			}
 		}
 
 		if done.full == nil {
 			// already sent or are already sending cancel
-			return nil, ErrSendCanceled
+			return nil, errSendCanceled
 		}
 
 		if isFullClose {
@@ -159,7 +163,7 @@ func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 
 		if done.half == nil {
 			// already sent or are already sending half close
-			return nil, ErrSendCanceled
+			return nil, errSendCanceled
 		}
 
 		if isHalfClose {
@@ -177,17 +181,17 @@ func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 	// note we don't need to pre-emptively check x.stop, it's checked in the worker
 	select {
 	case <-done:
-		return ErrSendCanceled
+		return errSendCanceled
 	default:
 	}
 
 	// wait for a send attempt / result
 	select {
 	case <-done:
-		return ErrSendCanceled
+		return errSendCanceled
 
 	case <-x.stop:
-		return ErrSendCanceled
+		return errSendCanceled
 
 	case x.in <- msg:
 		select {
@@ -220,7 +224,7 @@ ControlLoop:
 		case msg := <-x.in:
 			select {
 			case <-x.stop:
-				x.out <- ErrSendCanceled
+				x.out <- errSendCanceled
 				break ControlLoop
 
 			default:
@@ -249,5 +253,3 @@ func (x *tunnelStreamServerWrapper) Send(msg *ServerToClient) error {
 }
 
 func (x *tunnelStreamServerWrapper) Recv() (*ClientToServer, error) { return x.stream.Recv() }
-
-func errTransportClosing() error { return status.Error(codes.Unavailable, `transport is closing`) }
