@@ -21,7 +21,7 @@ Other notable changes:
 - Fixed unsafe send behavior via wrapper (see `stream.go`)
 - Added graceful stop support
 - Fixed CloseSend behavior (error handling)
-- Implemented flow control (deadlocks)
+- Implemented flow control (involving fixing numerous deadlocks)
 
 ## From the original readme
 

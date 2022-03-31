@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/joeycumines/sesame/internal/testutil"
+	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 	"runtime"
 	"strconv"
@@ -15,9 +16,11 @@ import (
 )
 
 type (
+	mockKey int
+
 	streamCounterMap struct {
 		mu   sync.RWMutex
-		data map[any]*streamCounters
+		data map[mockKey]*streamCounters
 	}
 
 	streamCounters struct {
@@ -32,16 +35,15 @@ type (
 		sendOut          chan error
 		recvIn           chan struct{}
 		recvOut          chan mockInterfaceRecvOut
-		sendWindowUpdate func(key any, val uint32) (msg any)
+		sendWindowUpdate func(key mockKey, val uint32) (msg any)
 		recvWindowUpdate func(msg any) (uint32, bool)
 		sendSize         func(msg any) (uint32, bool)
 		recvSize         func(msg any) (uint32, bool)
-		sendKey          func(msg any) any
-		recvKey          func(msg any) any
-		sendMaxWindow    func() uint32
-		recvMaxWindow    func() uint32
-		sendMinConsume   func() uint32
-		recvMinConsume   func() uint32
+		sendKey          func(msg any) mockKey
+		recvKey          func(msg any) mockKey
+		sendConfig       func(key mockKey) Config
+		recvConfig       func(key mockKey) Config
+		streamContext    func(key mockKey) context.Context
 	}
 	mockInterfaceRecvOut struct {
 		msg any
@@ -49,7 +51,7 @@ type (
 	}
 )
 
-func (x *streamCounterMap) SendLoad(k any) int64 {
+func (x *streamCounterMap) SendLoad(k mockKey) int64 {
 	x.mu.RLock()
 	defer x.mu.RUnlock()
 	if x.data[k] != nil {
@@ -57,7 +59,7 @@ func (x *streamCounterMap) SendLoad(k any) int64 {
 	}
 	return 0
 }
-func (x *streamCounterMap) RecvLoad(k any) int64 {
+func (x *streamCounterMap) RecvLoad(k mockKey) int64 {
 	x.mu.RLock()
 	defer x.mu.RUnlock()
 	if x.data[k] != nil {
@@ -65,22 +67,22 @@ func (x *streamCounterMap) RecvLoad(k any) int64 {
 	}
 	return 0
 }
-func (x *streamCounterMap) SendStore(k any, v int64) {
+func (x *streamCounterMap) SendStore(k mockKey, v int64) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	if x.data == nil {
-		x.data = make(map[any]*streamCounters)
+		x.data = make(map[mockKey]*streamCounters)
 	}
 	if x.data[k] == nil {
 		x.data[k] = new(streamCounters)
 	}
 	x.data[k].Send = v
 }
-func (x *streamCounterMap) RecvStore(k any, v int64) {
+func (x *streamCounterMap) RecvStore(k mockKey, v int64) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	if x.data == nil {
-		x.data = make(map[any]*streamCounters)
+		x.data = make(map[mockKey]*streamCounters)
 	}
 	if x.data[k] == nil {
 		x.data[k] = new(streamCounters)
@@ -91,13 +93,13 @@ func (x *streamCounterMap) String() string {
 	x.mu.RLock()
 	defer x.mu.RUnlock()
 	var b strings.Builder
-	keys := make(map[any]string, len(x.data))
-	kv := make([]any, 0, len(x.data))
+	keys := make(map[mockKey]string, len(x.data))
+	kv := make([]mockKey, 0, len(x.data))
 	for k := range x.data {
 		kv = append(kv, k)
 		keys[k] = fmt.Sprint(k)
 	}
-	slices.SortFunc(kv, func(a, b any) bool { return keys[a] < keys[b] })
+	slices.SortFunc(kv, func(a, b mockKey) bool { return keys[a] < keys[b] })
 	for _, k := range kv {
 		if b.Len() != 0 {
 			b.WriteByte('\n')
@@ -112,20 +114,12 @@ func (x *streamCounterMap) String() string {
 	}
 	return b.String()
 }
-func (x *streamCounterMap) equal(data map[any]*streamCounters) bool {
+func (x *streamCounterMap) equal(data map[mockKey]*streamCounters) bool {
 	x.mu.RLock()
 	defer x.mu.RUnlock()
-	if len(x.data) != len(data) {
-		return false
-	}
-	for k, v1 := range x.data {
-		if v2, ok := data[k]; !ok ||
-			v1.Send != v2.Send ||
-			v1.Recv != v2.Recv {
-			return false
-		}
-	}
-	return true
+	return maps.EqualFunc[map[mockKey]*streamCounters, map[mockKey]*streamCounters](x.data, data, func(v1 *streamCounters, v2 *streamCounters) bool {
+		return v1.Send == v2.Send && v1.Recv == v2.Recv
+	})
 }
 
 func (x *mockInterface) Context() context.Context { return x.ctx }
@@ -138,18 +132,17 @@ func (x *mockInterface) Recv() (msg any, err error) {
 	v := <-x.recvOut
 	return v.msg, v.err
 }
-func (x *mockInterface) SendWindowUpdate(key any, val uint32) (msg any) {
+func (x *mockInterface) SendWindowUpdate(key mockKey, val uint32) (msg any) {
 	return x.sendWindowUpdate(key, val)
 }
-func (x *mockInterface) RecvWindowUpdate(msg any) (uint32, bool) { return x.recvWindowUpdate(msg) }
-func (x *mockInterface) SendSize(msg any) (uint32, bool)         { return x.sendSize(msg) }
-func (x *mockInterface) RecvSize(msg any) (uint32, bool)         { return x.recvSize(msg) }
-func (x *mockInterface) SendKey(msg any) any                     { return x.sendKey(msg) }
-func (x *mockInterface) RecvKey(msg any) any                     { return x.recvKey(msg) }
-func (x *mockInterface) SendMaxWindow() uint32                   { return x.sendMaxWindow() }
-func (x *mockInterface) RecvMaxWindow() uint32                   { return x.recvMaxWindow() }
-func (x *mockInterface) SendMinConsume() uint32                  { return x.sendMinConsume() }
-func (x *mockInterface) RecvMinConsume() uint32                  { return x.recvMinConsume() }
+func (x *mockInterface) RecvWindowUpdate(msg any) (uint32, bool)   { return x.recvWindowUpdate(msg) }
+func (x *mockInterface) SendSize(msg any) (uint32, bool)           { return x.sendSize(msg) }
+func (x *mockInterface) RecvSize(msg any) (uint32, bool)           { return x.recvSize(msg) }
+func (x *mockInterface) SendKey(msg any) mockKey                   { return x.sendKey(msg) }
+func (x *mockInterface) RecvKey(msg any) mockKey                   { return x.recvKey(msg) }
+func (x *mockInterface) SendConfig(key mockKey) Config             { return x.sendConfig(key) }
+func (x *mockInterface) RecvConfig(key mockKey) Config             { return x.recvConfig(key) }
+func (x *mockInterface) StreamContext(key mockKey) context.Context { return x.streamContext(key) }
 
 func TestNewConn_direct(t *testing.T) {
 	startGoroutine := runtime.NumGoroutine()
@@ -159,10 +152,9 @@ func TestNewConn_direct(t *testing.T) {
 	defer cancel()
 
 	type (
-		K int
 		T int
 		S struct {
-			Key  K
+			Key  mockKey
 			Type T
 			Size uint32
 		}
@@ -187,7 +179,7 @@ func TestNewConn_direct(t *testing.T) {
 		sendOut:          make(chan error),
 		recvIn:           make(chan struct{}),
 		recvOut:          make(chan mockInterfaceRecvOut),
-		sendWindowUpdate: func(key any, val uint32) (msg any) { return S{key.(K), Que, val} },
+		sendWindowUpdate: func(key mockKey, val uint32) (msg any) { return S{key, Que, val} },
 		recvWindowUpdate: func(msg any) (uint32, bool) {
 			v := msg.(R)
 			if v.Type == Que {
@@ -209,23 +201,27 @@ func TestNewConn_direct(t *testing.T) {
 			}
 			return 0, false
 		},
-		sendKey:        func(msg any) any { return msg.(S).Key },
-		recvKey:        func(msg any) any { return msg.(R).Key },
-		sendMaxWindow:  func() uint32 { return 100 },
-		recvMaxWindow:  func() uint32 { return 40 },
-		sendMinConsume: func() uint32 { return sendMinConsume },
-		recvMinConsume: func() uint32 { return recvMinConsume },
+		sendKey: func(msg any) mockKey { return msg.(S).Key },
+		recvKey: func(msg any) mockKey { return msg.(R).Key },
+		sendConfig: func(key mockKey) Config {
+			return Config{
+				MaxWindow:  100,
+				MinConsume: sendMinConsume,
+			}
+		},
+		recvConfig: func(key mockKey) Config {
+			return Config{
+				MaxWindow:  40,
+				MinConsume: recvMinConsume,
+			}
+		},
+		streamContext: func(key mockKey) context.Context { return context.Background() },
 	}
 
-	equal := func(v map[K]*streamCounters) bool {
-		c := make(map[any]*streamCounters, len(v))
-		for k, v := range v {
-			c[k] = v
-		}
-		return m.equal(c)
-	}
+	var expected map[mockKey]*streamCounters
+	asExpected := func() bool { return m.equal(expected) }
 
-	c := NewConn[any, any, any, Interface[any, any, any]](m)
+	c := NewConn[mockKey, any, any](m)
 
 	if v := c.Context(); v != ctx {
 		t.Error(v)
@@ -283,7 +279,8 @@ func TestNewConn_direct(t *testing.T) {
 	}
 
 	// receive with error
-	if !equal(nil) {
+	expected = nil
+	if !asExpected() {
 		t.Fatal(m)
 	}
 	startRecv(func(msg R, err error) bool {
@@ -298,7 +295,8 @@ func TestNewConn_direct(t *testing.T) {
 	if !(<-recvDone) {
 		t.Fatal()
 	}
-	if !equal(nil) {
+	expected = nil
+	if !asExpected() {
 		t.Fatal(m)
 	}
 
@@ -325,9 +323,10 @@ func TestNewConn_direct(t *testing.T) {
 		if !(<-recvDone) {
 			t.Fatal()
 		}
-		if !equal(map[K]*streamCounters{
+		expected = map[mockKey]*streamCounters{
 			2: {0, z.Recv},
-		}) {
+		}
+		if !asExpected() {
 			t.Fatal(m)
 		}
 	}
@@ -352,9 +351,10 @@ func TestNewConn_direct(t *testing.T) {
 		if !(<-recvDone) {
 			t.Fatal()
 		}
-		if !equal(map[K]*streamCounters{
+		expected = map[mockKey]*streamCounters{
 			2: {z.Send, 39},
-		}) {
+		}
+		if !asExpected() {
 			t.Fatal(m)
 		}
 	}
@@ -383,9 +383,10 @@ func TestNewConn_direct(t *testing.T) {
 		if !(<-sendDone) {
 			t.Fatal()
 		}
-		if !equal(map[K]*streamCounters{
+		expected = map[mockKey]*streamCounters{
 			2: {z.Send, 39},
-		}) {
+		}
+		if !asExpected() {
 			t.Fatal(m)
 		}
 	}
@@ -408,9 +409,10 @@ func TestNewConn_direct(t *testing.T) {
 	if !(<-sendDone) {
 		t.Fatal()
 	}
-	if !equal(map[K]*streamCounters{
+	expected = map[mockKey]*streamCounters{
 		2: {-100, 39},
-	}) {
+	}
+	if !asExpected() {
 		t.Fatal(m)
 	}
 	// ---
@@ -426,13 +428,72 @@ func TestNewConn_direct(t *testing.T) {
 	if !(<-recvDone) {
 		t.Fatal()
 	}
-	if !equal(map[K]*streamCounters{
+	expected = map[mockKey]*streamCounters{
 		2: {-100, 39},
-	}) {
+	}
+	if !asExpected() {
 		t.Fatal(m)
 	}
 	// ---
 	testutil.CheckNumGoroutines(t, startGoroutine, false, 0)
+
+	// we'll start modifying expected in place now... it's a pain to copy and paste
+
+	// send to another stream
+	startSend(S{3, Yes, 100}, func(err error) bool {
+		if err != nil {
+			t.Error(err)
+			return false
+		}
+		return true
+	})
+	if v := <-m.sendIn; v != (S{3, Yes, 100}) {
+		t.Fatal(v)
+	}
+	m.sendOut <- nil
+	if !(<-sendDone) {
+		t.Fatal()
+	}
+	expected[3] = &streamCounters{-100, 0}
+	if !asExpected() {
+		t.Fatal(m)
+	}
+
+	// receive from another stream
+	startRecv(func(msg R, err error) bool {
+		if msg != (R{4, Yes, 39}) || err != nil {
+			t.Error(msg, err)
+			return false
+		}
+		return true
+	})
+	<-m.recvIn
+	m.recvOut <- mockInterfaceRecvOut{R{4, Yes, 39}, nil}
+	if !(<-recvDone) {
+		t.Fatal()
+	}
+	expected[4] = &streamCounters{0, 39}
+	if !asExpected() {
+		t.Fatal(m)
+	}
+
+	// receive window update from another stream
+	startRecv(func(msg R, err error) bool {
+		if msg != (R{5, Que, 233}) || err != nil {
+			t.Error(msg, err)
+			return false
+		}
+		return true
+	})
+	<-m.recvIn
+	m.recvOut <- mockInterfaceRecvOut{R{5, Que, 233}, nil}
+	if !(<-recvDone) {
+		t.Fatal()
+	}
+	expected[5] = &streamCounters{233, 0}
+	if !asExpected() {
+		t.Fatal(m)
+	}
 
 	// block send
 	startSend(S{2, Yes, 1}, func(err error) bool {
@@ -450,9 +511,8 @@ func TestNewConn_direct(t *testing.T) {
 		t.Fatal()
 	default:
 	}
-	if !equal(map[K]*streamCounters{
-		2: {-100, 39},
-	}) {
+	// note: 2 is still {-100, 39}
+	if !asExpected() {
 		t.Fatal(m)
 	}
 
@@ -473,9 +533,8 @@ func TestNewConn_direct(t *testing.T) {
 		t.Fatal(v)
 	}
 	m.sendOut <- nil
-	if !equal(map[K]*streamCounters{
-		2: {-100, 0},
-	}) {
+	expected[2] = &streamCounters{-100, 0}
+	if !asExpected() {
 		t.Fatal(m)
 	}
 
@@ -487,7 +546,7 @@ func TestNewConn_direct(t *testing.T) {
 	default:
 	}
 
-	// receive window update - 1 byte, just enough, triggers send
+	// receive window update - 1 byte, "just enough" to unblock (note: different in this implementation, see below)
 	startRecv(func(msg R, err error) bool {
 		if msg != (R{2, Que, 1}) || err != nil {
 			t.Error(msg, err)
@@ -504,15 +563,192 @@ func TestNewConn_direct(t *testing.T) {
 		t.Fatal(v)
 	}
 	m.sendOut <- nil
-	if !equal(map[K]*streamCounters{
-		2: {-100, 0},
-	}) {
+	if !(<-sendDone) {
+		t.Fatal()
+	}
+	// note: 2 is still {-100, 0} (it increased then decreased by the same)
+	if !asExpected() {
+		t.Fatal(m)
+	}
+	testutil.CheckNumGoroutines(t, startGoroutine, false, 0)
+	if !asExpected() {
 		t.Fatal(m)
 	}
 
-	// TODO test unblock but not enough
+	// block again - this time for a larger send
+	// (this is where it diverges from the bytes based buffering)
+	startSend(S{2, Yes, 399}, func(err error) bool {
+		if err != nil {
+			t.Error(err)
+			return false
+		}
+		return true
+	})
+	time.Sleep(time.Millisecond * 200)
+	select {
+	case <-sendDone:
+		t.Fatal()
+	case <-m.sendIn:
+		t.Fatal()
+	default:
+	}
+	// note: 2 is still {-100, 0}
+	if !asExpected() {
+		t.Fatal(m)
+	}
 
-	// TODO test over unblock
+	// annd unblock, with only one byte, leaving it very negative
+	startRecv(func(msg R, err error) bool {
+		if msg != (R{2, Que, 1}) || err != nil {
+			t.Error(msg, err)
+			return false
+		}
+		return true
+	})
+	<-m.recvIn
+	m.recvOut <- mockInterfaceRecvOut{R{2, Que, 1}, nil}
+	if !(<-recvDone) {
+		t.Fatal()
+	}
+	if v := <-m.sendIn; v != (S{2, Yes, 399}) {
+		t.Fatal(v)
+	}
+	m.sendOut <- nil
+	if !(<-sendDone) {
+		t.Fatal()
+	}
+	expected[2] = &streamCounters{-100 + 1 - 399, 0}
+	if !asExpected() {
+		t.Fatal(m)
+	}
+	testutil.CheckNumGoroutines(t, startGoroutine, false, 0)
+	if !asExpected() {
+		t.Fatal(m)
+	}
 
-	// TODO test send block context cancel
+	// recv window update several times
+	for _, z := range [...]struct {
+		Size uint32
+		Send int64
+	}{
+		{100, -398},
+		{100, -298},
+		{98, -200},
+		{99, -101},
+	} {
+		startRecv(func(msg R, err error) bool {
+			if msg != (R{2, Que, z.Size}) || err != nil {
+				t.Error(msg, err)
+				return false
+			}
+			return true
+		})
+		<-m.recvIn
+		m.recvOut <- mockInterfaceRecvOut{R{2, Que, z.Size}, nil}
+		if !(<-recvDone) {
+			t.Fatal()
+		}
+		expected[2].Send = z.Send
+		if !asExpected() {
+			t.Fatal(m)
+		}
+	}
+
+	// block on send of 0
+	startSend(S{2, Yes, 0}, func(err error) bool {
+		if err != nil {
+			t.Error(err)
+			return false
+		}
+		return true
+	})
+	time.Sleep(time.Millisecond * 200)
+	select {
+	case <-sendDone:
+		t.Fatal()
+	case <-m.sendIn:
+		t.Fatal()
+	default:
+	}
+	// note: 2 is still {-101, 0}
+	if !asExpected() {
+		t.Fatal(m)
+	}
+
+	// well over unblock, leaving it very positive
+	startRecv(func(msg R, err error) bool {
+		if msg != (R{2, Que, 9999}) || err != nil {
+			t.Error(msg, err)
+			return false
+		}
+		return true
+	})
+	<-m.recvIn
+	m.recvOut <- mockInterfaceRecvOut{R{2, Que, 9999}, nil}
+	if !(<-recvDone) {
+		t.Fatal()
+	}
+	if v := <-m.sendIn; v != (S{2, Yes, 0}) {
+		t.Fatal(v)
+	}
+	m.sendOut <- nil
+	if !(<-sendDone) {
+		t.Fatal()
+	}
+	expected[2] = &streamCounters{-101 + 9999, 0}
+	if !asExpected() {
+		t.Fatal(m)
+	}
+	testutil.CheckNumGoroutines(t, startGoroutine, false, 0)
+	if !asExpected() {
+		t.Fatal(m)
+	}
+
+	// block send then context cancel
+	expected[3] = &streamCounters{-100, 0}
+	if !asExpected() {
+		t.Fatal(m)
+	}
+	select {
+	case <-sendDone:
+		t.Fatal()
+	case <-m.sendIn:
+		t.Fatal()
+	default:
+	}
+	startSend(S{3, Yes, 1}, func(err error) bool {
+		if err != context.Canceled {
+			t.Error(`unexpected error:`, err)
+			return false
+		}
+		return true
+	})
+	time.Sleep(time.Millisecond * 200)
+	select {
+	case <-sendDone:
+		t.Fatal()
+	case <-m.sendIn:
+		t.Fatal()
+	default:
+	}
+	if !asExpected() {
+		t.Fatal(m)
+	}
+	cancel()
+	if !(<-sendDone) {
+		t.Fatal()
+	}
+}
+
+func TestStreamNotFound(t *testing.T) {
+	ctx := StreamNotFound
+	if ctx == context.Background() {
+		t.Error(ctx)
+	}
+	if ctx != StreamNotFound {
+		t.Error(ctx)
+	}
+	if err := ctx.Err(); err != context.Canceled {
+		t.Error(err)
+	}
 }

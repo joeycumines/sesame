@@ -290,3 +290,10 @@ func (x *HandlerMap) RegisterService(desc *grpc.ServiceDesc, impl interface{}) {
 func (x *HandlerMap) GetServiceInfo() map[string]grpc.ServiceInfo {
 	return x.m.GetServiceInfo()
 }
+
+func (x *HandlerMap) grpchan() grpchan.HandlerMap {
+	if x != nil {
+		return x.m
+	}
+	return nil
+}

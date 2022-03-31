@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/joeycumines/sesame/internal/flowcontrol"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -38,7 +39,7 @@ func NewChannel(options ...ChannelOption) (*Channel, error) {
 	if err := c.validate(); err != nil {
 		return nil, err
 	}
-	return newChannel(wrapTunnelStreamClient(c.stream.get().stream, c.stream.get().tearDown)), nil
+	return newChannel(&c), nil
 }
 
 type tunnelStreamClient interface {
@@ -55,6 +56,7 @@ type Channel struct {
 	cancel   context.CancelFunc
 	tearDown func() error
 
+	// WARNING this mutex MUST NOT be held while blocking on sending to a stream
 	mu            sync.RWMutex
 	streams       map[uint64]*tunnelClientStream
 	lastStreamID  uint64
@@ -65,17 +67,36 @@ type Channel struct {
 
 var _ grpc.ClientConnInterface = (*Channel)(nil)
 
-func newChannel(stream tunnelStreamClient, tearDown func() error) *Channel {
-	ctx, cancel := context.WithCancel(stream.Context())
-	c := &Channel{
+func newChannel(c *channelConfig) *Channel {
+	var (
+		stream   = c.stream.get().stream
+		tearDown = c.stream.get().tearDown
+	)
+
+	// wrap the stream (and tearDown) to add concurrency controls
+	{
+		wrapper := newTunnelStreamClientWrapper(stream, tearDown)
+		stream, tearDown = wrapper, wrapper.Close
+	}
+
+	// initialise flow control, wrapping stream
+	// WARNING not ready for use yet (needs to be wired up with the ChanneL)
+	fc := &flowControlClient{tunnelStreamClient: stream}
+	stream = flowcontrol.NewConn[uint64, *ClientToServer, *ServerToClient](fc)
+
+	ch := Channel{
 		stream:   stream,
-		ctx:      ctx,
-		cancel:   cancel,
 		tearDown: tearDown,
 		streams:  make(map[uint64]*tunnelClientStream),
 	}
-	go c.recvLoop()
-	return c
+
+	// finish wiring up fc with ch
+	fc.ch = &ch
+
+	// finish initialisation of ch, starting the recv worker
+	ch.ctx, ch.cancel = context.WithCancel(stream.Context())
+	go ch.recvLoop()
+	return &ch
 }
 
 func (c *Channel) Context() context.Context {
@@ -218,7 +239,7 @@ func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStrea
 		panic(errors.New("sesame/tun/grpc: next stream ID not available"))
 	}
 
-	ch := make(chan isServerToClient_Frame, 1)
+	ch := make(chan isServerToClient_Frame, windowMaxBuffer)
 	ctx, cncl := context.WithCancel(ctx)
 	str := &tunnelClientStream{
 		ctx:              ctx,
@@ -248,11 +269,23 @@ func (c *Channel) recvLoop() {
 			_ = c.close(err)
 			return
 		}
+
+		if in.GetStreamId() == 0 || in.GetFrame() == nil {
+			_ = c.close(errors.New("sesame/tun/grpc: invalid frame"))
+			return
+		}
+
 		str, err := c.getStream(in.StreamId)
 		if err != nil {
 			_ = c.close(err)
 			return
 		}
+
+		if _, ok := in.GetFrame().(*ServerToClient_WindowUpdate); ok {
+			// handled in the flow control wrapper impl.
+			continue
+		}
+
 		str.acceptServerFrame(in.Frame)
 	}
 }
@@ -315,6 +348,9 @@ type tunnelClientStream struct {
 	streamID uint64
 	method   string
 	stream   tunnelStreamClient
+
+	fcSend int64
+	fcRecv int64
 
 	headersTargets  []*metadata.MD
 	trailersTargets []*metadata.MD

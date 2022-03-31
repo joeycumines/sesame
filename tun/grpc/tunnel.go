@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/fullstorydev/grpchan"
 	"github.com/joeycumines/sesame/genproto/type/grpcmetadata"
+	"github.com/joeycumines/sesame/internal/flowcontrol"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -40,21 +41,32 @@ func ServeTunnel(options ...TunnelOption) error {
 	if err := c.validate(); err != nil {
 		return err
 	}
-	return serveTunnel(
-		c.stream.get().stream,
-		c.handlers.get().val.m,
-		c.stop.get().ch,
-	)
+	return serveTunnel(&c)
 }
 
-func serveTunnel(stream tunnelStreamServer, handlers grpchan.HandlerMap, stop <-chan struct{}) error {
-	svr := &tunnelServer{
-		stream:   newTunnelStreamServerWrapper(stream),
-		services: handlers,
-		stop:     stop,
+func serveTunnel(c *tunnelConfig) error {
+	stream := c.stream.get().stream
+
+	// wrap the stream to add concurrency controls
+	stream = newTunnelStreamServerWrapper(stream)
+
+	// initialise flow control, wrapping stream
+	// WARNING not ready for use yet (needs to be wired up with the tunnelServer)
+	fc := &flowControlServer{tunnelStreamServer: stream}
+	stream = flowcontrol.NewConn[uint64, *ServerToClient, *ClientToServer](fc)
+
+	tun := tunnelServer{
+		stream:   stream,
+		services: c.handlers.get().val.grpchan(),
+		stop:     c.stop.get().ch,
 		streams:  make(map[uint64]*tunnelServerStream),
 	}
-	return svr.serve()
+
+	// finish wiring up fc with tun
+	fc.tun = &tun
+
+	// start serving the tunnel
+	return tun.serve()
 }
 
 type tunnelStreamServer interface {
@@ -68,6 +80,7 @@ type tunnelServer struct {
 	services grpchan.HandlerMap
 	stop     <-chan struct{} // graceful
 
+	// WARNING this mutex MUST NOT be held while blocking on sending to a stream
 	mu       sync.RWMutex
 	streams  map[uint64]*tunnelServerStream
 	lastSeen uint64
@@ -128,6 +141,11 @@ func (s *tunnelServer) serve() error {
 				str, err := s.getStream(in.StreamId)
 				if err != nil {
 					return err
+				}
+
+				if _, ok := in.GetFrame().(*ClientToServer_WindowUpdate); ok {
+					// handled in the flow control wrapper impl.
+					continue
 				}
 
 				str.acceptClientFrame(in.Frame)
@@ -221,7 +239,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 
 	ctx = metadata.NewIncomingContext(ctx, fromProto(frame.Header))
 
-	ch := make(chan isClientToServer_Frame, 1)
+	ch := make(chan isClientToServer_Frame, windowMaxBuffer)
 	str := &tunnelServerStream{
 		ctx:            ctx,
 		svr:            s,
@@ -284,6 +302,9 @@ type tunnelServerStream struct {
 	method   string
 	stream   tunnelStreamServer
 
+	fcSend int64
+	fcRecv int64
+
 	isClientStream bool
 	isServerStream bool
 
@@ -297,13 +318,14 @@ type tunnelServerStream struct {
 	readChan <-chan isClientToServer_Frame
 	readErr  error
 
-	// for sending frames to client
-	writeMu     sync.Mutex
-	numSent     uint32
+	stateMu     sync.Mutex
 	headers     metadata.MD
 	trailers    metadata.MD
 	sentHeaders bool
 	closed      chan struct{}
+
+	writeMu sync.Mutex
+	hasSent bool
 }
 
 func (st *tunnelServerStream) acceptClientFrame(frame isClientToServer_Frame) {
@@ -348,9 +370,8 @@ func (st *tunnelServerStream) SendHeader(md metadata.MD) error {
 }
 
 func (st *tunnelServerStream) setHeader(md metadata.MD, send bool) error {
-	st.writeMu.Lock()
-	defer st.writeMu.Unlock()
-
+	st.stateMu.Lock()
+	defer st.stateMu.Unlock()
 	if st.sentHeaders {
 		return errors.New("already sent headers")
 	}
@@ -425,8 +446,8 @@ func (st *tunnelServerStream) SetTrailer(md metadata.MD) {
 }
 
 func (st *tunnelServerStream) setTrailer(md metadata.MD) error {
-	st.writeMu.Lock()
-	defer st.writeMu.Unlock()
+	st.stateMu.Lock()
+	defer st.stateMu.Unlock()
 	select {
 	case <-st.closed:
 		return errors.New("already finished")
@@ -441,17 +462,17 @@ func (st *tunnelServerStream) Context() context.Context {
 }
 
 func (st *tunnelServerStream) SendMsg(m interface{}) error {
+	// send header if not already sent
+	_ = st.setHeader(nil, true)
+
 	st.writeMu.Lock()
 	defer st.writeMu.Unlock()
 
-	if !st.sentHeaders {
-		_ = st.sendHeadersLocked()
-	}
-
-	if !st.isServerStream && st.numSent == 1 {
+	if !st.hasSent {
+		st.hasSent = true
+	} else if !st.isServerStream {
 		return status.Errorf(codes.Internal, "Already sent response for non-server-stream method %q", st.method)
 	}
-	st.numSent++
 
 	// TODO: support alternate codecs, compressors, etc
 	b, err := proto.Marshal(m.(proto.Message))
@@ -635,8 +656,8 @@ func (st *tunnelServerStream) finishStream(err error) {
 
 	st.halfClose(err)
 
-	st.writeMu.Lock()
-	defer st.writeMu.Unlock()
+	st.stateMu.Lock()
+	defer st.stateMu.Unlock()
 
 	select {
 	case <-st.closed:

@@ -3,15 +3,27 @@ package grpc
 import (
 	"errors"
 	"fmt"
+	"github.com/joeycumines/sesame/internal/flowcontrol"
 	"golang.org/x/net/context"
 	"io"
+	"math"
 	"sync"
 )
 
 const (
-	// initialWindowSize is the initial size of the per-stream per-sender flow control window.
+	// windowMaxSize is the initial size of the per-stream per-sender flow control window.
 	// Unlike HTTP/2, this implementation does not support updating it.
-	initialWindowSize = 65535
+	// Also unlike HTTP/2, the buffering is per-message, and so is allowed to be exceeded.
+	// See also windowMaxBuffer and windowMinConsume.
+	windowMaxSize = 65535
+	// windowUpdateSize is the threshold for window updates, which is the point at which a window update message will
+	// be sent to the remote sender.
+	windowUpdateSize = windowMaxSize * 0.4
+	// windowMaxBuffer is the target number of messages that we want to allow to be buffered (at most) per stream.
+	windowMaxBuffer = 256
+	// windowMinConsume is a value that aims to support windowMaxBuffer by means of adjusting consumption from
+	// the window.
+	windowMinConsume = windowMaxSize/(windowMaxBuffer-1) + 1
 )
 
 type (
@@ -42,6 +54,20 @@ type (
 		stream tunnelStreamServer
 		mu     sync.Mutex
 	}
+
+	flowControlClient struct {
+		flowControlConfig
+		tunnelStreamClient
+		ch *Channel
+	}
+
+	flowControlServer struct {
+		flowControlConfig
+		tunnelStreamServer
+		tun *tunnelServer
+	}
+
+	flowControlConfig struct{}
 )
 
 var (
@@ -56,12 +82,12 @@ var (
 	_ tunnelStreamClient = (*tunnelStreamClientWrapper)(nil)
 	_ io.Closer          = (*tunnelStreamClientWrapper)(nil)
 	_ tunnelStreamServer = (*tunnelStreamServerWrapper)(nil)
-)
 
-func wrapTunnelStreamClient(stream tunnelStreamClient, tearDown func() error) (tunnelStreamClient, func() error) {
-	w := newTunnelStreamClientWrapper(stream, tearDown)
-	return w, w.Close
-}
+	_ = map[bool]struct{}{false: {}, windowMaxSize > 0: {}}
+	_ = map[bool]struct{}{false: {}, windowMaxBuffer > 1: {}}
+	_ = map[bool]struct{}{false: {}, windowMinConsume > 0 && windowMinConsume*(windowMaxBuffer-1) > windowMaxSize: {}}
+	_ = map[bool]struct{}{false: {}, windowUpdateSize >= 1 && windowUpdateSize <= windowMaxSize: {}}
+)
 
 func newTunnelStreamClientWrapper(stream tunnelStreamClient, tearDown func() error) *tunnelStreamClientWrapper {
 	r := tunnelStreamClientWrapper{
@@ -96,6 +122,10 @@ func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 			isFullClose bool
 		)
 		switch frame := msg.GetFrame().(type) {
+		case *ClientToServer_WindowUpdate:
+			// always send window updates
+			return nil, nil
+
 		case *ClientToServer_NewStream_:
 			// note that we ensure the stream id increments by one so we can reliably detect cases where the stream was
 			// never created (for non-new requests, if the streamID is <= x.streamID, then it's creation was attempted)
@@ -247,9 +277,177 @@ func newTunnelStreamServerWrapper(stream tunnelStreamServer) *tunnelStreamServer
 func (x *tunnelStreamServerWrapper) Context() context.Context { return x.stream.Context() }
 
 func (x *tunnelStreamServerWrapper) Send(msg *ServerToClient) error {
+	if msg.GetStreamId() == 0 {
+		return errors.New(`sesame/tun/grpc: stream id 0 invalid`)
+	}
+	switch frame := msg.GetFrame().(type) {
+	case *ServerToClient_WindowUpdate:
+	case *ServerToClient_Header:
+	case *ServerToClient_Message:
+	case *ServerToClient_MessageData:
+	case *ServerToClient_CloseStream_:
+	default:
+		return fmt.Errorf(`sesame/tun/grpc: unexpected or invalid server to client frame %T`, frame)
+	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	return x.stream.Send(msg)
 }
 
 func (x *tunnelStreamServerWrapper) Recv() (*ClientToServer, error) { return x.stream.Recv() }
+
+func (x *flowControlClient) SendWindowUpdate(streamID uint64, windowUpdate uint32) *ClientToServer {
+	return &ClientToServer{StreamId: streamID, Frame: &ClientToServer_WindowUpdate{WindowUpdate: windowUpdate}}
+}
+func (x *flowControlClient) RecvWindowUpdate(msg *ServerToClient) (uint32, bool) {
+	if v, ok := msg.GetFrame().(*ServerToClient_WindowUpdate); ok {
+		return v.WindowUpdate, true
+	}
+	return 0, false
+}
+func (x *flowControlClient) SendSize(msg *ClientToServer) (uint32, bool) {
+	return clientToServerMessageSize(msg)
+}
+func (x *flowControlClient) RecvSize(msg *ServerToClient) (uint32, bool) {
+	return serverToClientMessageSize(msg)
+}
+func (x *flowControlClient) SendKey(msg *ClientToServer) uint64 { return msg.GetStreamId() }
+func (x *flowControlClient) RecvKey(msg *ServerToClient) uint64 { return msg.GetStreamId() }
+func (x *flowControlClient) SendLoad(streamID uint64) int64 {
+	x.ch.mu.RLock()
+	defer x.ch.mu.RUnlock()
+	if v := x.ch.streams[streamID]; v != nil {
+		return v.fcSend
+	}
+	return 0
+}
+func (x *flowControlClient) RecvLoad(streamID uint64) int64 {
+	x.ch.mu.RLock()
+	defer x.ch.mu.RUnlock()
+	if v := x.ch.streams[streamID]; v != nil {
+		return v.fcRecv
+	}
+	return 0
+}
+func (x *flowControlClient) SendStore(streamID uint64, value int64) {
+	x.ch.mu.RLock()
+	defer x.ch.mu.RUnlock()
+	if v := x.ch.streams[streamID]; v != nil {
+		v.fcSend = value
+	}
+}
+func (x *flowControlClient) RecvStore(streamID uint64, value int64) {
+	x.ch.mu.RLock()
+	defer x.ch.mu.RUnlock()
+	if v := x.ch.streams[streamID]; v != nil {
+		v.fcRecv = value
+	}
+}
+func (x *flowControlClient) StreamContext(streamID uint64) context.Context {
+	x.ch.mu.RLock()
+	defer x.ch.mu.RUnlock()
+	if v := x.ch.streams[streamID]; v != nil {
+		return v.ctx
+	}
+	return flowcontrol.StreamNotFound
+}
+
+func (x *flowControlServer) SendWindowUpdate(streamID uint64, windowUpdate uint32) *ServerToClient {
+	return &ServerToClient{StreamId: streamID, Frame: &ServerToClient_WindowUpdate{WindowUpdate: windowUpdate}}
+}
+func (x *flowControlServer) RecvWindowUpdate(msg *ClientToServer) (uint32, bool) {
+	if v, ok := msg.GetFrame().(*ClientToServer_WindowUpdate); ok {
+		return v.WindowUpdate, true
+	}
+	return 0, false
+}
+func (x *flowControlServer) SendSize(msg *ServerToClient) (uint32, bool) {
+	return serverToClientMessageSize(msg)
+}
+func (x *flowControlServer) RecvSize(msg *ClientToServer) (uint32, bool) {
+	return clientToServerMessageSize(msg)
+}
+func (x *flowControlServer) SendKey(msg *ServerToClient) uint64 { return msg.GetStreamId() }
+func (x *flowControlServer) RecvKey(msg *ClientToServer) uint64 { return msg.GetStreamId() }
+func (x *flowControlServer) SendLoad(streamID uint64) int64 {
+	x.tun.mu.RLock()
+	defer x.tun.mu.RUnlock()
+	if v := x.tun.streams[streamID]; v != nil {
+		return v.fcSend
+	}
+	return 0
+}
+func (x *flowControlServer) RecvLoad(streamID uint64) int64 {
+	x.tun.mu.RLock()
+	defer x.tun.mu.RUnlock()
+	if v := x.tun.streams[streamID]; v != nil {
+		return v.fcRecv
+	}
+	return 0
+}
+func (x *flowControlServer) SendStore(streamID uint64, value int64) {
+	x.tun.mu.RLock()
+	defer x.tun.mu.RUnlock()
+	if v := x.tun.streams[streamID]; v != nil {
+		v.fcSend = value
+	}
+}
+func (x *flowControlServer) RecvStore(streamID uint64, value int64) {
+	x.tun.mu.RLock()
+	defer x.tun.mu.RUnlock()
+	if v := x.tun.streams[streamID]; v != nil {
+		v.fcRecv = value
+	}
+}
+func (x *flowControlServer) StreamContext(streamID uint64) context.Context {
+	x.tun.mu.RLock()
+	defer x.tun.mu.RUnlock()
+	if v := x.tun.streams[streamID]; v != nil {
+		return v.ctx
+	}
+	return flowcontrol.StreamNotFound
+}
+
+func (flowControlConfig) SendConfig(streamID uint64) flowcontrol.Config {
+	return flowcontrol.Config{
+		MaxWindow:  windowMaxSize,
+		MinConsume: windowMinConsume,
+	}
+}
+func (flowControlConfig) RecvConfig(streamID uint64) flowcontrol.Config {
+	return flowcontrol.Config{
+		MaxWindow:  uint32(windowUpdateSize),
+		MinConsume: windowMinConsume,
+	}
+}
+
+func clientToServerMessageSize(msg *ClientToServer) (uint32, bool) {
+	var size int
+	switch frame := msg.GetFrame().(type) {
+	case *ClientToServer_Message:
+		size = len(frame.Message.GetData())
+	case *ClientToServer_MessageData:
+		size = len(frame.MessageData)
+	default:
+		return 0, false
+	}
+	if size > math.MaxUint32 {
+		panic(fmt.Errorf(`sesame/tun/grpc: unexpected client to server message size: %d`, size))
+	}
+	return uint32(size), true
+}
+func serverToClientMessageSize(msg *ServerToClient) (uint32, bool) {
+	var size int
+	switch frame := msg.GetFrame().(type) {
+	case *ServerToClient_Message:
+		size = len(frame.Message.GetData())
+	case *ServerToClient_MessageData:
+		size = len(frame.MessageData)
+	default:
+		return 0, false
+	}
+	if size > math.MaxUint32 {
+		panic(fmt.Errorf(`sesame/tun/grpc: unexpected server to client message size: %d`, size))
+	}
+	return uint32(size), true
+}

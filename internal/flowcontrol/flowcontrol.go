@@ -7,17 +7,25 @@ import (
 )
 
 type (
-	Conn[K any, S any, R any, I Interface[K, S, R]] struct {
-		i  Interface[K, S, R]
-		ch chan struct{}
-		mu sync.Mutex
-		rw sync.RWMutex
+	// Conn implements message based flow control.
+	//
+	// Usage notes:
+	//
+	//   - When sending flow-controlled messages, callers MUST synchronise calls to Send, on a per-stream basis
+	//   - Send and Recv on the Interface are NOT synchronised by this implementation
+	//   - Send MUST be safe to call concurrently
+	Conn[K comparable, S any, R any] struct {
+		i       Interface[K, S, R]
+		waiters map[K]chan struct{}
+		mu      sync.Mutex
 	}
 
 	Interface[K any, S any, R any] interface {
 		Context() context.Context
 		Send(msg S) error
 		Recv() (msg R, err error)
+
+		StreamContext(key K) context.Context
 
 		SendWindowUpdate(key K, val uint32) (msg S)
 		RecvWindowUpdate(msg R) (uint32, bool)
@@ -34,78 +42,137 @@ type (
 		SendStore(key K, val int64)
 		RecvStore(key K, val int64)
 
-		SendMaxWindow() uint32
-		RecvMaxWindow() uint32
+		SendConfig(key K) Config
+		RecvConfig(key K) Config
+	}
 
-		SendMinConsume() uint32
-		RecvMinConsume() uint32
+	Config struct {
+		MaxWindow  uint32
+		MinConsume uint32
 	}
 )
 
-func NewConn[K any, S any, R any, I Interface[K, S, R]](i Interface[K, S, R]) *Conn[K, S, R, I] {
-	return &Conn[K, S, R, I]{
-		i:  i,
-		ch: make(chan struct{}, 1),
+var (
+	// StreamNotFound is a sentinel value for use with Interface.StreamContext.
+	StreamNotFound = func() context.Context {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		return ctx
+	}()
+)
+
+func NewConn[K comparable, S any, R any](i Interface[K, S, R]) *Conn[K, S, R] {
+	return &Conn[K, S, R]{
+		i:       i,
+		waiters: make(map[K]chan struct{}),
 	}
 }
 
-func (x *Conn[K, S, R, I]) Context() context.Context { return x.i.Context() }
+func (x *Conn[K, S, R]) Context() context.Context { return x.i.Context() }
 
-func (x *Conn[K, S, R, I]) Send(msg S) error {
+func (x *Conn[K, S, R]) Send(msg S) error {
+	ctx := x.i.Context()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	key := x.i.SendKey(msg)
+
+	ctxStream := x.i.StreamContext(key)
+	if err := ctxStream.Err(); err != nil {
+		return err
+	}
+
 	size, ok := x.i.SendSize(msg)
 	if !ok {
 		// not flow controlled
-		return x.send(&x.rw, msg)
+		return x.i.Send(msg)
 	}
-	if min := x.i.SendMinConsume(); size < min {
-		size = min
-	}
+
 	var (
-		key = x.i.SendKey(msg)
-		val int64
-		ctx context.Context
+		addedWaiter   bool
+		deletedWaiter bool
 	)
+	defer func() {
+		if !addedWaiter || deletedWaiter {
+			return
+		}
+		// on context cancel or (potentially) panic
+		x.mu.Lock()
+		defer x.mu.Unlock()
+		x.deleteWaiter(key)
+	}()
 	for {
-		func() {
+		// config may change
+		config := x.i.SendConfig(key)
+
+		size := size
+		if size < config.MinConsume {
+			size = config.MinConsume
+		}
+
+		ch := func() chan struct{} {
 			x.mu.Lock()
 			defer x.mu.Unlock()
-			val = x.i.SendLoad(key)
-			val -= int64(size)
-			ok = val+int64(x.i.SendMaxWindow()) >= 0
-			if ok {
+
+			val := x.i.SendLoad(key) - int64(size)
+
+			// because this is message based, and because we enforce a min consume per message,
+			// we allow if EITHER there's space OR if there's ANY space BEFORE calculating the size
+			// (the buffering is expected to be per-message, e.g. channels)
+			if adj := val + int64(config.MaxWindow); adj >= 0 || adj+int64(size) > 0 {
+				x.deleteWaiter(key)
+				deletedWaiter = true
+
 				x.i.SendStore(key, val)
-			} else {
-				// we're going to need to block
-				// drain the channel while holding the mutex
-				select {
-				case <-x.ch:
-				default:
-				}
+
+				return nil
 			}
+
+			if x.waiters[key] == nil {
+				x.waiters[key] = make(chan struct{}, 1)
+				addedWaiter = true
+			}
+
+			return x.waiters[key]
 		}()
-		if ok {
+		if ch == nil {
 			break
 		}
-		if ctx == nil {
-			ctx = x.i.Context()
-		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-x.ch:
+
+		case <-ctxStream.Done():
+			return ctxStream.Err()
+
+		case <-ch:
 			// recheck...
 		}
+
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		if err := ctxStream.Err(); err != nil {
+			return err
+		}
 	}
-	// this send uses the read lock to enforce lower priority
-	// (callers should not use this concurrently, in the first place)
-	return x.send(x.rw.RLocker(), msg)
+
+	return x.i.Send(msg)
 }
 
-func (x *Conn[K, S, R, I]) Recv() (msg R, err error) {
+func (x *Conn[K, S, R]) Recv() (msg R, err error) {
+	if err = x.i.Context().Err(); err != nil {
+		return
+	}
+
 	msg, err = x.i.Recv()
 	if err != nil {
 		return
 	}
+
 	if update, ok := x.i.RecvWindowUpdate(msg); ok {
 		key := x.i.RecvKey(msg)
 		x.mu.Lock()
@@ -115,25 +182,32 @@ func (x *Conn[K, S, R, I]) Recv() (msg R, err error) {
 		val += int64(update)
 		x.i.SendStore(key, val)
 		select {
-		case x.ch <- struct{}{}:
+		case x.waiters[key] <- struct{}{}:
 		default:
 		}
 		return
 	}
+
 	size, ok := x.i.RecvSize(msg)
 	if !ok {
 		// not flow controlled
 		return
 	}
-	if min := x.i.RecvMinConsume(); size < min {
-		size = min
-	}
+
 	key := x.i.RecvKey(msg)
+
+	config := x.i.RecvConfig(key)
+
+	if size < config.MinConsume {
+		size = config.MinConsume
+	}
+
 	x.mu.Lock()
 	defer x.mu.Unlock()
-	val := x.i.RecvLoad(key)
-	val += int64(size)
-	if val >= int64(x.i.RecvMaxWindow()) {
+
+	val := x.i.RecvLoad(key) + int64(size)
+
+	if val >= int64(config.MaxWindow) && val > 0 && x.i.StreamContext(key).Err() == nil {
 		// inform the other end how much we've received
 		for val > 0 {
 			const max = 1<<32 - 1
@@ -144,16 +218,23 @@ func (x *Conn[K, S, R, I]) Recv() (msg R, err error) {
 				update = uint32(val)
 			}
 			val -= int64(update)
-			// TODO this would be much better off in a worker
-			go x.send(&x.rw, x.i.SendWindowUpdate(key, update))
+			// don't use x.Send due to the risk of it being erroneously detected as a flow controlled message
+			// (e.g. due to programmer error / misuse)
+			// if that happens, it may break the assumption of no concurrent (stream) sends
+			go x.i.Send(x.i.SendWindowUpdate(key, update))
 		}
 	}
+
 	x.i.RecvStore(key, val)
+
 	return
 }
 
-func (x *Conn[K, S, R, I]) send(l sync.Locker, m S) error {
-	l.Lock()
-	defer l.Unlock()
-	return x.i.Send(m)
+func (x *Conn[K, S, R]) deleteWaiter(key K) {
+	if waiter, ok := x.waiters[key]; ok {
+		delete(x.waiters, key)
+		if waiter != nil {
+			close(waiter)
+		}
+	}
 }

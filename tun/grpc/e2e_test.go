@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
-	"regexp"
 	"runtime"
 	"sort"
 	"testing"
@@ -50,6 +49,10 @@ func reverseTunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.Clien
 			switch stat.Code() {
 			case codes.Unavailable, codes.Canceled:
 				serveErr = nil
+			case codes.Unknown:
+				if serveErr == context.Canceled {
+					serveErr = nil
+				}
 			}
 		}()
 		timer := time.NewTimer(time.Second * 5)
@@ -128,8 +131,7 @@ func Test_external_RC_NetConn_nettest(t *testing.T) {
 	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*20)
 	t.Run(`p`, func(t *testing.T) {
 		wt := testutil.Wrap(t)
-		wt = testutil.DepthLimiter{T: testutil.Parallel(wt), Depth: 2}
-		wt = testutil.SkipRegex(wt, regexp.MustCompile(`/PresentTimeout$`))
+		wt = testutil.Parallel(wt)
 		for _, k := range testutil.CallOn(maps.Keys(clientConnFactories), func(v []string) { sort.Strings(v) }) {
 			wt.Run(k, func(t testutil.T) { grpctest.RC_NetConn_Test_nettest(t, clientConnFactories[k]) })
 		}
