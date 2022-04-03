@@ -239,7 +239,6 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 
 	ctx = metadata.NewIncomingContext(ctx, fromProto(frame.Header))
 
-	ch := make(chan isClientToServer_Frame, windowMaxBuffer)
 	str := &tunnelServerStream{
 		ctx:            ctx,
 		svr:            s,
@@ -248,8 +247,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 		stream:         s.stream,
 		isClientStream: isClientStream,
 		isServerStream: isServerStream,
-		readChan:       ch,
-		ingestChan:     ch,
+		buffer:         make(chan isClientToServer_Frame, windowMaxBuffer),
 		closed:         make(chan struct{}),
 	}
 	s.streams[streamID] = str
@@ -308,15 +306,10 @@ type tunnelServerStream struct {
 	isClientStream bool
 	isServerStream bool
 
-	// for "ingesting" frames into channel, from receive loop
-	ingestMu   sync.Mutex
-	ingestChan chan<- isClientToServer_Frame
+	buffer     chan isClientToServer_Frame
 	halfClosed error
-
-	// for reading frames from channel, to read message data
-	readMu   sync.Mutex
-	readChan <-chan isClientToServer_Frame
-	readErr  error
+	readMu     sync.Mutex
+	readErr    error
 
 	stateMu     sync.Mutex
 	headers     metadata.MD
@@ -343,12 +336,10 @@ func (st *tunnelServerStream) acceptClientFrame(frame isClientToServer_Frame) {
 		return
 
 	case *ClientToServer_Cancel:
+		st.halfClose(context.Canceled)
 		st.finishStream(context.Canceled)
 		return
 	}
-
-	st.ingestMu.Lock()
-	defer st.ingestMu.Unlock()
 
 	if st.halfClosed != nil {
 		// stream is half closed -- ignore subsequent messages
@@ -356,7 +347,8 @@ func (st *tunnelServerStream) acceptClientFrame(frame isClientToServer_Frame) {
 	}
 
 	select {
-	case st.ingestChan <- frame:
+	case st.buffer <- frame:
+	case <-st.closed:
 	case <-st.ctx.Done():
 	}
 }
@@ -584,7 +576,10 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 		case <-st.ctx.Done():
 			return nil, true, st.ctx.Err()
 
-		case in, ok := <-st.readChan:
+		case <-st.closed:
+			return nil, true, context.Canceled
+
+		case in, ok := <-st.buffer:
 			if !ok {
 				// don't need lock to read st.halfClosed; observing
 				// input channel close provides safe visibility
@@ -654,8 +649,6 @@ func (st *tunnelServerStream) serveStream(md interface{}, srv interface{}) {
 func (st *tunnelServerStream) finishStream(err error) {
 	defer st.svr.removeStream(st.streamID)
 
-	st.halfClose(err)
-
 	st.stateMu.Lock()
 	defer st.stateMu.Unlock()
 
@@ -685,9 +678,8 @@ func (st *tunnelServerStream) finishStream(err error) {
 	close(st.closed)
 }
 
+// halfClose is only safe to call from the ingest loop
 func (st *tunnelServerStream) halfClose(err error) {
-	st.ingestMu.Lock()
-	defer st.ingestMu.Unlock()
 	if st.halfClosed != nil {
 		// already closed
 		return
@@ -696,7 +688,7 @@ func (st *tunnelServerStream) halfClose(err error) {
 		err = io.EOF
 	}
 	st.halfClosed = err
-	close(st.ingestChan)
+	close(st.buffer)
 }
 
 type tunnelServerTransportStream tunnelServerStream

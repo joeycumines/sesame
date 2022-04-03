@@ -33,7 +33,6 @@ type (
 		stream    tunnelStreamClient
 		tearDown  func() error
 		mu        sync.Mutex
-		streamID  uint64
 		streamMap map[uint64]*tscwStream
 		in        chan *ClientToServer
 		out       chan error
@@ -113,11 +112,16 @@ func (x *tunnelStreamClientWrapper) Recv() (*ServerToClient, error) {
 func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 	// handle message
 	done, err := func() (<-chan struct{}, error) {
+		streamID := msg.GetStreamId()
+		if streamID == 0 {
+			// shouldn't happen
+			panic(`sesame/tun/grpc: stream id 0 is invalid`)
+		}
+
 		x.mu.Lock()
 		defer x.mu.Unlock()
 
 		var (
-			streamID    = msg.GetStreamId()
 			isHalfClose bool
 			isFullClose bool
 		)
@@ -127,18 +131,14 @@ func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 			return nil, nil
 
 		case *ClientToServer_NewStream_:
-			// note that we ensure the stream id increments by one so we can reliably detect cases where the stream was
-			// never created (for non-new requests, if the streamID is <= x.streamID, then it's creation was attempted)
-			if streamID <= x.streamID || streamID != x.streamID+1 || x.streamMap[streamID] != nil {
-				return nil, fmt.Errorf(`sesame/tun/grpc: expected new stream id > %d got %d`, x.streamID, streamID)
+			if _, ok := x.streamMap[streamID]; ok {
+				// shouldn't happen
+				panic(fmt.Errorf(`sesame/tun/grpc: duplicate new stream message or recreated stream id %d`, streamID))
 			}
-
-			x.streamID = streamID
 			x.streamMap[streamID] = &tscwStream{
 				half: make(chan struct{}),
 				full: make(chan struct{}),
 			}
-
 			// we disallow cancellation of new stream requests, to avoid confusing the server
 			return nil, nil
 
@@ -155,11 +155,6 @@ func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
 
 		default:
 			return nil, fmt.Errorf(`sesame/tun/grpc: unexpected or invalid client to server frame %T`, frame)
-		}
-
-		// note that 0 is the initial x.streamID value, and is invalid
-		if streamID > x.streamID || streamID == 0 {
-			return nil, fmt.Errorf(`sesame/tun/grpc: expected stream id <= %d got %d`, x.streamID, streamID)
 		}
 
 		var done tscwStream
