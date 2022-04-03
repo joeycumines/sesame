@@ -309,6 +309,7 @@ type tunnelServerStream struct {
 	isClientStream bool
 	isServerStream bool
 
+	ingestMu   sync.Mutex
 	buffer     chan *ClientToServer
 	halfClosed error
 	readMu     sync.Mutex
@@ -339,10 +340,12 @@ func (st *tunnelServerStream) acceptClientFrame(msg *ClientToServer) {
 		return
 
 	case *ClientToServer_Cancel:
-		st.halfClose(context.Canceled)
 		st.finishStream(context.Canceled)
 		return
 	}
+
+	st.ingestMu.Lock()
+	defer st.ingestMu.Unlock()
 
 	if st.halfClosed != nil {
 		// stream is half closed -- ignore subsequent messages
@@ -351,7 +354,6 @@ func (st *tunnelServerStream) acceptClientFrame(msg *ClientToServer) {
 
 	select {
 	case st.buffer <- msg:
-	case <-st.closed:
 	case <-st.ctx.Done():
 	}
 }
@@ -579,9 +581,6 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 		case <-st.ctx.Done():
 			return nil, true, st.ctx.Err()
 
-		case <-st.closed:
-			return nil, true, context.Canceled
-
 		case msg, ok := <-st.buffer:
 			if !ok {
 				// don't need lock to read st.halfClosed; observing
@@ -654,6 +653,8 @@ func (st *tunnelServerStream) serveStream(md interface{}, srv interface{}) {
 func (st *tunnelServerStream) finishStream(err error) {
 	defer st.tun.removeStream(st.streamID)
 
+	st.halfClose(err)
+
 	st.stateMu.Lock()
 	defer st.stateMu.Unlock()
 
@@ -683,8 +684,9 @@ func (st *tunnelServerStream) finishStream(err error) {
 	close(st.closed)
 }
 
-// halfClose is only safe to call from the ingest loop
 func (st *tunnelServerStream) halfClose(err error) {
+	st.ingestMu.Lock()
+	defer st.ingestMu.Unlock()
 	if st.halfClosed != nil {
 		// already closed
 		return
