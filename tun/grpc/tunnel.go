@@ -204,10 +204,9 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 		// stream already active!
 		return false, fmt.Errorf("cannot create stream ID %d: already exists", streamID)
 	}
-	if streamID <= s.lastSeen {
-		return false, fmt.Errorf("cannot create stream ID %d: that ID has already been used", streamID)
+	if s.lastSeen < streamID {
+		s.lastSeen = streamID
 	}
-	s.lastSeen = streamID
 
 	select {
 	case <-s.stop:

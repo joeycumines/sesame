@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/joeycumines/sesame/internal/grpctest"
+	"github.com/joeycumines/sesame/internal/pipelistener"
 	"github.com/joeycumines/sesame/internal/testutil"
 	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
@@ -156,10 +157,6 @@ func Test_external_RC_NetConn_nettest(t *testing.T) {
 
 // Test_multiplex runs a variety of other tests in parallel, over mocked rc/netconn streams, backed by a single tunnel.
 func Test_multiplex(t *testing.T) {
-	if true {
-		t.SkipNow()
-	}
-
 	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*10)
 
 	for _, k := range testutil.CallOn(maps.Keys(clientConnFactories), func(v []string) { sort.Strings(v) }) {
@@ -216,9 +213,9 @@ func Test_multiplex(t *testing.T) {
 				return
 			}
 
-			//var factory testutil.ClientConnFactory = func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
-			//	return testutil.NewNetpipeClient(pipeFactory, func(_ *pipelistener.PipeListener, srv *grpc.Server) { fn(srv) })
-			//}
+			var factory testutil.ClientConnFactory = func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
+				return testutil.NewNetpipeClient(pipeFactory, func(_ *pipelistener.PipeListener, srv *grpc.Server) { fn(srv) })
+			}
 
 			t.Run(`p`, func(t *testing.T) {
 				t.Run(`nettest1`, func(t *testing.T) {
@@ -229,13 +226,13 @@ func Test_multiplex(t *testing.T) {
 					t.Parallel()
 					nettest.TestConn(t, makePipe)
 				})
-				//t.Run(`nettest3`, func(t *testing.T) {
-				//	t.Parallel()
-				//	nettest.TestConn(t, makePipe)
-				//})
-				//wt := testutil.Wrap(t)
-				//wt = testutil.DepthLimiter{T: testutil.Parallel(wt), Depth: 2}
-				//wt.Run(`RC_NetConn_Test_nettest`, func(t testutil.T) { grpctest.RC_NetConn_Test_nettest(t, factory) })
+				t.Run(`nettest3`, func(t *testing.T) {
+					t.Parallel()
+					nettest.TestConn(t, makePipe)
+				})
+				wt := testutil.Wrap(t)
+				wt = testutil.DepthLimiter{T: testutil.Parallel(wt), Depth: 3}
+				wt.Run(`RC_NetConn_Test_nettest`, func(t testutil.T) { grpctest.RC_NetConn_Test_nettest(t, factory) })
 			})
 		})
 	}
