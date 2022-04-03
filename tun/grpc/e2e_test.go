@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/joeycumines/sesame/internal/grpctest"
+	"github.com/joeycumines/sesame/internal/pipelistener"
 	"github.com/joeycumines/sesame/internal/testutil"
+	"github.com/joeycumines/sesame/rc"
+	"github.com/joeycumines/sesame/rc/netconn"
 	"github.com/joeycumines/sesame/stream"
 	grpctun "github.com/joeycumines/sesame/tun/grpc"
 	"golang.org/x/exp/maps"
@@ -12,10 +15,19 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
+	"net"
 	"runtime"
 	"sort"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
+)
+
+type (
+	mockDialer struct {
+		dialContext func(ctx context.Context, network, address string) (net.Conn, error)
+	}
 )
 
 var clientConnFactories = func() (m map[string]testutil.ClientConnFactory) {
@@ -142,31 +154,80 @@ func Test_external_RC_NetConn_nettest(t *testing.T) {
 	})
 }
 
-// Test_e2e pulls in other test cases to aid in testing the tunnel implementations (in both directions) under
-// significant load, and in more "realistic" scenarios.
-//func Test_e2e(t *testing.T) {
-//	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*5)
-//
-//	// Note that all tests must support running concurrently.
-//	for _, tc := range [...]struct {
-//		Name string
-//		Test func(t testutil.T)
-//	}{
-//		{
-//			Name: ``,
-//		},
-//	} {
-//		t.Run(tc.Name, func(t *testing.T) {
-//			defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*5)
-//
-//			r, err := testutil.NewRunner(
-//				testutil.OptRunner.T(testutil.Wrap(t)),
-//			)
-//			if err != nil {
-//				t.Fatal(err)
-//			}
-//
-//			tc.Test(r)
-//		})
-//	}
-//}
+// Test_multiplex runs a variety of other tests in parallel, over mocked rc/netconn streams, backed by a single tunnel.
+func Test_multiplex(t *testing.T) {
+	if true {
+		t.SkipNow()
+	}
+
+	defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*10)
+
+	type (
+		TestConfig struct {
+			testutil.T
+			Factory testutil.ClientConnFactory
+		}
+
+		TestFunc func(t TestConfig)
+	)
+
+	for _, k := range testutil.CallOn(maps.Keys(clientConnFactories), func(v []string) { sort.Strings(v) }) {
+		factory := clientConnFactories[k]
+		t.Run(k, func(t *testing.T) {
+			defer testutil.CheckNumGoroutines(t, runtime.NumGoroutine(), false, time.Second*10)
+
+			var (
+				mu      sync.Mutex
+				index   int
+				pipes   = make(map[string]net.Conn)
+				newPipe = func() (string, net.Conn) {
+					mu.Lock()
+					defer mu.Unlock()
+					index++
+					address := strconv.Itoa(index)
+					c1, c2 := net.Pipe()
+					pipes[address] = c1
+					return address, c2
+				}
+				dialer = mockDialer{dialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					conn := pipes[address]
+					if conn == nil {
+						t.Error(`missing pipe for address`, address)
+						panic(address)
+					}
+					delete(pipes, address)
+					return conn, nil
+				}}
+			)
+
+			rcServer := netconn.Server{Dialer: func(*rc.NetConnRequest_Dial) (netconn.Dialer, error) { return &dialer, nil }}
+			rcConn := factory(func(h testutil.GRPCServer) { rc.RegisterRemoteControlServer(h, &rcServer) })
+			defer rcConn.Close()
+			rcClient := netconn.Client{API: rc.NewRemoteControlClient(rcConn)}
+			pipeFactory := func() (net.Conn, net.Conn) {
+				address, c2 := newPipe()
+				c1, err := rcClient.DialContext(context.Background(), ``, address)
+				if err != nil {
+					t.Error(err)
+					panic(err)
+				}
+				return c1, c2
+			}
+
+			var factory testutil.ClientConnFactory = func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
+				return testutil.NewNetpipeClient(pipeFactory, func(_ *pipelistener.PipeListener, srv *grpc.Server) { fn(srv) })
+			}
+
+			testutil.Wrap(t).Run(`p`, func(t testutil.T) {
+				t = testutil.Parallel(t)
+				t.Run(`RC_NetConn_Test_nettest`, func(t testutil.T) { grpctest.RC_NetConn_Test_nettest(t, factory) })
+			})
+		})
+	}
+}
+
+func (x *mockDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return x.dialContext(ctx, network, address)
+}

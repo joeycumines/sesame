@@ -112,7 +112,7 @@ func (x *Runner) runTest(t *RunnerTest, f func(t *RunnerTest)) {
 			t.fail()
 		}
 		select {
-		case t.runCh <- x.Failures() == 0:
+		case t.runCh <- !x.Failed():
 		default:
 		}
 		close(t.runCh)
