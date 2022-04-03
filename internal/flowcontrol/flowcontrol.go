@@ -188,6 +188,12 @@ func (x *Conn[K, S, R]) Recv() (msg R, err error) {
 		return
 	}
 
+	return
+}
+
+// UpdateWindow should be called after every receive, and is necessary for ALL flow controlled messages.
+// That is, AFTER the message is completely processed, i.e. removed from any internal buffer.
+func (x *Conn[K, S, R]) UpdateWindow(msg R) {
 	size, ok := x.i.RecvSize(msg)
 	if !ok {
 		// not flow controlled
@@ -226,8 +232,6 @@ func (x *Conn[K, S, R]) Recv() (msg R, err error) {
 	}
 
 	x.i.RecvStore(key, val)
-
-	return
 }
 
 func (x *Conn[K, S, R]) deleteWaiter(key K) {

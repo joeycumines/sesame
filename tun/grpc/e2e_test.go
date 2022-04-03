@@ -216,31 +216,27 @@ func Test_multiplex(t *testing.T) {
 				return
 			}
 
+			//var factory testutil.ClientConnFactory = func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
+			//	return testutil.NewNetpipeClient(pipeFactory, func(_ *pipelistener.PipeListener, srv *grpc.Server) { fn(srv) })
+			//}
+
 			t.Run(`p`, func(t *testing.T) {
 				t.Run(`nettest1`, func(t *testing.T) {
-					//t.Parallel()
+					t.Parallel()
 					nettest.TestConn(t, makePipe)
 				})
-				//t.Run(`nettest2`, func(t *testing.T) {
-				//	t.Parallel()
-				//	nettest.TestConn(t, makePipe)
-				//})
+				t.Run(`nettest2`, func(t *testing.T) {
+					t.Parallel()
+					nettest.TestConn(t, makePipe)
+				})
 				//t.Run(`nettest3`, func(t *testing.T) {
 				//	t.Parallel()
 				//	nettest.TestConn(t, makePipe)
 				//})
+				//wt := testutil.Wrap(t)
+				//wt = testutil.DepthLimiter{T: testutil.Parallel(wt), Depth: 2}
+				//wt.Run(`RC_NetConn_Test_nettest`, func(t testutil.T) { grpctest.RC_NetConn_Test_nettest(t, factory) })
 			})
-
-			//var factory testutil.ClientConnFactory = func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
-			//	return testutil.NewNetpipeClient(pipeFactory, func(_ *pipelistener.PipeListener, srv *grpc.Server) { fn(srv) })
-			//}
-			//testutil.Wrap(t).Run(`p`, func(t testutil.T) {
-			//	t = testutil.DepthLimiter{
-			//		T:     testutil.Parallel(t),
-			//		Depth: 2,
-			//	}
-			//	t.Run(`RC_NetConn_Test_nettest`, func(t testutil.T) { grpctest.RC_NetConn_Test_nettest(t, factory) })
-			//})
 		})
 	}
 }

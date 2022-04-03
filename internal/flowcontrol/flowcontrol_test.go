@@ -243,6 +243,9 @@ func TestNewConn_direct(t *testing.T) {
 				var ok bool
 				defer func() { recvDone <- ok }()
 				msg, err := c.Recv()
+				if err == nil {
+					c.UpdateWindow(msg)
+				}
 				ok = fn(msg.(R), err)
 			}()
 		}

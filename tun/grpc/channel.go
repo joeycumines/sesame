@@ -51,10 +51,11 @@ type tunnelStreamClient interface {
 // Channel is a tunnel client, and implements grpc.ClientConnInterface.
 // It is backed by a single stream, though this stream may be either a tunnel client, or a reverse tunnel server.
 type Channel struct {
-	stream   tunnelStreamClient
-	ctx      context.Context
-	cancel   context.CancelFunc
-	tearDown func() error
+	stream       tunnelStreamClient
+	updateWindow func(msg *ServerToClient)
+	ctx          context.Context
+	cancel       context.CancelFunc
+	tearDown     func() error
 
 	// WARNING this mutex MUST NOT be held while blocking on sending to a stream
 	mu            sync.RWMutex
@@ -81,17 +82,19 @@ func newChannel(c *channelConfig) *Channel {
 
 	// initialise flow control, wrapping stream
 	// WARNING not ready for use yet (needs to be wired up with the ChanneL)
-	fc := &flowControlClient{tunnelStreamClient: stream}
-	stream = flowcontrol.NewConn[uint64, *ClientToServer, *ServerToClient](fc)
+	fcInterface := &flowControlClient{tunnelStreamClient: stream}
+	fcConn := flowcontrol.NewConn[uint64, *ClientToServer, *ServerToClient](fcInterface)
+	stream = fcConn
 
 	ch := Channel{
-		stream:   stream,
-		tearDown: tearDown,
-		streams:  make(map[uint64]*tunnelClientStream),
+		stream:       stream,
+		updateWindow: fcConn.UpdateWindow,
+		tearDown:     tearDown,
+		streams:      make(map[uint64]*tunnelClientStream),
 	}
 
-	// finish wiring up fc with ch
-	fc.ch = &ch
+	// finish wiring up fcInterface with ch
+	fcInterface.ch = &ch
 
 	// finish initialisation of ch, starting the recv worker
 	ch.ctx, ch.cancel = context.WithCancel(stream.Context())
@@ -239,7 +242,6 @@ func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStrea
 		panic(errors.New("sesame/tun/grpc: next stream ID not available"))
 	}
 
-	ch := make(chan isServerToClient_Frame, windowMaxBuffer)
 	ctx, cncl := context.WithCancel(ctx)
 	str := &tunnelClientStream{
 		ctx:              ctx,
@@ -252,8 +254,7 @@ func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStrea
 		trailersTargets:  tlrs,
 		isClientStream:   clientStreams,
 		isServerStream:   serverStreams,
-		ingestChan:       ch,
-		readChan:         ch,
+		buffer:           make(chan *ServerToClient, windowMaxBuffer),
 		gotHeadersSignal: make(chan struct{}),
 		doneSignal:       make(chan struct{}),
 	}
@@ -264,29 +265,29 @@ func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStrea
 
 func (c *Channel) recvLoop() {
 	for {
-		in, err := c.stream.Recv()
+		msg, err := c.stream.Recv()
 		if err != nil {
 			_ = c.close(err)
 			return
 		}
 
-		if in.GetStreamId() == 0 || in.GetFrame() == nil {
+		if msg.GetStreamId() == 0 || msg.GetFrame() == nil {
 			_ = c.close(errors.New("sesame/tun/grpc: invalid frame"))
 			return
 		}
 
-		str, err := c.getStream(in.StreamId)
+		str, err := c.getStream(msg.StreamId)
 		if err != nil {
 			_ = c.close(err)
 			return
 		}
 
-		if _, ok := in.GetFrame().(*ServerToClient_WindowUpdate); ok {
+		if _, ok := msg.GetFrame().(*ServerToClient_WindowUpdate); ok {
 			// handled in the flow control wrapper impl.
 			continue
 		}
 
-		str.acceptServerFrame(in.Frame)
+		str.acceptServerFrame(msg)
 	}
 }
 
@@ -358,20 +359,17 @@ type tunnelClientStream struct {
 	isClientStream bool
 	isServerStream bool
 
-	// for "ingesting" frames into channel, from receive loop
+	buffer chan *ServerToClient
+
 	ingestMu         sync.Mutex
-	ingestChan       chan<- isServerToClient_Frame
 	gotHeaders       bool
 	gotHeadersSignal chan struct{}
 	headers          metadata.MD
 	done             error
 	doneSignal       chan struct{}
 	trailers         metadata.MD
-
-	// for reading frames from channel, to read message data
-	readMu   sync.Mutex
-	readChan <-chan isServerToClient_Frame
-	readErr  error
+	readMu           sync.Mutex
+	readErr          error
 
 	// for message frame to server (WARNING: unsafe to hold while sending cancelation etc)
 	writeMu sync.Mutex
@@ -541,20 +539,22 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 	msgLen := -1
 	var b []byte
 	for {
-		in, ok := <-st.readChan
+		msg, ok := <-st.buffer
 		if !ok {
 			// don't need lock to read st.done; observing
 			// input channel close provides safe visibility
 			return nil, true, st.done
 		}
 
-		switch in := in.(type) {
+		st.ch.updateWindow(msg)
+
+		switch frame := msg.GetFrame().(type) {
 		case *ServerToClient_Message:
 			if msgLen != -1 {
 				return nil, false, status.Errorf(codes.Internal, "server sent redundant response message envelope")
 			}
-			msgLen = int(in.Message.Size)
-			b = in.Message.Data
+			msgLen = int(frame.Message.Size)
+			b = frame.Message.Data
 			if len(b) > msgLen {
 				return nil, false, status.Errorf(codes.Internal, "server sent more data than indicated by response message envelope")
 			}
@@ -566,7 +566,7 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 			if msgLen == -1 {
 				return nil, false, status.Errorf(codes.Internal, "server never sent envelope for response message")
 			}
-			b = append(b, in.MessageData...)
+			b = append(b, frame.MessageData...)
 			if len(b) > msgLen {
 				return nil, false, status.Errorf(codes.Internal, "server sent more data than indicated by response message envelope")
 			}
@@ -575,7 +575,7 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 			}
 
 		default:
-			return nil, false, status.Errorf(codes.Internal, "unrecognized frame type: %T", in)
+			return nil, false, status.Errorf(codes.Internal, "unrecognized frame type: %T", frame)
 		}
 	}
 }
@@ -589,7 +589,7 @@ func (st *tunnelClientStream) err() error {
 	}
 }
 
-func (st *tunnelClientStream) acceptServerFrame(frame isServerToClient_Frame) {
+func (st *tunnelClientStream) acceptServerFrame(msg *ServerToClient) {
 	if st == nil {
 		// can happen if client decided that the stream ID was recently used
 		// yet inactive -- it returns nil error but also nil stream, which
@@ -598,7 +598,7 @@ func (st *tunnelClientStream) acceptServerFrame(frame isServerToClient_Frame) {
 		return
 	}
 
-	switch frame := frame.(type) {
+	switch frame := msg.GetFrame().(type) {
 	case *ServerToClient_Header:
 		st.ingestMu.Lock()
 		defer st.ingestMu.Unlock()
@@ -628,7 +628,7 @@ func (st *tunnelClientStream) acceptServerFrame(frame isServerToClient_Frame) {
 	}
 
 	select {
-	case st.ingestChan <- frame:
+	case st.buffer <- msg:
 	case <-st.ctx.Done():
 	}
 }
@@ -673,6 +673,6 @@ func (st *tunnelClientStream) finishStream(err error, trailers metadata.MD) {
 	}
 	st.done = err
 
-	close(st.ingestChan)
+	close(st.buffer)
 	close(st.doneSignal)
 }

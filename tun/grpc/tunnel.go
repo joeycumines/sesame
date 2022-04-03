@@ -52,18 +52,20 @@ func serveTunnel(c *tunnelConfig) error {
 
 	// initialise flow control, wrapping stream
 	// WARNING not ready for use yet (needs to be wired up with the tunnelServer)
-	fc := &flowControlServer{tunnelStreamServer: stream}
-	stream = flowcontrol.NewConn[uint64, *ServerToClient, *ClientToServer](fc)
+	fcInterface := &flowControlServer{tunnelStreamServer: stream}
+	fcConn := flowcontrol.NewConn[uint64, *ServerToClient, *ClientToServer](fcInterface)
+	stream = fcConn
 
 	tun := tunnelServer{
-		stream:   stream,
-		services: c.handlers.get().val.grpchan(),
-		stop:     c.stop.get().ch,
-		streams:  make(map[uint64]*tunnelServerStream),
+		stream:       stream,
+		updateWindow: fcConn.UpdateWindow,
+		services:     c.handlers.get().val.grpchan(),
+		stop:         c.stop.get().ch,
+		streams:      make(map[uint64]*tunnelServerStream),
 	}
 
-	// finish wiring up fc with tun
-	fc.tun = &tun
+	// finish wiring up fcInterface with tun
+	fcInterface.tun = &tun
 
 	// start serving the tunnel
 	return tun.serve()
@@ -76,9 +78,10 @@ type tunnelStreamServer interface {
 }
 
 type tunnelServer struct {
-	stream   tunnelStreamServer
-	services grpchan.HandlerMap
-	stop     <-chan struct{} // graceful
+	stream       tunnelStreamServer
+	updateWindow func(msg *ClientToServer)
+	services     grpchan.HandlerMap
+	stop         <-chan struct{} // graceful
 
 	// WARNING this mutex MUST NOT be held while blocking on sending to a stream
 	mu       sync.RWMutex
@@ -106,7 +109,7 @@ func (s *tunnelServer) serve() error {
 		defer cancel()
 		out <- func() error {
 			for {
-				in, err := s.stream.Recv()
+				msg, err := s.stream.Recv()
 				if err != nil {
 					if err == io.EOF {
 						return nil
@@ -114,19 +117,19 @@ func (s *tunnelServer) serve() error {
 					return err
 				}
 
-				if in.GetStreamId() == 0 || in.GetFrame() == nil {
+				if msg.GetStreamId() == 0 || msg.GetFrame() == nil {
 					return status.Error(codes.InvalidArgument, "invalid frame")
 				}
 
-				if f, ok := in.Frame.(*ClientToServer_NewStream_); ok {
+				if f, ok := msg.Frame.(*ClientToServer_NewStream_); ok {
 					// TODO don't block on this
-					if ok, err := s.createStream(ctx, in.StreamId, f.NewStream); err != nil {
+					if ok, err := s.createStream(ctx, msg.StreamId, f.NewStream); err != nil {
 						if !ok {
 							return err
 						} else {
 							st, _ := status.FromError(err)
 							_ = s.stream.Send(&ServerToClient{
-								StreamId: in.StreamId,
+								StreamId: msg.StreamId,
 								Frame: &ServerToClient_CloseStream_{
 									CloseStream: &ServerToClient_CloseStream{
 										Status: st.Proto(),
@@ -138,17 +141,17 @@ func (s *tunnelServer) serve() error {
 					continue
 				}
 
-				str, err := s.getStream(in.StreamId)
+				str, err := s.getStream(msg.StreamId)
 				if err != nil {
 					return err
 				}
 
-				if _, ok := in.GetFrame().(*ClientToServer_WindowUpdate); ok {
+				if _, ok := msg.GetFrame().(*ClientToServer_WindowUpdate); ok {
 					// handled in the flow control wrapper impl.
 					continue
 				}
 
-				str.acceptClientFrame(in.Frame)
+				str.acceptClientFrame(msg)
 			}
 		}()
 	}()
@@ -241,13 +244,13 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 
 	str := &tunnelServerStream{
 		ctx:            ctx,
-		svr:            s,
+		tun:            s,
 		streamID:       streamID,
 		method:         frame.Method,
 		stream:         s.stream,
 		isClientStream: isClientStream,
 		isServerStream: isServerStream,
-		buffer:         make(chan isClientToServer_Frame, windowMaxBuffer),
+		buffer:         make(chan *ClientToServer, windowMaxBuffer),
 		closed:         make(chan struct{}),
 	}
 	s.streams[streamID] = str
@@ -295,7 +298,7 @@ func findMethod(sd *grpc.ServiceDesc, method string) interface{} {
 
 type tunnelServerStream struct {
 	ctx      context.Context
-	svr      *tunnelServer
+	tun      *tunnelServer
 	streamID uint64
 	method   string
 	stream   tunnelStreamServer
@@ -306,7 +309,7 @@ type tunnelServerStream struct {
 	isClientStream bool
 	isServerStream bool
 
-	buffer     chan isClientToServer_Frame
+	buffer     chan *ClientToServer
 	halfClosed error
 	readMu     sync.Mutex
 	readErr    error
@@ -321,7 +324,7 @@ type tunnelServerStream struct {
 	hasSent bool
 }
 
-func (st *tunnelServerStream) acceptClientFrame(frame isClientToServer_Frame) {
+func (st *tunnelServerStream) acceptClientFrame(msg *ClientToServer) {
 	if st == nil {
 		// can happen if server decided that the stream ID was recently used
 		// yet inactive -- it returns nil error but also nil stream, which
@@ -330,7 +333,7 @@ func (st *tunnelServerStream) acceptClientFrame(frame isClientToServer_Frame) {
 		return
 	}
 
-	switch frame.(type) {
+	switch msg.GetFrame().(type) {
 	case *ClientToServer_HalfClose:
 		st.halfClose(io.EOF)
 		return
@@ -347,7 +350,7 @@ func (st *tunnelServerStream) acceptClientFrame(frame isClientToServer_Frame) {
 	}
 
 	select {
-	case st.buffer <- frame:
+	case st.buffer <- msg:
 	case <-st.closed:
 	case <-st.ctx.Done():
 	}
@@ -579,20 +582,22 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 		case <-st.closed:
 			return nil, true, context.Canceled
 
-		case in, ok := <-st.buffer:
+		case msg, ok := <-st.buffer:
 			if !ok {
 				// don't need lock to read st.halfClosed; observing
 				// input channel close provides safe visibility
 				return nil, true, st.halfClosed
 			}
 
-			switch in := in.(type) {
+			st.tun.updateWindow(msg)
+
+			switch frame := msg.GetFrame().(type) {
 			case *ClientToServer_Message:
 				if msgLen != -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "received redundant request message envelope")
 				}
-				msgLen = int(in.Message.Size)
-				b = in.Message.Data
+				msgLen = int(frame.Message.Size)
+				b = frame.Message.Data
 				if len(b) > msgLen {
 					return nil, false, status.Errorf(codes.InvalidArgument, "received more data than indicated by request message envelope")
 				}
@@ -604,7 +609,7 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 				if msgLen == -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "never received envelope for request message")
 				}
-				b = append(b, in.MessageData...)
+				b = append(b, frame.MessageData...)
 				if len(b) > msgLen {
 					return nil, false, status.Errorf(codes.InvalidArgument, "received more data than indicated by request message envelope")
 				}
@@ -613,7 +618,7 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 				}
 
 			default:
-				return nil, false, status.Errorf(codes.InvalidArgument, "unrecognized frame type: %T", in)
+				return nil, false, status.Errorf(codes.InvalidArgument, "unrecognized frame type: %T", frame)
 			}
 		}
 	}
@@ -647,7 +652,7 @@ func (st *tunnelServerStream) serveStream(md interface{}, srv interface{}) {
 }
 
 func (st *tunnelServerStream) finishStream(err error) {
-	defer st.svr.removeStream(st.streamID)
+	defer st.tun.removeStream(st.streamID)
 
 	st.stateMu.Lock()
 	defer st.stateMu.Unlock()
