@@ -18,10 +18,14 @@ import (
 	"time"
 )
 
-var clientConnFactories = map[string]testutil.ClientConnFactory{
-	`tunnel_netpipe`:         tunnelCCFactory(testutil.NetpipeClientConnFactory),
-	`reverse_tunnel_netpipe`: reverseTunnelCCFactory(testutil.NetpipeClientConnFactory),
-}
+var clientConnFactories = func() (m map[string]testutil.ClientConnFactory) {
+	m = make(map[string]testutil.ClientConnFactory)
+	for k, f := range testutil.ClientConnFactories {
+		m[`tunnel_`+k] = tunnelCCFactory(f)
+		m[`reverse_tunnel_`+k] = reverseTunnelCCFactory(f)
+	}
+	return
+}()
 
 func reverseTunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.ClientConnFactory {
 	return func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
