@@ -42,6 +42,8 @@ These will be added/updated as they're adopted or change... that's the hope, any
         3. [GAPIC (Generated API Client) showcase](https://github.com/googleapis/gapic-showcase)
            TODO evaluate this
     2. Packages under `genproto` should be entirely auto-generated
+        1. Exceptions may be made where sensible, e.g. the `New` factory and `As<Go type>` methods, commonly implemented
+           by the Go packages for the core "well-known types", provided by protobuf
     3. Generating all Protobuf and gRPC source under `genproto` is not required, but should be considered
         1. The top-level `genproto` path/structure is ok
         2. Similar `genproto` paths/structures (under other path(s)) are ok
