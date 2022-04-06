@@ -16,6 +16,7 @@ package grpc
 
 import (
 	"github.com/fullstorydev/grpchan"
+	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -63,9 +64,9 @@ type TunnelServer struct {
 	unimplementedTunnelServiceServer
 }
 
-type unimplementedTunnelServiceServer = UnimplementedTunnelServiceServer
+type unimplementedTunnelServiceServer = grpctunnel.UnimplementedTunnelServiceServer
 
-var _ TunnelServiceServer = (*TunnelServer)(nil)
+var _ grpctunnel.TunnelServiceServer = (*TunnelServer)(nil)
 var _ grpc.ServiceRegistrar = (*TunnelServer)(nil)
 
 func (s *TunnelServer) RegisterService(desc *grpc.ServiceDesc, srv interface{}) {
@@ -79,7 +80,7 @@ func (s *TunnelServer) GetServiceInfo() map[string]grpc.ServiceInfo {
 	return s.handlers.GetServiceInfo()
 }
 
-func (s *TunnelServer) OpenTunnel(stream TunnelService_OpenTunnelServer) error {
+func (s *TunnelServer) OpenTunnel(stream grpctunnel.TunnelService_OpenTunnelServer) error {
 	if len(s.handlers) == 0 {
 		return status.Error(codes.Unimplemented, "forward tunnels not supported")
 	}
@@ -93,7 +94,7 @@ func (s *TunnelServer) OpenTunnel(stream TunnelService_OpenTunnelServer) error {
 	return ServeTunnel(options...)
 }
 
-func (s *TunnelServer) OpenReverseTunnel(stream TunnelService_OpenReverseTunnelServer) error {
+func (s *TunnelServer) OpenReverseTunnel(stream grpctunnel.TunnelService_OpenReverseTunnelServer) error {
 	if s.NoReverseTunnels {
 		return status.Error(codes.Unimplemented, "reverse tunnels not supported")
 	}

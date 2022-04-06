@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/fullstorydev/grpchan/grpchantesting"
+	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
 	"github.com/joeycumines/sesame/internal/testutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -48,10 +49,10 @@ func TestTunnelServer(t *testing.T) {
 
 	t.Run("forward", func(t *testing.T) {
 		checkForGoroutineLeak(t, func() {
-			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { RegisterTunnelServiceServer(srv, &ts) })
+			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { grpctunnel.RegisterTunnelServiceServer(srv, &ts) })
 			defer cc.Close()
 
-			tunnel, err := NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+			tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
 			if err != nil {
 				t.Fatalf("failed to open tunnel: %v", err)
 			}
@@ -68,10 +69,10 @@ func TestTunnelServer(t *testing.T) {
 
 	t.Run("reverse", func(t *testing.T) {
 		checkForGoroutineLeak(t, func() {
-			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { RegisterTunnelServiceServer(srv, &ts) })
+			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { grpctunnel.RegisterTunnelServiceServer(srv, &ts) })
 			defer cc.Close()
 
-			tunnel, err := NewTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
+			tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
 			if err != nil {
 				t.Fatalf("failed to open reverse tunnel: %v", err)
 			}
@@ -117,10 +118,10 @@ func ExampleTunnelServer_reflection() {
 	reflection.Register(svc)
 	grpchantesting.RegisterTestServiceServer(svc, new(grpchantesting.TestServer))
 
-	conn := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { RegisterTunnelServiceServer(srv, svc) })
+	conn := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { grpctunnel.RegisterTunnelServiceServer(srv, svc) })
 	defer conn.Close()
 
-	tunnel, err := NewTunnelServiceClient(conn).OpenTunnel(context.Background())
+	tunnel, err := grpctunnel.NewTunnelServiceClient(conn).OpenTunnel(context.Background())
 	if err != nil {
 		panic(err)
 	}

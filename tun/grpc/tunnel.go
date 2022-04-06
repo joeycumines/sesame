@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/fullstorydev/grpchan"
 	"github.com/joeycumines/sesame/genproto/type/grpcmetadata"
+	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
 	"github.com/joeycumines/sesame/internal/flowcontrol"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -70,7 +71,7 @@ func serveTunnel(c *tunnelConfig) error {
 	// initialise flow control, wrapping stream
 	// WARNING not ready for use yet (needs to be wired up with the tunnelServer)
 	fcInterface := &flowControlServer{tunnelStreamServer: stream}
-	fcConn := flowcontrol.NewConn[uint64, *ServerToClient, *ClientToServer](fcInterface)
+	fcConn := flowcontrol.NewConn[uint64, *grpctunnel.ServerToClient, *grpctunnel.ClientToServer](fcInterface)
 	stream = fcConn
 
 	tun := tunnelServer{
@@ -90,13 +91,13 @@ func serveTunnel(c *tunnelConfig) error {
 
 type tunnelStreamServer interface {
 	Context() context.Context
-	Send(*ServerToClient) error
-	Recv() (*ClientToServer, error)
+	Send(*grpctunnel.ServerToClient) error
+	Recv() (*grpctunnel.ClientToServer, error)
 }
 
 type tunnelServer struct {
 	stream       tunnelStreamServer
-	updateWindow func(msg *ClientToServer)
+	updateWindow func(msg *grpctunnel.ClientToServer)
 	services     grpchan.HandlerMap
 	stop         <-chan struct{} // graceful
 
@@ -140,16 +141,16 @@ func (s *tunnelServer) serve() error {
 					return status.Error(codes.InvalidArgument, "invalid frame")
 				}
 
-				if f, ok := msg.Frame.(*ClientToServer_NewStream_); ok {
+				if f, ok := msg.Frame.(*grpctunnel.ClientToServer_NewStream_); ok {
 					if ok, err := s.createStream(ctx, msg.StreamId, f.NewStream); err != nil {
 						if !ok {
 							return err
 						} else {
 							st, _ := status.FromError(err)
-							_ = s.stream.Send(&ServerToClient{
+							_ = s.stream.Send(&grpctunnel.ServerToClient{
 								StreamId: msg.StreamId,
-								Frame: &ServerToClient_CloseStream_{
-									CloseStream: &ServerToClient_CloseStream{
+								Frame: &grpctunnel.ServerToClient_CloseStream_{
+									CloseStream: &grpctunnel.ServerToClient_CloseStream{
 										Status: st.Proto(),
 									},
 								},
@@ -164,7 +165,7 @@ func (s *tunnelServer) serve() error {
 					return err
 				}
 
-				if _, ok := msg.GetFrame().(*ClientToServer_WindowUpdate); ok {
+				if _, ok := msg.GetFrame().(*grpctunnel.ClientToServer_WindowUpdate); ok {
 					// handled in the flow control wrapper impl.
 					continue
 				}
@@ -215,7 +216,7 @@ func (s *tunnelServer) waitAllStreams(ctx context.Context) error {
 	}
 }
 
-func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame *ClientToServer_NewStream) (bool, error) {
+func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame *grpctunnel.ClientToServer_NewStream) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -269,7 +270,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 		stream:         s.stream,
 		isClientStream: isClientStream,
 		isServerStream: isServerStream,
-		buffer:         make(chan *ClientToServer, windowMaxBuffer),
+		buffer:         make(chan *grpctunnel.ClientToServer, windowMaxBuffer),
 		closed:         make(chan struct{}),
 	}
 	s.streams[streamID] = str
@@ -329,7 +330,7 @@ type tunnelServerStream struct {
 	isServerStream bool
 
 	ingestMu   sync.Mutex
-	buffer     chan *ClientToServer
+	buffer     chan *grpctunnel.ClientToServer
 	halfClosed error
 
 	readMu  sync.Mutex
@@ -345,7 +346,7 @@ type tunnelServerStream struct {
 	hasSent bool
 }
 
-func (st *tunnelServerStream) acceptClientFrame(msg *ClientToServer) {
+func (st *tunnelServerStream) acceptClientFrame(msg *grpctunnel.ClientToServer) {
 	if st == nil {
 		// can happen if server decided that the stream ID was recently used
 		// yet inactive -- it returns nil error but also nil stream, which
@@ -355,11 +356,11 @@ func (st *tunnelServerStream) acceptClientFrame(msg *ClientToServer) {
 	}
 
 	switch msg.GetFrame().(type) {
-	case *ClientToServer_HalfClose:
+	case *grpctunnel.ClientToServer_HalfClose:
 		st.halfClose(io.EOF)
 		return
 
-	case *ClientToServer_Cancel:
+	case *grpctunnel.ClientToServer_Cancel:
 		st.finishStream(context.Canceled)
 		return
 	}
@@ -405,9 +406,9 @@ func (st *tunnelServerStream) setHeader(md metadata.MD, send bool) error {
 }
 
 func (st *tunnelServerStream) sendHeadersLocked() error {
-	err := st.stream.Send(&ServerToClient{
+	err := st.stream.Send(&grpctunnel.ServerToClient{
 		StreamId: st.streamID,
-		Frame: &ServerToClient_Header{
+		Frame: &grpctunnel.ServerToClient_Header{
 			Header: toProto(st.header),
 		},
 	})
@@ -511,19 +512,19 @@ func (st *tunnelServerStream) SendMsg(m interface{}) error {
 		}
 
 		if i == 0 {
-			err = st.stream.Send(&ServerToClient{
+			err = st.stream.Send(&grpctunnel.ServerToClient{
 				StreamId: st.streamID,
-				Frame: &ServerToClient_Message{
-					Message: &EncodedMessage{
+				Frame: &grpctunnel.ServerToClient_Message{
+					Message: &grpctunnel.EncodedMessage{
 						Size: int32(len(b)),
 						Data: chunk,
 					},
 				},
 			})
 		} else {
-			err = st.stream.Send(&ServerToClient{
+			err = st.stream.Send(&grpctunnel.ServerToClient{
 				StreamId: st.streamID,
-				Frame: &ServerToClient_MessageData{
+				Frame: &grpctunnel.ServerToClient_MessageData{
 					MessageData: chunk,
 				},
 			})
@@ -612,7 +613,7 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 			st.tun.updateWindow(msg)
 
 			switch frame := msg.GetFrame().(type) {
-			case *ClientToServer_Message:
+			case *grpctunnel.ClientToServer_Message:
 				if msgLen != -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "received redundant request message envelope")
 				}
@@ -625,7 +626,7 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 					return b, true, nil
 				}
 
-			case *ClientToServer_MessageData:
+			case *grpctunnel.ClientToServer_MessageData:
 				if msgLen == -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "never received envelope for request message")
 				}
@@ -691,10 +692,10 @@ func (st *tunnelServerStream) finishStream(err error) {
 	}
 
 	stat, _ := status.FromError(err)
-	_ = st.stream.Send(&ServerToClient{
+	_ = st.stream.Send(&grpctunnel.ServerToClient{
 		StreamId: st.streamID,
-		Frame: &ServerToClient_CloseStream_{
-			CloseStream: &ServerToClient_CloseStream{
+		Frame: &grpctunnel.ServerToClient_CloseStream_{
+			CloseStream: &grpctunnel.ServerToClient_CloseStream{
 				Status:  stat.Proto(),
 				Trailer: toProto(st.trailer),
 			},

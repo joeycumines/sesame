@@ -3,6 +3,7 @@ package grpc
 import (
 	"fmt"
 	"github.com/fullstorydev/grpchan"
+	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
 	"google.golang.org/grpc"
 )
 
@@ -95,7 +96,7 @@ var (
 //
 // This option group (ClientStream, ServerStream) must be provided exactly once.
 // This method may be accessed via the OptChannel package variable.
-func (ChannelOptions) ClientStream(stream TunnelService_OpenTunnelClient) ChannelOption {
+func (ChannelOptions) ClientStream(stream grpctunnel.TunnelService_OpenTunnelClient) ChannelOption {
 	return func(c *channelConfig) {
 		var v channelConfigStream
 		if stream != nil {
@@ -112,7 +113,7 @@ func (ChannelOptions) ClientStream(stream TunnelService_OpenTunnelClient) Channe
 //
 // This option group (ClientStream, ServerStream) must be provided exactly once.
 // This method may be accessed via the OptChannel package variable.
-func (ChannelOptions) ServerStream(stream TunnelService_OpenReverseTunnelServer) ChannelOption {
+func (ChannelOptions) ServerStream(stream grpctunnel.TunnelService_OpenReverseTunnelServer) ChannelOption {
 	return func(c *channelConfig) { c.stream.set(channelConfigStream{stream: stream}) }
 }
 
@@ -120,7 +121,7 @@ func (ChannelOptions) ServerStream(stream TunnelService_OpenReverseTunnelServer)
 //
 // This option group (ClientStream, ServerStream) must be provided exactly once.
 // This method may be accessed via the OptTunnel package variable.
-func (TunnelOptions) ClientStream(stream TunnelService_OpenReverseTunnelClient) TunnelOption {
+func (TunnelOptions) ClientStream(stream grpctunnel.TunnelService_OpenReverseTunnelClient) TunnelOption {
 	return func(c *tunnelConfig) { c.stream.set(tunnelConfigStream{stream: stream}) }
 }
 
@@ -128,7 +129,7 @@ func (TunnelOptions) ClientStream(stream TunnelService_OpenReverseTunnelClient) 
 //
 // This option group (ClientStream, ServerStream) must be provided exactly once.
 // This method may be accessed via the OptTunnel package variable.
-func (TunnelOptions) ServerStream(stream TunnelService_OpenTunnelServer) TunnelOption {
+func (TunnelOptions) ServerStream(stream grpctunnel.TunnelService_OpenTunnelServer) TunnelOption {
 	return func(c *tunnelConfig) { c.stream.set(tunnelConfigStream{stream: stream}) }
 }
 

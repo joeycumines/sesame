@@ -3,6 +3,7 @@ package grpc
 import (
 	"errors"
 	"fmt"
+	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
 	"github.com/joeycumines/sesame/internal/flowcontrol"
 	"golang.org/x/net/context"
 	"io"
@@ -32,7 +33,7 @@ type (
 	tunnelStreamClientWrapper struct {
 		stream   tunnelStreamClient
 		tearDown func() error
-		in       chan *ClientToServer
+		in       chan *grpctunnel.ClientToServer
 		out      chan error
 		once     sync.Once
 		stop     chan struct{}
@@ -79,7 +80,7 @@ func newTunnelStreamClientWrapper(stream tunnelStreamClient, tearDown func() err
 	r := tunnelStreamClientWrapper{
 		stream:   stream,
 		tearDown: tearDown,
-		in:       make(chan *ClientToServer),
+		in:       make(chan *grpctunnel.ClientToServer),
 		out:      make(chan error),
 		stop:     make(chan struct{}),
 		done:     make(chan struct{}),
@@ -90,9 +91,11 @@ func newTunnelStreamClientWrapper(stream tunnelStreamClient, tearDown func() err
 
 func (x *tunnelStreamClientWrapper) Context() context.Context { return x.stream.Context() }
 
-func (x *tunnelStreamClientWrapper) Recv() (*ServerToClient, error) { return x.stream.Recv() }
+func (x *tunnelStreamClientWrapper) Recv() (*grpctunnel.ServerToClient, error) {
+	return x.stream.Recv()
+}
 
-func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
+func (x *tunnelStreamClientWrapper) Send(msg *grpctunnel.ClientToServer) error {
 	// wait for a send attempt / result
 	// note we don't need to pre-emptively check x.stop, it's checked in the worker
 	select {
@@ -155,31 +158,33 @@ func newTunnelStreamServerWrapper(stream tunnelStreamServer) *tunnelStreamServer
 
 func (x *tunnelStreamServerWrapper) Context() context.Context { return x.stream.Context() }
 
-func (x *tunnelStreamServerWrapper) Send(msg *ServerToClient) error {
+func (x *tunnelStreamServerWrapper) Send(msg *grpctunnel.ServerToClient) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	return x.stream.Send(msg)
 }
 
-func (x *tunnelStreamServerWrapper) Recv() (*ClientToServer, error) { return x.stream.Recv() }
-
-func (x *flowControlClient) SendWindowUpdate(streamID uint64, windowUpdate uint32) *ClientToServer {
-	return &ClientToServer{StreamId: streamID, Frame: &ClientToServer_WindowUpdate{WindowUpdate: windowUpdate}}
+func (x *tunnelStreamServerWrapper) Recv() (*grpctunnel.ClientToServer, error) {
+	return x.stream.Recv()
 }
-func (x *flowControlClient) RecvWindowUpdate(msg *ServerToClient) (uint32, bool) {
-	if v, ok := msg.GetFrame().(*ServerToClient_WindowUpdate); ok {
+
+func (x *flowControlClient) SendWindowUpdate(streamID uint64, windowUpdate uint32) *grpctunnel.ClientToServer {
+	return &grpctunnel.ClientToServer{StreamId: streamID, Frame: &grpctunnel.ClientToServer_WindowUpdate{WindowUpdate: windowUpdate}}
+}
+func (x *flowControlClient) RecvWindowUpdate(msg *grpctunnel.ServerToClient) (uint32, bool) {
+	if v, ok := msg.GetFrame().(*grpctunnel.ServerToClient_WindowUpdate); ok {
 		return v.WindowUpdate, true
 	}
 	return 0, false
 }
-func (x *flowControlClient) SendSize(msg *ClientToServer) (uint32, bool) {
+func (x *flowControlClient) SendSize(msg *grpctunnel.ClientToServer) (uint32, bool) {
 	return clientToServerMessageSize(msg)
 }
-func (x *flowControlClient) RecvSize(msg *ServerToClient) (uint32, bool) {
+func (x *flowControlClient) RecvSize(msg *grpctunnel.ServerToClient) (uint32, bool) {
 	return serverToClientMessageSize(msg)
 }
-func (x *flowControlClient) SendKey(msg *ClientToServer) uint64 { return msg.GetStreamId() }
-func (x *flowControlClient) RecvKey(msg *ServerToClient) uint64 { return msg.GetStreamId() }
+func (x *flowControlClient) SendKey(msg *grpctunnel.ClientToServer) uint64 { return msg.GetStreamId() }
+func (x *flowControlClient) RecvKey(msg *grpctunnel.ServerToClient) uint64 { return msg.GetStreamId() }
 func (x *flowControlClient) SendLoad(streamID uint64) int64 {
 	x.ch.mu.RLock()
 	defer x.ch.mu.RUnlock()
@@ -219,23 +224,23 @@ func (x *flowControlClient) StreamContext(streamID uint64) context.Context {
 	return flowcontrol.StreamNotFound
 }
 
-func (x *flowControlServer) SendWindowUpdate(streamID uint64, windowUpdate uint32) *ServerToClient {
-	return &ServerToClient{StreamId: streamID, Frame: &ServerToClient_WindowUpdate{WindowUpdate: windowUpdate}}
+func (x *flowControlServer) SendWindowUpdate(streamID uint64, windowUpdate uint32) *grpctunnel.ServerToClient {
+	return &grpctunnel.ServerToClient{StreamId: streamID, Frame: &grpctunnel.ServerToClient_WindowUpdate{WindowUpdate: windowUpdate}}
 }
-func (x *flowControlServer) RecvWindowUpdate(msg *ClientToServer) (uint32, bool) {
-	if v, ok := msg.GetFrame().(*ClientToServer_WindowUpdate); ok {
+func (x *flowControlServer) RecvWindowUpdate(msg *grpctunnel.ClientToServer) (uint32, bool) {
+	if v, ok := msg.GetFrame().(*grpctunnel.ClientToServer_WindowUpdate); ok {
 		return v.WindowUpdate, true
 	}
 	return 0, false
 }
-func (x *flowControlServer) SendSize(msg *ServerToClient) (uint32, bool) {
+func (x *flowControlServer) SendSize(msg *grpctunnel.ServerToClient) (uint32, bool) {
 	return serverToClientMessageSize(msg)
 }
-func (x *flowControlServer) RecvSize(msg *ClientToServer) (uint32, bool) {
+func (x *flowControlServer) RecvSize(msg *grpctunnel.ClientToServer) (uint32, bool) {
 	return clientToServerMessageSize(msg)
 }
-func (x *flowControlServer) SendKey(msg *ServerToClient) uint64 { return msg.GetStreamId() }
-func (x *flowControlServer) RecvKey(msg *ClientToServer) uint64 { return msg.GetStreamId() }
+func (x *flowControlServer) SendKey(msg *grpctunnel.ServerToClient) uint64 { return msg.GetStreamId() }
+func (x *flowControlServer) RecvKey(msg *grpctunnel.ClientToServer) uint64 { return msg.GetStreamId() }
 func (x *flowControlServer) SendLoad(streamID uint64) int64 {
 	x.tun.mu.RLock()
 	defer x.tun.mu.RUnlock()
@@ -288,12 +293,12 @@ func (flowControlConfig) RecvConfig(streamID uint64) flowcontrol.Config {
 	}
 }
 
-func clientToServerMessageSize(msg *ClientToServer) (uint32, bool) {
+func clientToServerMessageSize(msg *grpctunnel.ClientToServer) (uint32, bool) {
 	var size int
 	switch frame := msg.GetFrame().(type) {
-	case *ClientToServer_Message:
+	case *grpctunnel.ClientToServer_Message:
 		size = len(frame.Message.GetData())
-	case *ClientToServer_MessageData:
+	case *grpctunnel.ClientToServer_MessageData:
 		size = len(frame.MessageData)
 	default:
 		return 0, false
@@ -303,12 +308,12 @@ func clientToServerMessageSize(msg *ClientToServer) (uint32, bool) {
 	}
 	return uint32(size), true
 }
-func serverToClientMessageSize(msg *ServerToClient) (uint32, bool) {
+func serverToClientMessageSize(msg *grpctunnel.ServerToClient) (uint32, bool) {
 	var size int
 	switch frame := msg.GetFrame().(type) {
-	case *ServerToClient_Message:
+	case *grpctunnel.ServerToClient_Message:
 		size = len(frame.Message.GetData())
-	case *ServerToClient_MessageData:
+	case *grpctunnel.ServerToClient_MessageData:
 		size = len(frame.MessageData)
 	default:
 		return 0, false

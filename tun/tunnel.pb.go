@@ -7,7 +7,7 @@
 package tun
 
 import (
-	grpc "github.com/joeycumines/sesame/tun/grpc"
+	grpctunnel "github.com/joeycumines/sesame/genproto/type/grpctunnel"
 	status "google.golang.org/genproto/googleapis/rpc/status"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -263,7 +263,7 @@ func (x *StreamRequest) GetDial() *StreamRequest_Dial {
 	return nil
 }
 
-func (x *StreamRequest) GetTunnel() *grpc.ServerToClient {
+func (x *StreamRequest) GetTunnel() *grpctunnel.ServerToClient {
 	if x, ok := x.GetData().(*StreamRequest_Tunnel); ok {
 		return x.Tunnel
 	}
@@ -283,7 +283,7 @@ type StreamRequest_Dial_ struct {
 }
 
 type StreamRequest_Tunnel struct {
-	Tunnel *grpc.ServerToClient `protobuf:"bytes,3,opt,name=tunnel,proto3,oneof"`
+	Tunnel *grpctunnel.ServerToClient `protobuf:"bytes,3,opt,name=tunnel,proto3,oneof"`
 }
 
 func (*StreamRequest_Connect_) isStreamRequest_Data() {}
@@ -357,7 +357,7 @@ func (x *StreamResponse) GetDial() *StreamResponse_Dial {
 	return nil
 }
 
-func (x *StreamResponse) GetTunnel() *grpc.ClientToServer {
+func (x *StreamResponse) GetTunnel() *grpctunnel.ClientToServer {
 	if x, ok := x.GetData().(*StreamResponse_Tunnel); ok {
 		return x.Tunnel
 	}
@@ -377,7 +377,7 @@ type StreamResponse_Dial_ struct {
 }
 
 type StreamResponse_Tunnel struct {
-	Tunnel *grpc.ClientToServer `protobuf:"bytes,3,opt,name=tunnel,proto3,oneof"`
+	Tunnel *grpctunnel.ClientToServer `protobuf:"bytes,3,opt,name=tunnel,proto3,oneof"`
 }
 
 func (*StreamResponse_Connect_) isStreamResponse_Data() {}
@@ -839,21 +839,21 @@ func file_sesame_v1alpha1_tunnel_proto_rawDescGZIP() []byte {
 
 var file_sesame_v1alpha1_tunnel_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_sesame_v1alpha1_tunnel_proto_goTypes = []interface{}{
-	(*TunnelRequest)(nil),          // 0: sesame.v1alpha1.TunnelRequest
-	(*TunnelResponse)(nil),         // 1: sesame.v1alpha1.TunnelResponse
-	(*StreamRequest)(nil),          // 2: sesame.v1alpha1.StreamRequest
-	(*StreamResponse)(nil),         // 3: sesame.v1alpha1.StreamResponse
-	(*TunnelRequest_Connect)(nil),  // 4: sesame.v1alpha1.TunnelRequest.Connect
-	(*TunnelRequest_Stream)(nil),   // 5: sesame.v1alpha1.TunnelRequest.Stream
-	(*TunnelResponse_Connect)(nil), // 6: sesame.v1alpha1.TunnelResponse.Connect
-	(*TunnelResponse_Stream)(nil),  // 7: sesame.v1alpha1.TunnelResponse.Stream
-	(*StreamRequest_Connect)(nil),  // 8: sesame.v1alpha1.StreamRequest.Connect
-	(*StreamRequest_Dial)(nil),     // 9: sesame.v1alpha1.StreamRequest.Dial
-	(*StreamResponse_Connect)(nil), // 10: sesame.v1alpha1.StreamResponse.Connect
-	(*StreamResponse_Dial)(nil),    // 11: sesame.v1alpha1.StreamResponse.Dial
-	(*grpc.ServerToClient)(nil),    // 12: sesame.type.ServerToClient
-	(*grpc.ClientToServer)(nil),    // 13: sesame.type.ClientToServer
-	(*status.Status)(nil),          // 14: google.rpc.Status
+	(*TunnelRequest)(nil),             // 0: sesame.v1alpha1.TunnelRequest
+	(*TunnelResponse)(nil),            // 1: sesame.v1alpha1.TunnelResponse
+	(*StreamRequest)(nil),             // 2: sesame.v1alpha1.StreamRequest
+	(*StreamResponse)(nil),            // 3: sesame.v1alpha1.StreamResponse
+	(*TunnelRequest_Connect)(nil),     // 4: sesame.v1alpha1.TunnelRequest.Connect
+	(*TunnelRequest_Stream)(nil),      // 5: sesame.v1alpha1.TunnelRequest.Stream
+	(*TunnelResponse_Connect)(nil),    // 6: sesame.v1alpha1.TunnelResponse.Connect
+	(*TunnelResponse_Stream)(nil),     // 7: sesame.v1alpha1.TunnelResponse.Stream
+	(*StreamRequest_Connect)(nil),     // 8: sesame.v1alpha1.StreamRequest.Connect
+	(*StreamRequest_Dial)(nil),        // 9: sesame.v1alpha1.StreamRequest.Dial
+	(*StreamResponse_Connect)(nil),    // 10: sesame.v1alpha1.StreamResponse.Connect
+	(*StreamResponse_Dial)(nil),       // 11: sesame.v1alpha1.StreamResponse.Dial
+	(*grpctunnel.ServerToClient)(nil), // 12: sesame.type.ServerToClient
+	(*grpctunnel.ClientToServer)(nil), // 13: sesame.type.ClientToServer
+	(*status.Status)(nil),             // 14: google.rpc.Status
 }
 var file_sesame_v1alpha1_tunnel_proto_depIdxs = []int32{
 	4,  // 0: sesame.v1alpha1.TunnelRequest.connect:type_name -> sesame.v1alpha1.TunnelRequest.Connect

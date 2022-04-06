@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
 	"github.com/joeycumines/sesame/internal/flowcontrol"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -44,15 +45,15 @@ func NewChannel(options ...ChannelOption) (*Channel, error) {
 
 type tunnelStreamClient interface {
 	Context() context.Context
-	Send(*ClientToServer) error
-	Recv() (*ServerToClient, error)
+	Send(*grpctunnel.ClientToServer) error
+	Recv() (*grpctunnel.ServerToClient, error)
 }
 
 // Channel is a tunnel client, and implements grpc.ClientConnInterface.
 // It is backed by a single stream, though this stream may be either a tunnel client, or a reverse tunnel server.
 type Channel struct {
 	stream       tunnelStreamClient
-	updateWindow func(msg *ServerToClient)
+	updateWindow func(msg *grpctunnel.ServerToClient)
 	ctx          context.Context
 	cancel       context.CancelFunc
 	tearDown     func() error
@@ -83,7 +84,7 @@ func newChannel(c *channelConfig) *Channel {
 	// initialise flow control, wrapping stream
 	// WARNING not ready for use yet (needs to be wired up with the ChanneL)
 	fcInterface := &flowControlClient{tunnelStreamClient: stream}
-	fcConn := flowcontrol.NewConn[uint64, *ClientToServer, *ServerToClient](fcInterface)
+	fcConn := flowcontrol.NewConn[uint64, *grpctunnel.ClientToServer, *grpctunnel.ServerToClient](fcInterface)
 	stream = fcConn
 
 	ch := Channel{
@@ -157,10 +158,10 @@ func (c *Channel) newStream(ctx context.Context, clientStreams, serverStreams bo
 	if err != nil {
 		return nil, err
 	}
-	err = c.stream.Send(&ClientToServer{
+	err = c.stream.Send(&grpctunnel.ClientToServer{
 		StreamId: str.streamID,
-		Frame: &ClientToServer_NewStream_{
-			NewStream: &ClientToServer_NewStream{
+		Frame: &grpctunnel.ClientToServer_NewStream_{
+			NewStream: &grpctunnel.ClientToServer_NewStream{
 				Method: methodName,
 				Header: toProto(md),
 			},
@@ -257,7 +258,7 @@ func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStrea
 		trailerTargets: tlrs,
 		isClientStream: clientStreams,
 		isServerStream: serverStreams,
-		buffer:         make(chan *ServerToClient, windowMaxBuffer),
+		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
 		headerSignal:   make(chan struct{}),
 		doneSignal:     make(chan struct{}),
 	}
@@ -285,7 +286,7 @@ func (c *Channel) recvLoop() {
 			return
 		}
 
-		if _, ok := msg.GetFrame().(*ServerToClient_WindowUpdate); ok {
+		if _, ok := msg.GetFrame().(*grpctunnel.ServerToClient_WindowUpdate); ok {
 			// handled in the flow control wrapper impl.
 			continue
 		}
@@ -359,7 +360,7 @@ type tunnelClientStream struct {
 	isServerStream bool
 
 	ingestMu     sync.Mutex
-	buffer       chan *ServerToClient
+	buffer       chan *grpctunnel.ServerToClient
 	header       metadata.MD
 	headerSignal chan struct{}
 	trailer      metadata.MD
@@ -407,9 +408,9 @@ func (st *tunnelClientStream) CloseSend() error {
 		return nil
 	default:
 	}
-	_ = st.stream.Send(&ClientToServer{
+	_ = st.stream.Send(&grpctunnel.ClientToServer{
 		StreamId: st.streamID,
-		Frame: &ClientToServer_HalfClose{
+		Frame: &grpctunnel.ClientToServer_HalfClose{
 			HalfClose: &empty.Empty{},
 		},
 	})
@@ -445,19 +446,19 @@ func (st *tunnelClientStream) SendMsg(m interface{}) error {
 		}
 
 		if i == 0 {
-			err = st.stream.Send(&ClientToServer{
+			err = st.stream.Send(&grpctunnel.ClientToServer{
 				StreamId: st.streamID,
-				Frame: &ClientToServer_Message{
-					Message: &EncodedMessage{
+				Frame: &grpctunnel.ClientToServer_Message{
+					Message: &grpctunnel.EncodedMessage{
 						Size: int32(len(b)),
 						Data: chunk,
 					},
 				},
 			})
 		} else {
-			err = st.stream.Send(&ClientToServer{
+			err = st.stream.Send(&grpctunnel.ClientToServer{
 				StreamId: st.streamID,
-				Frame: &ClientToServer_MessageData{
+				Frame: &grpctunnel.ClientToServer_MessageData{
 					MessageData: chunk,
 				},
 			})
@@ -535,7 +536,7 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 		st.ch.updateWindow(msg)
 
 		switch frame := msg.GetFrame().(type) {
-		case *ServerToClient_Message:
+		case *grpctunnel.ServerToClient_Message:
 			if msgLen != -1 {
 				return nil, false, status.Errorf(codes.Internal, "server sent redundant response message envelope")
 			}
@@ -548,7 +549,7 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 				return b, true, nil
 			}
 
-		case *ServerToClient_MessageData:
+		case *grpctunnel.ServerToClient_MessageData:
 			if msgLen == -1 {
 				return nil, false, status.Errorf(codes.Internal, "server never sent envelope for response message")
 			}
@@ -575,7 +576,7 @@ func (st *tunnelClientStream) err() error {
 	}
 }
 
-func (st *tunnelClientStream) acceptServerFrame(msg *ServerToClient) {
+func (st *tunnelClientStream) acceptServerFrame(msg *grpctunnel.ServerToClient) {
 	if st == nil {
 		// can happen if client decided that the stream ID was recently used
 		// yet inactive -- it returns nil error but also nil stream, which
@@ -585,7 +586,7 @@ func (st *tunnelClientStream) acceptServerFrame(msg *ServerToClient) {
 	}
 
 	switch frame := msg.GetFrame().(type) {
-	case *ServerToClient_Header:
+	case *grpctunnel.ServerToClient_Header:
 		st.ingestMu.Lock()
 		defer st.ingestMu.Unlock()
 		select {
@@ -599,7 +600,7 @@ func (st *tunnelClientStream) acceptServerFrame(msg *ServerToClient) {
 		}
 		return
 
-	case *ServerToClient_CloseStream_:
+	case *grpctunnel.ServerToClient_CloseStream_:
 		trailer := fromProto(frame.CloseStream.Trailer)
 		err := status.FromProto(frame.CloseStream.Status).Err()
 		st.finishStream(err, trailer)
@@ -624,9 +625,9 @@ func (st *tunnelClientStream) acceptServerFrame(msg *ServerToClient) {
 func (st *tunnelClientStream) cancel(err error) error {
 	st.finishStream(err, nil)
 	// let server know
-	return st.stream.Send(&ClientToServer{
+	return st.stream.Send(&grpctunnel.ClientToServer{
 		StreamId: st.streamID,
-		Frame: &ClientToServer_Cancel{
+		Frame: &grpctunnel.ClientToServer_Cancel{
 			Cancel: &empty.Empty{},
 		},
 	})

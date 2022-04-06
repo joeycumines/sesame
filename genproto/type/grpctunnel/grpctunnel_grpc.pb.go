@@ -4,7 +4,7 @@
 // - protoc             v3.14.0
 // source: sesame/type/grpctunnel.proto
 
-package grpc
+package grpctunnel
 
 import (
 	context "context"

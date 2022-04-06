@@ -3,7 +3,7 @@
 
 package tun
 
-import "github.com/joeycumines/sesame/tun/grpc"
+import "github.com/joeycumines/sesame/genproto/type/grpctunnel"
 import "google.golang.org/genproto/googleapis/rpc/status"
 
 // Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
@@ -214,8 +214,10 @@ func (x *StreamRequest) Proto_ShallowCopy(v interface{}) {
 						return
 					}
 				}
-				if v, ok := v.(interface{ GetTunnel() *grpc.ServerToClient }); ok {
-					var defaultValue *grpc.ServerToClient
+				if v, ok := v.(interface {
+					GetTunnel() *grpctunnel.ServerToClient
+				}); ok {
+					var defaultValue *grpctunnel.ServerToClient
 					if v := v.GetTunnel(); v != defaultValue {
 						x.Data = &StreamRequest_Tunnel{Tunnel: v}
 						return
@@ -303,8 +305,10 @@ func (x *StreamResponse) Proto_ShallowCopy(v interface{}) {
 						return
 					}
 				}
-				if v, ok := v.(interface{ GetTunnel() *grpc.ClientToServer }); ok {
-					var defaultValue *grpc.ClientToServer
+				if v, ok := v.(interface {
+					GetTunnel() *grpctunnel.ClientToServer
+				}); ok {
+					var defaultValue *grpctunnel.ClientToServer
 					if v := v.GetTunnel(); v != defaultValue {
 						x.Data = &StreamResponse_Tunnel{Tunnel: v}
 						return

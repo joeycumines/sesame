@@ -3,6 +3,7 @@ package grpc
 import (
 	"errors"
 	"github.com/fullstorydev/grpchan/grpchantesting"
+	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
 	"google.golang.org/grpc/reflection"
 	"reflect"
 	"testing"
@@ -66,7 +67,9 @@ func Test_tunnelConfig_validate(t *testing.T) {
 		{
 			Name: `valid server stream`,
 			In: n(func(c *tunnelConfig) {
-				OptTunnel.ServerStream((*tunnelServiceOpenTunnelServer)(nil))(c)
+				OptTunnel.ServerStream(struct {
+					grpctunnel.TunnelService_OpenTunnelServer
+				}{})(c)
 				if c.stream.get().stream == nil {
 					t.Error()
 				}
@@ -75,7 +78,9 @@ func Test_tunnelConfig_validate(t *testing.T) {
 		{
 			Name: `valid client stream`,
 			In: n(func(c *tunnelConfig) {
-				OptTunnel.ClientStream((*tunnelServiceOpenReverseTunnelClient)(nil))(c)
+				OptTunnel.ClientStream(struct {
+					grpctunnel.TunnelService_OpenReverseTunnelClient
+				}{})(c)
 				if c.stream.get().stream == nil {
 					t.Error()
 				}
@@ -87,7 +92,9 @@ func Test_tunnelConfig_validate(t *testing.T) {
 				for i := 0; i < 2; i++ {
 					OptTunnel.Service(func(h *HandlerMap) { grpchantesting.RegisterTestServiceServer(h, new(grpchantesting.TestServer)) })(c)
 				}
-				OptTunnel.ServerStream((*tunnelServiceOpenTunnelServer)(nil))(c)
+				OptTunnel.ServerStream(struct {
+					grpctunnel.TunnelService_OpenTunnelServer
+				}{})(c)
 			}),
 			Out: errors.New(`sesame/tun/grpc: tunnel handlers option: panic in registrar: service grpchantesting.TestService: handler already registered`),
 		},
@@ -99,14 +106,18 @@ func Test_tunnelConfig_validate(t *testing.T) {
 						grpchantesting.RegisterTestServiceServer(h, new(grpchantesting.TestServer))
 					}
 				})(c)
-				OptTunnel.ServerStream((*tunnelServiceOpenTunnelServer)(nil))(c)
+				OptTunnel.ServerStream(struct {
+					grpctunnel.TunnelService_OpenTunnelServer
+				}{})(c)
 			}),
 			Out: errors.New(`sesame/tun/grpc: tunnel handlers option: panic in registrar: service grpchantesting.TestService: handler already registered`),
 		},
 		{
 			Name: `duplicate service 3`,
 			In: n(func(c *tunnelConfig) {
-				OptTunnel.ServerStream((*tunnelServiceOpenTunnelServer)(nil))(c)
+				OptTunnel.ServerStream(struct {
+					grpctunnel.TunnelService_OpenTunnelServer
+				}{})(c)
 				for i := 0; i < 10; i++ {
 					OptTunnel.Service(func(h *HandlerMap) {
 						for i := 0; i < 10; i++ {
@@ -120,7 +131,9 @@ func Test_tunnelConfig_validate(t *testing.T) {
 		{
 			Name: `stop signal nil`,
 			In: n(func(c *tunnelConfig) {
-				OptTunnel.ClientStream((*tunnelServiceOpenReverseTunnelClient)(nil))(c)
+				OptTunnel.ClientStream(struct {
+					grpctunnel.TunnelService_OpenReverseTunnelClient
+				}{})(c)
 				OptTunnel.StopSignal(nil)(c)
 			}),
 			Out: errors.New(`sesame/tun/grpc: tunnel stop option: invalid value`),
@@ -128,7 +141,9 @@ func Test_tunnelConfig_validate(t *testing.T) {
 		{
 			Name: `stop signal twice`,
 			In: n(func(c *tunnelConfig) {
-				OptTunnel.ClientStream((*tunnelServiceOpenReverseTunnelClient)(nil))(c)
+				OptTunnel.ClientStream(struct {
+					grpctunnel.TunnelService_OpenReverseTunnelClient
+				}{})(c)
 				for i := 0; i < 2; i++ {
 					OptTunnel.StopSignal(make(chan struct{}))(c)
 				}
@@ -138,7 +153,9 @@ func Test_tunnelConfig_validate(t *testing.T) {
 		{
 			Name: `valid e2e`,
 			In: n(func(c *tunnelConfig) {
-				OptTunnel.ClientStream((*tunnelServiceOpenReverseTunnelClient)(nil))(c)
+				OptTunnel.ClientStream(struct {
+					grpctunnel.TunnelService_OpenReverseTunnelClient
+				}{})(c)
 
 				var (
 					hm         []*HandlerMap
@@ -224,7 +241,9 @@ func Test_channelConfig_validate(t *testing.T) {
 		{
 			Name: `valid server stream`,
 			In: n(func(c *channelConfig) {
-				OptChannel.ServerStream((*tunnelServiceOpenReverseTunnelServer)(nil))(c)
+				OptChannel.ServerStream(struct {
+					grpctunnel.TunnelService_OpenReverseTunnelServer
+				}{})(c)
 				if c.stream.get().stream == nil {
 					t.Error()
 				}
@@ -236,7 +255,9 @@ func Test_channelConfig_validate(t *testing.T) {
 		{
 			Name: `valid client stream`,
 			In: n(func(c *channelConfig) {
-				OptChannel.ClientStream((*tunnelServiceOpenTunnelClient)(nil))(c)
+				OptChannel.ClientStream(struct {
+					grpctunnel.TunnelService_OpenTunnelClient
+				}{})(c)
 				if c.stream.get().stream == nil {
 					t.Error()
 				}
