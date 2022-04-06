@@ -30,21 +30,14 @@ type (
 	// tunnelStreamClientWrapper wraps a client or server stream acting as the client (in the proxied gRPC scenario),
 	// managing send concurrency.
 	tunnelStreamClientWrapper struct {
-		stream    tunnelStreamClient
-		tearDown  func() error
-		mu        sync.Mutex
-		streamMap map[uint64]*tscwStream
-		in        chan *ClientToServer
-		out       chan error
-		once      sync.Once
-		stop      chan struct{}
-		done      chan struct{}
-		err       error
-	}
-
-	tscwStream struct {
-		half chan struct{}
-		full chan struct{}
+		stream   tunnelStreamClient
+		tearDown func() error
+		in       chan *ClientToServer
+		out      chan error
+		once     sync.Once
+		stop     chan struct{}
+		done     chan struct{}
+		err      error
 	}
 
 	// tunnelStreamServerWrapper wraps a client or server stream acting as the server (in the proxied gRPC scenario),
@@ -70,12 +63,6 @@ type (
 )
 
 var (
-	// errSendCanceled occurs when a message send was dropped due to another message taking precedence, e.g. a half
-	// close message (not yet started to send) replaced with a cancel message, or a cancel message attempted more than
-	// one. Note that this error DOES NOT imply that the message, that the send was canceled for, has been successfully
-	// sent, or has even started sending yet, just that it was scheduled.
-	errSendCanceled = errors.New(`sesame/tun/grpc: send canceled`)
-
 	// compile time assertions
 
 	_ tunnelStreamClient = (*tunnelStreamClientWrapper)(nil)
@@ -90,13 +77,12 @@ var (
 
 func newTunnelStreamClientWrapper(stream tunnelStreamClient, tearDown func() error) *tunnelStreamClientWrapper {
 	r := tunnelStreamClientWrapper{
-		stream:    stream,
-		tearDown:  tearDown,
-		streamMap: make(map[uint64]*tscwStream),
-		in:        make(chan *ClientToServer),
-		out:       make(chan error),
-		stop:      make(chan struct{}),
-		done:      make(chan struct{}),
+		stream:   stream,
+		tearDown: tearDown,
+		in:       make(chan *ClientToServer),
+		out:      make(chan error),
+		stop:     make(chan struct{}),
+		done:     make(chan struct{}),
 	}
 	go r.worker()
 	return &r
@@ -104,119 +90,17 @@ func newTunnelStreamClientWrapper(stream tunnelStreamClient, tearDown func() err
 
 func (x *tunnelStreamClientWrapper) Context() context.Context { return x.stream.Context() }
 
-func (x *tunnelStreamClientWrapper) Recv() (*ServerToClient, error) {
-	// TODO validate that we don't need to track this (shouldn't if cancel is always sent)
-	return x.stream.Recv()
-}
+func (x *tunnelStreamClientWrapper) Recv() (*ServerToClient, error) { return x.stream.Recv() }
 
 func (x *tunnelStreamClientWrapper) Send(msg *ClientToServer) error {
-	// handle message
-	done, err := func() (<-chan struct{}, error) {
-		streamID := msg.GetStreamId()
-		if streamID == 0 {
-			// shouldn't happen
-			panic(`sesame/tun/grpc: stream id 0 is invalid`)
-		}
-
-		x.mu.Lock()
-		defer x.mu.Unlock()
-
-		var (
-			isHalfClose bool
-			isFullClose bool
-		)
-		switch frame := msg.GetFrame().(type) {
-		case *ClientToServer_WindowUpdate:
-			// always send window updates
-			return nil, nil
-
-		case *ClientToServer_NewStream_:
-			if _, ok := x.streamMap[streamID]; ok {
-				// shouldn't happen
-				panic(fmt.Errorf(`sesame/tun/grpc: duplicate new stream message or recreated stream id %d`, streamID))
-			}
-			x.streamMap[streamID] = &tscwStream{
-				half: make(chan struct{}),
-				full: make(chan struct{}),
-			}
-			// we disallow cancellation of new stream requests, to avoid confusing the server
-			return nil, nil
-
-		case *ClientToServer_Message:
-
-		case *ClientToServer_MessageData:
-
-		case *ClientToServer_HalfClose:
-			isHalfClose = true
-
-		case *ClientToServer_Cancel:
-			isHalfClose = true
-			isFullClose = true
-
-		default:
-			return nil, fmt.Errorf(`sesame/tun/grpc: unexpected or invalid client to server frame %T`, frame)
-		}
-
-		var done tscwStream
-		if v := x.streamMap[streamID]; v != nil {
-			done = *v
-
-			if isHalfClose && v.half != nil {
-				close(v.half)
-				v.half = nil
-			}
-
-			if isFullClose && v.full != nil {
-				close(v.full)
-				v.full = nil
-			}
-
-			if *v == (tscwStream{}) {
-				x.streamMap[streamID] = nil
-			}
-		}
-
-		if done.full == nil {
-			// already sent or are already sending cancel
-			return nil, errSendCanceled
-		}
-
-		if isFullClose {
-			// we are the first to send cancel, we have nothing to wait on except ourselves
-			return nil, nil
-		}
-
-		if done.half == nil {
-			// already sent or are already sending half close
-			return nil, errSendCanceled
-		}
-
-		if isHalfClose {
-			// we are the first to send half close, wait on cancel
-			return done.full, nil
-		}
-
-		// we are sending one of the other messages, wait on either half close or cancel
-		return done.half, nil
-	}()
-	if err != nil {
-		return err
-	}
-
+	// wait for a send attempt / result
 	// note we don't need to pre-emptively check x.stop, it's checked in the worker
 	select {
-	case <-done:
-		return errSendCanceled
-	default:
-	}
-
-	// wait for a send attempt / result
-	select {
-	case <-done:
-		return errSendCanceled
-
 	case <-x.stop:
-		return errSendCanceled
+		return context.Canceled
+
+	case <-x.done:
+		return context.Canceled
 
 	case x.in <- msg:
 		select {
@@ -249,7 +133,7 @@ ControlLoop:
 		case msg := <-x.in:
 			select {
 			case <-x.stop:
-				x.out <- errSendCanceled
+				x.out <- context.Canceled
 				break ControlLoop
 
 			default:
@@ -272,18 +156,6 @@ func newTunnelStreamServerWrapper(stream tunnelStreamServer) *tunnelStreamServer
 func (x *tunnelStreamServerWrapper) Context() context.Context { return x.stream.Context() }
 
 func (x *tunnelStreamServerWrapper) Send(msg *ServerToClient) error {
-	if msg.GetStreamId() == 0 {
-		return errors.New(`sesame/tun/grpc: stream id 0 invalid`)
-	}
-	switch frame := msg.GetFrame().(type) {
-	case *ServerToClient_WindowUpdate:
-	case *ServerToClient_Header:
-	case *ServerToClient_Message:
-	case *ServerToClient_MessageData:
-	case *ServerToClient_CloseStream_:
-	default:
-		return fmt.Errorf(`sesame/tun/grpc: unexpected or invalid server to client frame %T`, frame)
-	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	return x.stream.Send(msg)

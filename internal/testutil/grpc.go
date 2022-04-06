@@ -29,6 +29,13 @@ type (
 		closer   io.Closer
 	}
 
+	PipeClientOption func(c *pipeClientConfig)
+
+	pipeClientConfig struct {
+		dialOptions   []grpc.DialOption
+		serverOptions []grpc.ServerOption
+	}
+
 	ClientConnFactory func(fn func(h GRPCServer)) ClientConnCloser
 
 	GRPCServer = reflection.GRPCServer
@@ -87,7 +94,7 @@ func NetpipeClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
 // NewBufconnClient initialises a new gRPC client for testing, using google.golang.org/grpc/test/bufconn.
 // Size will default to DefaultBufconnSize if <= 0. The init func will be called prior to serving on the listener, which
 // does not need to be implemented by the caller.
-func NewBufconnClient(size int, init func(lis *bufconn.Listener, srv *grpc.Server)) *PipeClient {
+func NewBufconnClient(size int, init func(lis *bufconn.Listener, srv *grpc.Server), options ...PipeClientOption) *PipeClient {
 	if size <= 0 {
 		size = DefaultBufconnSize
 	}
@@ -99,10 +106,10 @@ func NewBufconnClient(size int, init func(lis *bufconn.Listener, srv *grpc.Serve
 	if init != nil {
 		initFunc = func(lis net.Listener, srv *grpc.Server) { init(lis.(*bufconn.Listener), srv) }
 	}
-	return newPipeClient(listenerFactory, initFunc)
+	return newPipeClient(listenerFactory, initFunc, options...)
 }
 
-func NewNetpipeClient(factory func() (c1, c2 net.Conn), init func(lis *pipelistener.PipeListener, srv *grpc.Server)) *PipeClient {
+func NewNetpipeClient(factory func() (c1, c2 net.Conn), init func(lis *pipelistener.PipeListener, srv *grpc.Server), options ...PipeClientOption) *PipeClient {
 	if factory == nil {
 		panic(`nil factory`)
 	}
@@ -111,13 +118,13 @@ func NewNetpipeClient(factory func() (c1, c2 net.Conn), init func(lis *pipeliste
 		listener, dialer = factory()
 		return
 	}
-	return NewPipeClient(f, init)
+	return NewPipeClient(f, init, options...)
 }
 
 // NewPipeClient initialises a new gRPC client for testing, using a net.Pipe style implementation.
 // Size will default to DefaultBufconnSize if <= 0. The init func will be called prior to serving on the listener, which
 // does not need to be implemented by the caller.
-func NewPipeClient(factory pipelistener.PipeFactory, init func(lis *pipelistener.PipeListener, srv *grpc.Server)) *PipeClient {
+func NewPipeClient(factory pipelistener.PipeFactory, init func(lis *pipelistener.PipeListener, srv *grpc.Server), options ...PipeClientOption) *PipeClient {
 	listenerFactory := func() ListenerDialer {
 		var lis *pipelistener.PipeListener = pipelistener.NewPipeListener(factory)
 		return lis
@@ -126,12 +133,25 @@ func NewPipeClient(factory pipelistener.PipeFactory, init func(lis *pipelistener
 	if init != nil {
 		initFunc = func(lis net.Listener, srv *grpc.Server) { init(lis.(*pipelistener.PipeListener), srv) }
 	}
-	return newPipeClient(listenerFactory, initFunc)
+	return newPipeClient(listenerFactory, initFunc, options...)
 }
 
-func newPipeClient(listenerFactory func() ListenerDialer, init func(lis net.Listener, srv *grpc.Server)) *PipeClient {
+func WithDialOptions(options ...grpc.DialOption) PipeClientOption {
+	return func(c *pipeClientConfig) { c.dialOptions = append(c.dialOptions, options...) }
+}
+
+func WithServerOptions(options ...grpc.ServerOption) PipeClientOption {
+	return func(c *pipeClientConfig) { c.serverOptions = append(c.serverOptions, options...) }
+}
+
+func newPipeClient(listenerFactory func() ListenerDialer, init func(lis net.Listener, srv *grpc.Server), options ...PipeClientOption) *PipeClient {
+	var c pipeClientConfig
+	for _, o := range options {
+		o(&c)
+	}
+
 	listener := listenerFactory()
-	server := grpc.NewServer()
+	server := grpc.NewServer(c.serverOptions...)
 
 	if init != nil {
 		init(listener, server)
@@ -140,12 +160,11 @@ func newPipeClient(listenerFactory func() ListenerDialer, init func(lis net.List
 	out := make(chan error, 1)
 	go func() { out <- server.Serve(listener) }()
 
-	conn, err := grpc.Dial(
-		"",
+	conn, err := grpc.Dial("", append([]grpc.DialOption{
 		grpc.WithBlock(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }),
-	)
+	}, c.dialOptions...)...)
 	if err != nil {
 		defer listener.Close()
 		defer server.Stop()

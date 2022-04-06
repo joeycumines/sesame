@@ -31,7 +31,24 @@ import (
 	"sync"
 )
 
-const maxChunkSize = 16384
+const (
+	// maxChunkSize is used to chunk the encoded messages (aiming to be 1-1 with HTTP/2 data frames)
+	// NOTE: fudge factor is for whatever else goes into the data frames (should probably check that)
+	maxChunkSize = maxChunkSizeBase - 100
+	// maxChunkSizeBase is maxChunkSize w/o fudge factor
+	maxChunkSizeBase = grpcMaxFrameSize - 28
+	// currently hardcoded to the minimum (for HTTP/2)
+	// https://github.com/grpc/grpc-go/blob/master/internal/transport/http_util.go#L47
+	// relevant issue https://github.com/grpc/grpc-go/issues/4630
+	grpcMaxFrameSize = 16384
+)
+
+var (
+	// compile time assertions
+	_ = map[bool]struct{}{false: {}, grpcMaxFrameSize > 0: {}}
+	_ = map[bool]struct{}{false: {}, maxChunkSizeBase > 0 && maxChunkSizeBase < grpcMaxFrameSize: {}}
+	_ = map[bool]struct{}{false: {}, maxChunkSize > 0 && maxChunkSize <= maxChunkSizeBase: {}}
+)
 
 func ServeTunnel(options ...TunnelOption) error {
 	var c tunnelConfig
@@ -93,6 +110,7 @@ func (s *tunnelServer) serve() error {
 	ctx, cancel := context.WithCancel(s.stream.Context())
 	defer cancel()
 
+	// implements graceful stop
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -103,7 +121,8 @@ func (s *tunnelServer) serve() error {
 		}
 	}()
 
-	// TODO tidy this up
+	// the behavior below is necessary due to ctx not controlling the stream send/receive (blocking)
+	// could use a tidy up - didn't bother restructuring this when adding graceful stop
 	out := make(chan error, 1)
 	go func() {
 		defer cancel()
@@ -122,7 +141,6 @@ func (s *tunnelServer) serve() error {
 				}
 
 				if f, ok := msg.Frame.(*ClientToServer_NewStream_); ok {
-					// TODO don't block on this
 					if ok, err := s.createStream(ctx, msg.StreamId, f.NewStream); err != nil {
 						if !ok {
 							return err
@@ -156,6 +174,8 @@ func (s *tunnelServer) serve() error {
 		}()
 	}()
 
+	// only block until context cancel (support graceful close)
+	// WARNING the recv loop above may still be blocking
 	<-ctx.Done()
 	select {
 	case err := <-out:
@@ -311,14 +331,15 @@ type tunnelServerStream struct {
 	ingestMu   sync.Mutex
 	buffer     chan *ClientToServer
 	halfClosed error
-	readMu     sync.Mutex
-	readErr    error
 
-	stateMu     sync.Mutex
-	headers     metadata.MD
-	trailers    metadata.MD
-	sentHeaders bool
-	closed      chan struct{}
+	readMu  sync.Mutex
+	readErr error
+
+	stateMu    sync.Mutex
+	header     metadata.MD
+	trailer    metadata.MD
+	sentHeader bool
+	closed     chan struct{}
 
 	writeMu sync.Mutex
 	hasSent bool
@@ -351,6 +372,9 @@ func (st *tunnelServerStream) acceptClientFrame(msg *ClientToServer) {
 		return
 	}
 
+	// without considering external factors (like network IO),
+	// this should never block, if both ends have implemented correct
+	// (and compatible) flow control
 	select {
 	case st.buffer <- msg:
 	case <-st.ctx.Done():
@@ -368,11 +392,11 @@ func (st *tunnelServerStream) SendHeader(md metadata.MD) error {
 func (st *tunnelServerStream) setHeader(md metadata.MD, send bool) error {
 	st.stateMu.Lock()
 	defer st.stateMu.Unlock()
-	if st.sentHeaders {
-		return errors.New("already sent headers")
+	if st.sentHeader {
+		return errors.New("already sent header")
 	}
 	if md != nil {
-		st.headers = metadata.Join(st.headers, md)
+		st.header = metadata.Join(st.header, md)
 	}
 	if send {
 		return st.sendHeadersLocked()
@@ -384,11 +408,11 @@ func (st *tunnelServerStream) sendHeadersLocked() error {
 	err := st.stream.Send(&ServerToClient{
 		StreamId: st.streamID,
 		Frame: &ServerToClient_Header{
-			Header: toProto(st.headers),
+			Header: toProto(st.header),
 		},
 	})
-	st.headers = nil
-	st.sentHeaders = true
+	st.header = nil
+	st.sentHeader = true
 	return err
 }
 
@@ -448,7 +472,7 @@ func (st *tunnelServerStream) setTrailer(md metadata.MD) error {
 	case <-st.closed:
 		return errors.New("already finished")
 	default:
-		st.trailers = metadata.Join(st.trailers, md)
+		st.trailer = metadata.Join(st.trailer, md)
 		return nil
 	}
 }
@@ -470,7 +494,6 @@ func (st *tunnelServerStream) SendMsg(m interface{}) error {
 		return status.Errorf(codes.Internal, "Already sent response for non-server-stream method %q", st.method)
 	}
 
-	// TODO: support alternate codecs, compressors, etc
 	b, err := proto.Marshal(m.(proto.Message))
 	if err != nil {
 		return err
@@ -529,7 +552,6 @@ func (st *tunnelServerStream) RecvMsg(m interface{}) error {
 		}
 		return err
 	}
-	// TODO: support alternate codecs, compressors, etc
 	return proto.Unmarshal(data, m.(proto.Message))
 }
 
@@ -664,7 +686,7 @@ func (st *tunnelServerStream) finishStream(err error) {
 	default:
 	}
 
-	if !st.sentHeaders {
+	if !st.sentHeader {
 		_ = st.sendHeadersLocked()
 	}
 
@@ -674,11 +696,11 @@ func (st *tunnelServerStream) finishStream(err error) {
 		Frame: &ServerToClient_CloseStream_{
 			CloseStream: &ServerToClient_CloseStream{
 				Status:  stat.Proto(),
-				Trailer: toProto(st.trailers),
+				Trailer: toProto(st.trailer),
 			},
 		},
 	})
-	st.trailers = nil
+	st.trailer = nil
 
 	close(st.closed)
 }
@@ -690,10 +712,11 @@ func (st *tunnelServerStream) halfClose(err error) {
 		// already closed
 		return
 	}
-	if err == nil {
-		err = io.EOF
+	if err != nil {
+		st.halfClosed = err
+	} else {
+		st.halfClosed = io.EOF
 	}
-	st.halfClosed = err
 	close(st.buffer)
 }
 

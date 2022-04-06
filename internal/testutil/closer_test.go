@@ -98,7 +98,6 @@ func TestCloser_Comparable(t *testing.T) {
 	} else if v, ok := v.ioCloser.(Closer); !ok || reflect.ValueOf(v).Pointer() != reflect.ValueOf(fn).Pointer() {
 		t.Fatal(v, ok)
 	}
-	//lint:ignore SA4000 checking if it's comparable with itself
 	if closer != closer {
 		t.Error(closer)
 	}

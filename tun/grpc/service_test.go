@@ -57,6 +57,9 @@ func TestTunnelServer(t *testing.T) {
 			}
 
 			ch, err := NewChannel(OptChannel.ClientStream(tunnel))
+			if err != nil {
+				t.Fatal(err)
+			}
 			defer ch.Close()
 
 			grpchantesting.RunChannelTestCases(t, ch, true)
@@ -154,10 +157,3 @@ func ExampleTunnelServer_reflection() {
 	// grpc.reflection.v1alpha.ServerReflection
 	// grpchantesting.TestService
 }
-
-// TODO: also need more tests around channel lifecycle, and ensuring it
-// properly respects things like context cancellations, etc
-
-// TODO: also need some concurrency checks, to make sure the channel works
-// as expected, and race detector finds no bugs, when used from many
-// goroutines at once

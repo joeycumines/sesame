@@ -27,7 +27,7 @@ type (
 
 	// ChannelOptions exposes ChannelOption implementations as methods, which are available via the OptChannel
 	// package variable.
-	// TODO StopSignal option (errTransportClosing when channel attempts to establish a new stream)
+	// TODO consider adding StopSignal option (for graceful close support)
 	ChannelOptions struct{}
 
 	// TunnelOption is an option that may be provided to ServeTunnel.

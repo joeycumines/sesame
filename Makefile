@@ -21,8 +21,7 @@ all: lint build test
 clean:
 
 .PHONY: lint
-lint: vet
-# TODO re-enable staticcheck
+lint: vet staticcheck
 
 .PHONY: build
 build:
@@ -47,26 +46,6 @@ vet:
 staticcheck:
 	$(STATICCHECK) $(STATICCHECK_FLAGS) $(GO_PACKAGES)
 
-# this won't work on all systems
-.PHONY: tools
-tools:
-	export CGO_ENABLED=0 && \
-		run_command() { echo "$$@" && "$$@"; } && \
-		$(LIST_TOOLS) | \
-		while read -r line; do run_command go install "$$line" || exit 1; done
-
-# this won't work on all systems
-.PHONY: update-tools
-update-tools:
-	run_command() { echo "$$@" && "$$@"; } && \
-		$(LIST_TOOLS) | \
-		while read -r line; do run_command go get -u "$$line" || exit 1; done
-
-# this won't work on all systems
-.PHONY: generate
-generate:
-	hack/generate.sh
-
 .PHONY: fmt
 fmt:
 	$(GO) fmt $(GO_PACKAGES)
@@ -75,3 +54,25 @@ fmt:
 godoc:
 	@echo 'Running godoc, the default URL is http://localhost:6060/pkg/github.com/joeycumines/sesame/'
 	$(GODOC) $(GODOC_FLAGS)
+
+# this won't work on all systems
+.PHONY: update
+update:
+	$(GO) get -u -t ./...
+	run_command() { echo "$$@" && "$$@"; } && \
+		$(LIST_TOOLS) | \
+		while read -r line; do run_command $(GO) get -u "$$line" || exit 1; done
+	$(GO) mod tidy
+
+# this won't work on all systems
+.PHONY: tools
+tools:
+	export CGO_ENABLED=0 && \
+		run_command() { echo "$$@" && "$$@"; } && \
+		$(LIST_TOOLS) | \
+		while read -r line; do run_command $(GO) install "$$line" || exit 1; done
+
+# this won't work on all systems
+.PHONY: generate
+generate:
+	hack/generate.sh

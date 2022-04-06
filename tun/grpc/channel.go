@@ -193,10 +193,14 @@ func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStrea
 	for _, opt := range opts {
 		switch opt := opt.(type) {
 		case grpc.HeaderCallOption:
-			hdrs = append(hdrs, opt.HeaderAddr)
+			if opt.HeaderAddr != nil {
+				hdrs = append(hdrs, opt.HeaderAddr)
+			}
 
 		case grpc.TrailerCallOption:
-			tlrs = append(tlrs, opt.TrailerAddr)
+			if opt.TrailerAddr != nil {
+				tlrs = append(tlrs, opt.TrailerAddr)
+			}
 
 		case grpc.PeerCallOption:
 			if pr != nil {
@@ -216,7 +220,6 @@ func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStrea
 				md.Append(k, v)
 			}
 
-			// TODO: custom codec and compressor support
 			//case grpc.ContentSubtypeCallOption:
 			//case grpc.CustomCodecCallOption:
 			//case grpc.CompressorCallOption:
@@ -244,19 +247,19 @@ func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStrea
 
 	ctx, cncl := context.WithCancel(ctx)
 	str := &tunnelClientStream{
-		ctx:              ctx,
-		cncl:             cncl,
-		ch:               c,
-		streamID:         streamID,
-		method:           methodName,
-		stream:           c.stream,
-		headersTargets:   hdrs,
-		trailersTargets:  tlrs,
-		isClientStream:   clientStreams,
-		isServerStream:   serverStreams,
-		buffer:           make(chan *ServerToClient, windowMaxBuffer),
-		gotHeadersSignal: make(chan struct{}),
-		doneSignal:       make(chan struct{}),
+		ctx:            ctx,
+		cncl:           cncl,
+		ch:             c,
+		streamID:       streamID,
+		method:         methodName,
+		stream:         c.stream,
+		headerTargets:  hdrs,
+		trailerTargets: tlrs,
+		isClientStream: clientStreams,
+		isServerStream: serverStreams,
+		buffer:         make(chan *ServerToClient, windowMaxBuffer),
+		headerSignal:   make(chan struct{}),
+		doneSignal:     make(chan struct{}),
 	}
 	c.streams[streamID] = str
 
@@ -316,30 +319,26 @@ func (c *Channel) removeStream(streamID uint64) {
 	}
 }
 
-func (c *Channel) close(err error) (tearDownErr error) {
-	if c.tearDown != nil {
-		tearDownErr = c.tearDown()
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.finished {
-		return
-	}
-
-	defer c.cancel()
-
-	c.finished = true
-	if err == nil {
-		err = io.EOF
-	}
-	c.err = err
-	for _, st := range c.streams {
-		st.cncl()
-	}
-	c.streams = nil
-	return
+func (c *Channel) close(err error) error {
+	defer func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.finished {
+			return
+		}
+		c.finished = true
+		if err != nil {
+			c.err = err
+		} else {
+			c.err = io.EOF
+		}
+		for _, stream := range c.streams {
+			stream.cncl()
+		}
+		c.streams = nil
+		c.cancel()
+	}()
+	return c.tearDown()
 }
 
 type tunnelClientStream struct {
@@ -353,23 +352,22 @@ type tunnelClientStream struct {
 	fcSend int64
 	fcRecv int64
 
-	headersTargets  []*metadata.MD
-	trailersTargets []*metadata.MD
+	headerTargets  []*metadata.MD
+	trailerTargets []*metadata.MD
 
 	isClientStream bool
 	isServerStream bool
 
-	buffer chan *ServerToClient
+	ingestMu     sync.Mutex
+	buffer       chan *ServerToClient
+	header       metadata.MD
+	headerSignal chan struct{}
+	trailer      metadata.MD
+	done         error
+	doneSignal   chan struct{}
 
-	ingestMu         sync.Mutex
-	gotHeaders       bool
-	gotHeadersSignal chan struct{}
-	headers          metadata.MD
-	done             error
-	doneSignal       chan struct{}
-	trailers         metadata.MD
-	readMu           sync.Mutex
-	readErr          error
+	readMu  sync.Mutex
+	readErr error
 
 	// for message frame to server (WARNING: unsafe to hold while sending cancelation etc)
 	writeMu sync.Mutex
@@ -377,21 +375,13 @@ type tunnelClientStream struct {
 }
 
 func (st *tunnelClientStream) Header() (metadata.MD, error) {
-	// if we've already received headers, return them
 	select {
-	case <-st.gotHeadersSignal:
-		return st.headers, nil
-	default:
-	}
-
-	select {
-	case <-st.gotHeadersSignal:
-		return st.headers, nil
+	case <-st.headerSignal:
+		return st.header, nil
 	case <-st.ctx.Done():
-		// in the event of a race, always respect getting headers first
 		select {
-		case <-st.gotHeadersSignal:
-			return st.headers, nil
+		case <-st.headerSignal:
+			return st.header, nil
 		default:
 		}
 		return nil, st.ctx.Err()
@@ -403,7 +393,7 @@ func (st *tunnelClientStream) Trailer() metadata.MD {
 	// used by client after stream is closed.
 	select {
 	case <-st.doneSignal:
-		return st.trailers
+		return st.trailer
 	default:
 		return nil
 	}
@@ -426,9 +416,7 @@ func (st *tunnelClientStream) CloseSend() error {
 	return nil
 }
 
-func (st *tunnelClientStream) Context() context.Context {
-	return st.ctx
-}
+func (st *tunnelClientStream) Context() context.Context { return st.ctx }
 
 func (st *tunnelClientStream) SendMsg(m interface{}) error {
 	st.writeMu.Lock()
@@ -440,7 +428,6 @@ func (st *tunnelClientStream) SendMsg(m interface{}) error {
 		return status.Errorf(codes.Internal, "Already sent response for non-client-stream method %q", st.method)
 	}
 
-	// TODO: support alternate codecs, compressors, etc
 	b, err := proto.Marshal(m.(proto.Message))
 	if err != nil {
 		return err
@@ -499,7 +486,6 @@ func (st *tunnelClientStream) RecvMsg(m interface{}) error {
 		}
 		return err
 	}
-	// TODO: support alternate codecs, compressors, etc
 	return proto.Unmarshal(data, m.(proto.Message))
 }
 
@@ -602,22 +588,21 @@ func (st *tunnelClientStream) acceptServerFrame(msg *ServerToClient) {
 	case *ServerToClient_Header:
 		st.ingestMu.Lock()
 		defer st.ingestMu.Unlock()
-		if st.gotHeaders {
-			// TODO: cancel RPC and fail locally with internal error?
-			return
+		select {
+		case <-st.headerSignal:
+		default:
+			st.header = fromProto(frame.Header)
+			for _, target := range st.headerTargets {
+				*target = st.header
+			}
+			close(st.headerSignal)
 		}
-		st.gotHeaders = true
-		st.headers = fromProto(frame.Header)
-		for _, hdrs := range st.headersTargets {
-			*hdrs = st.headers
-		}
-		close(st.gotHeadersSignal)
 		return
 
 	case *ServerToClient_CloseStream_:
-		trailers := fromProto(frame.CloseStream.Trailer)
+		trailer := fromProto(frame.CloseStream.Trailer)
 		err := status.FromProto(frame.CloseStream.Status).Err()
-		st.finishStream(err, trailers)
+		st.finishStream(err, trailer)
 	}
 
 	st.ingestMu.Lock()
@@ -627,6 +612,9 @@ func (st *tunnelClientStream) acceptServerFrame(msg *ServerToClient) {
 		return
 	}
 
+	// without considering external factors (like network IO),
+	// this should never block, if both ends have implemented correct
+	// (and compatible) flow control
 	select {
 	case st.buffer <- msg:
 	case <-st.ctx.Done():
@@ -644,25 +632,37 @@ func (st *tunnelClientStream) cancel(err error) error {
 	})
 }
 
-func (st *tunnelClientStream) finishStream(err error, trailers metadata.MD) {
-	st.ch.removeStream(st.streamID)
+func (st *tunnelClientStream) finishStream(err error, trailer metadata.MD) {
+	// only remove from the parent once everything is cleaned up
+	defer st.ch.removeStream(st.streamID)
+
+	// only cancel the context after all state updates are applied
+	// this is necessary for the behavior of methods like tunnelClientStream.err
 	defer st.cncl()
 
 	st.ingestMu.Lock()
 	defer st.ingestMu.Unlock()
 
+	// guard against multiple close attempts
 	if st.done != nil {
 		// RPC already finished! just ignore...
 		return
 	}
-	st.trailers = trailers
-	for _, tlrs := range st.trailersTargets {
-		*tlrs = trailers
+
+	// update trailer targets and tunnelClientStream.Trailer
+	st.trailer = trailer
+	for _, target := range st.trailerTargets {
+		*target = trailer
 	}
-	if !st.gotHeaders {
-		st.gotHeaders = true
-		close(st.gotHeadersSignal)
+
+	// unblock header requests - we aren't getting one
+	select {
+	case <-st.headerSignal:
+	default:
+		close(st.headerSignal)
 	}
+
+	// update the value to be returned by tunnelClientStream.err
 	switch err {
 	case nil:
 		err = io.EOF
@@ -673,6 +673,11 @@ func (st *tunnelClientStream) finishStream(err error, trailers metadata.MD) {
 	}
 	st.done = err
 
+	// EOF for buffer, for receives
+	// has to be closed after st.done has been updated
 	close(st.buffer)
+
+	// has to be closed after st.done and st.trailer have been updated
+	// see also tunnelClientStream.err tunnelClientStream.Trailer
 	close(st.doneSignal)
 }

@@ -9,8 +9,11 @@ import (
 	"google.golang.org/grpc/reflection"
 	refl "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
+	"math"
 	"runtime"
 	"sort"
+	"testing"
 	"time"
 )
 
@@ -73,4 +76,130 @@ func ExampleServeTunnel_reflection() {
 	// output:
 	// grpc.reflection.v1alpha.ServerReflection
 	// grpchantesting.TestService
+}
+
+func Test_maxChunkSize(t *testing.T) {
+	if maxChunkSize > maxChunkSizeBase {
+		t.Fatal(maxChunkSize, maxChunkSizeBase)
+	}
+
+	encode := proto.Marshal
+
+	var fattestInt32 int32
+	{
+		encodedSizes := map[int32]int{
+			0:             0,
+			1:             0,
+			-1:            0,
+			math.MaxInt32: 0,
+			math.MinInt32: 0,
+		}
+		for k := range encodedSizes {
+			b, err := proto.Marshal(&EncodedMessage{Size: k})
+			if err != nil {
+				t.Fatal(err)
+			}
+			encodedSizes[k] = len(b)
+		}
+		//t.Log(encodedSizes)
+		max := -1
+		for k, v := range encodedSizes {
+			if v > max || (v == max && k < fattestInt32) {
+				fattestInt32 = k
+				max = v
+			}
+		}
+		//t.Log(fattestInt32)
+	}
+	if fattestInt32 != math.MinInt32 {
+		t.Fatal(fattestInt32)
+	}
+
+	var fattestUint64 uint64
+	{
+		encodedSizes := map[uint64]int{
+			0:              0,
+			1:              0,
+			math.MaxUint64: 0,
+		}
+		for k := range encodedSizes {
+			b, err := proto.Marshal(&ClientToServer{StreamId: k})
+			if err != nil {
+				t.Fatal(err)
+			}
+			encodedSizes[k] = len(b)
+		}
+		//t.Log(encodedSizes)
+		var max int
+		for k, v := range encodedSizes {
+			if v >= max {
+				fattestUint64 = k
+				max = v
+			}
+		}
+		//t.Log(fattestUint64)
+	}
+	if fattestUint64 != math.MaxUint64 {
+		t.Fatal(fattestUint64)
+	}
+
+	for _, tc := range [...]struct {
+		Name string
+		Init func() proto.Message
+	}{
+		{
+			Name: `client message`,
+			Init: func() proto.Message {
+				return &ClientToServer{
+					StreamId: fattestUint64,
+					Frame: &ClientToServer_Message{Message: &EncodedMessage{
+						Size: fattestInt32,
+						Data: make([]byte, maxChunkSizeBase),
+					}},
+				}
+			},
+		},
+		{
+			Name: `client message data`,
+			Init: func() proto.Message {
+				return &ClientToServer{
+					StreamId: fattestUint64,
+					Frame:    &ClientToServer_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
+				}
+			},
+		},
+		{
+			Name: `server message`,
+			Init: func() proto.Message {
+				return &ServerToClient{
+					StreamId: fattestUint64,
+					Frame: &ServerToClient_Message{Message: &EncodedMessage{
+						Size: fattestInt32,
+						Data: make([]byte, maxChunkSizeBase),
+					}},
+				}
+			},
+		},
+		{
+			Name: `server message data`,
+			Init: func() proto.Message {
+				return &ServerToClient{
+					StreamId: fattestUint64,
+					Frame:    &ServerToClient_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
+				}
+			},
+		},
+	} {
+		t.Run(tc.Name, func(t *testing.T) {
+			msg := tc.Init()
+			b, err := encode(msg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			msg = nil
+			if len(b) > grpcMaxFrameSize {
+				t.Errorf(`expected max frame size %d exceeds grpc max frame size: delta %d`, len(b), len(b)-grpcMaxFrameSize)
+			}
+		})
+	}
 }

@@ -235,7 +235,7 @@ const (
 // For a single stream ID, the first such message must include the new_stream
 // field. After that, there can be any number of requests sent, via the
 // request_message field and additional messages thereafter that use the
-// more_request_data field (for requests that are larger than 16kb). And
+// message_data field (for requests that are larger than 16kb). And
 // finally, the RPC ends with either the half_close or cancel fields. If the
 // half_close field is used, the RPC stream remains active so the server may
 // continue to send response data. But, if the cancel field is used, the RPC
@@ -369,7 +369,7 @@ type ClientToServer_NewStream_ struct {
 type ClientToServer_Message struct {
 	// Sends a message on the RPC stream. If the message is larger than 16k,
 	// the rest of the message should be sent in chunks using the
-	// more_request_data field (up to 16kb of data in each chunk).
+	// message_data field (up to 16kb of data in each chunk).
 	Message *EncodedMessage `protobuf:"bytes,4,opt,name=message,proto3,oneof"`
 }
 
@@ -408,7 +408,7 @@ func (*ClientToServer_Cancel) isClientToServer_Frame() {}
 // For a single stream ID, the first such message should include the
 // response_headers field unless no headers are to be sent. After the headers,
 // the server can send any number of responses, via the response_message field
-// and additional messages thereafter that use the more_response_data field (for
+// and additional messages thereafter that use the message_data field (for
 // responses that are larger than 16kb). A message with the close_stream field
 // concludes the stream, whether it terminates successfully or with an error.
 type ServerToClient struct {
@@ -529,7 +529,7 @@ type ServerToClient_Header struct {
 type ServerToClient_Message struct {
 	// Sends a message on the RPC stream. If the message is larger than 16k,
 	// the rest of the message should be sent in chunks using the
-	// more_response_data field (up to 16kb of data in each chunk).
+	// message_data field (up to 16kb of data in each chunk).
 	Message *EncodedMessage `protobuf:"bytes,4,opt,name=message,proto3,oneof"`
 }
 

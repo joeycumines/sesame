@@ -78,15 +78,18 @@ func (x *Conn[K, S, R]) Send(msg S) error {
 
 	key := x.i.SendKey(msg)
 
-	ctxStream := x.i.StreamContext(key)
-	if err := ctxStream.Err(); err != nil {
-		return err
-	}
-
 	size, ok := x.i.SendSize(msg)
 	if !ok {
 		// not flow controlled
 		return x.i.Send(msg)
+	}
+
+	// only guard flow controlled messages against the stream context
+	// (it may be necessary to send cancellation, and that might be a direct result of, or occur after
+	// context cancellation)
+	ctxStream := x.i.StreamContext(key)
+	if err := ctxStream.Err(); err != nil {
+		return err
 	}
 
 	var (
