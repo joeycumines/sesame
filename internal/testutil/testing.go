@@ -13,14 +13,6 @@ type (
 
 	TestingT = testing.TestingT
 
-	Runner = testing.Runner
-
-	RunnerOption = testing.RunnerOption
-
-	RunnerOptions = testing.RunnerOptions
-
-	RunnerTest = testing.RunnerTest
-
 	Unwrapper = testing.Unwrapper
 
 	DepthLimiter = testing.DepthLimiter
@@ -29,9 +21,7 @@ type (
 )
 
 var (
-	OptRunner = testing.OptRunner
 	Wrap      = testing.Wrap
-	NewRunner = testing.NewRunner
 	Parallel  = testing.Parallel
 	SkipRegex = testing.SkipRegex
 )
