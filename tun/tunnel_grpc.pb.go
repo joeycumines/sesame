@@ -23,6 +23,8 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TunnelServiceClient interface {
 	// Orchestrates Stream connections.
+	// Operates in a bi-directional request-response manner, with paired fields for each request and response, and a
+	// <field>_buffer in value in the connect request, indicating the number of concurrent request/responses per pair.
 	Tunnel(ctx context.Context, opts ...grpc.CallOption) (TunnelService_TunnelClient, error)
 	// Provides dedicated bi-directional streaming (reverse dialed).
 	Stream(ctx context.Context, opts ...grpc.CallOption) (TunnelService_StreamClient, error)
@@ -103,6 +105,8 @@ func (x *tunnelServiceStreamClient) Recv() (*StreamResponse, error) {
 // for forward compatibility
 type TunnelServiceServer interface {
 	// Orchestrates Stream connections.
+	// Operates in a bi-directional request-response manner, with paired fields for each request and response, and a
+	// <field>_buffer in value in the connect request, indicating the number of concurrent request/responses per pair.
 	Tunnel(TunnelService_TunnelServer) error
 	// Provides dedicated bi-directional streaming (reverse dialed).
 	Stream(TunnelService_StreamServer) error

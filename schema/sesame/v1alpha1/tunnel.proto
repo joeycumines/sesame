@@ -9,6 +9,8 @@ option go_package = "github.com/joeycumines/sesame/tun";
 
 service TunnelService {
   // Orchestrates Stream connections.
+  // Operates in a bi-directional request-response manner, with paired fields for each request and response, and a
+  // <field>_buffer in value in the connect request, indicating the number of concurrent request/responses per pair.
   rpc Tunnel (stream TunnelRequest) returns (stream TunnelResponse) {}
   // Provides dedicated bi-directional streaming (reverse dialed).
   rpc Stream (stream StreamRequest) returns (stream StreamResponse) {}
@@ -22,6 +24,8 @@ message TunnelRequest {
   };
   message Connect {
     string remote = 1;
+    // Maximum number of concurrent stream requests.
+    int32 stream_buffer = 2;
   }
   message Stream {
     google.rpc.Status error = 1;

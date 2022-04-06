@@ -60,9 +60,13 @@ func (x *TunnelRequest_Connect) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *TunnelRequest_Connect:
 		x.Remote = v.GetRemote()
+		x.StreamBuffer = v.GetStreamBuffer()
 	default:
 		if v, ok := v.(interface{ GetRemote() string }); ok {
 			x.Remote = v.GetRemote()
+		}
+		if v, ok := v.(interface{ GetStreamBuffer() rune }); ok {
+			x.StreamBuffer = v.GetStreamBuffer()
 		}
 	}
 }
@@ -72,6 +76,7 @@ func (x *TunnelRequest_Connect) Proto_ShallowClone() (c *TunnelRequest_Connect) 
 	if x != nil {
 		c = new(TunnelRequest_Connect)
 		c.Remote = x.Remote
+		c.StreamBuffer = x.StreamBuffer
 	}
 	return
 }
