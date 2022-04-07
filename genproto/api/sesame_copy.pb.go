@@ -254,14 +254,18 @@ func (x *DeleteRemoteRequest) Proto_ShallowClone() (c *DeleteRemoteRequest) {
 func (x *UpdateRemoteRequest) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *UpdateRemoteRequest:
-		x.Remote = v.GetRemote()
+		x.Name = v.GetName()
 		x.UpdateMask = v.GetUpdateMask()
+		x.Remote = v.GetRemote()
 	default:
-		if v, ok := v.(interface{ GetRemote() *Remote }); ok {
-			x.Remote = v.GetRemote()
+		if v, ok := v.(interface{ GetName() string }); ok {
+			x.Name = v.GetName()
 		}
 		if v, ok := v.(interface{ GetUpdateMask() *fieldmaskpb.FieldMask }); ok {
 			x.UpdateMask = v.GetUpdateMask()
+		}
+		if v, ok := v.(interface{ GetRemote() *Remote }); ok {
+			x.Remote = v.GetRemote()
 		}
 	}
 }
@@ -270,8 +274,9 @@ func (x *UpdateRemoteRequest) Proto_ShallowCopy(v interface{}) {
 func (x *UpdateRemoteRequest) Proto_ShallowClone() (c *UpdateRemoteRequest) {
 	if x != nil {
 		c = new(UpdateRemoteRequest)
-		c.Remote = x.Remote
+		c.Name = x.Name
 		c.UpdateMask = x.UpdateMask
+		c.Remote = x.Remote
 	}
 	return
 }
@@ -428,14 +433,18 @@ func (x *DeleteEndpointRequest) Proto_ShallowClone() (c *DeleteEndpointRequest) 
 func (x *UpdateEndpointRequest) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *UpdateEndpointRequest:
-		x.Endpoint = v.GetEndpoint()
+		x.Name = v.GetName()
 		x.UpdateMask = v.GetUpdateMask()
+		x.Endpoint = v.GetEndpoint()
 	default:
-		if v, ok := v.(interface{ GetEndpoint() *Endpoint }); ok {
-			x.Endpoint = v.GetEndpoint()
+		if v, ok := v.(interface{ GetName() string }); ok {
+			x.Name = v.GetName()
 		}
 		if v, ok := v.(interface{ GetUpdateMask() *fieldmaskpb.FieldMask }); ok {
 			x.UpdateMask = v.GetUpdateMask()
+		}
+		if v, ok := v.(interface{ GetEndpoint() *Endpoint }); ok {
+			x.Endpoint = v.GetEndpoint()
 		}
 	}
 }
@@ -444,8 +453,9 @@ func (x *UpdateEndpointRequest) Proto_ShallowCopy(v interface{}) {
 func (x *UpdateEndpointRequest) Proto_ShallowClone() (c *UpdateEndpointRequest) {
 	if x != nil {
 		c = new(UpdateEndpointRequest)
-		c.Endpoint = x.Endpoint
+		c.Name = x.Name
 		c.UpdateMask = x.UpdateMask
+		c.Endpoint = x.Endpoint
 	}
 	return
 }

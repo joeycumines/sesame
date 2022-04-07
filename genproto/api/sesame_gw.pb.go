@@ -222,7 +222,7 @@ func local_request_Sesame_DeleteRemote_0(ctx context.Context, marshaler runtime.
 }
 
 var (
-	filter_Sesame_UpdateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "name": 1}, Base: []int{1, 2, 1, 0, 0}, Check: []int{0, 1, 2, 3, 2}}
+	filter_Sesame_UpdateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "name": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_Sesame_UpdateRemote_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -251,14 +251,14 @@ func request_Sesame_UpdateRemote_0(ctx context.Context, marshaler runtime.Marsha
 		_   = err
 	)
 
-	val, ok = pathParams["remote.name"]
+	val, ok = pathParams["name"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "remote.name")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "remote.name", val)
+	protoReq.Name, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "remote.name", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -299,14 +299,14 @@ func local_request_Sesame_UpdateRemote_0(ctx context.Context, marshaler runtime.
 		_   = err
 	)
 
-	val, ok = pathParams["remote.name"]
+	val, ok = pathParams["name"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "remote.name")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "remote.name", val)
+	protoReq.Name, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "remote.name", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -582,7 +582,7 @@ func local_request_Sesame_DeleteEndpoint_0(ctx context.Context, marshaler runtim
 }
 
 var (
-	filter_Sesame_UpdateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "name": 1}, Base: []int{1, 2, 1, 0, 0}, Check: []int{0, 1, 2, 3, 2}}
+	filter_Sesame_UpdateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "name": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_Sesame_UpdateEndpoint_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -611,14 +611,14 @@ func request_Sesame_UpdateEndpoint_0(ctx context.Context, marshaler runtime.Mars
 		_   = err
 	)
 
-	val, ok = pathParams["endpoint.name"]
+	val, ok = pathParams["name"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "endpoint.name")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "endpoint.name", val)
+	protoReq.Name, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "endpoint.name", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -659,14 +659,14 @@ func local_request_Sesame_UpdateEndpoint_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["endpoint.name"]
+	val, ok = pathParams["name"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "endpoint.name")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "endpoint.name", val)
+	protoReq.Name, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "endpoint.name", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "name", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -879,7 +879,7 @@ func RegisterSesameHandlerServer(ctx context.Context, mux *runtime.ServeMux, ser
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
-		ctx, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/sesame.v1alpha1.Sesame/UpdateRemote", runtime.WithHTTPPathPattern("/v1alpha1/{remote.name=namespaces/*/remotes/*}"))
+		ctx, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/sesame.v1alpha1.Sesame/UpdateRemote", runtime.WithHTTPPathPattern("/v1alpha1/{name=namespaces/*/remotes/*}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -999,7 +999,7 @@ func RegisterSesameHandlerServer(ctx context.Context, mux *runtime.ServeMux, ser
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
-		ctx, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/sesame.v1alpha1.Sesame/UpdateEndpoint", runtime.WithHTTPPathPattern("/v1alpha1/{endpoint.name=namespaces/*/remotes/*/endpoints/*}"))
+		ctx, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/sesame.v1alpha1.Sesame/UpdateEndpoint", runtime.WithHTTPPathPattern("/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1156,7 +1156,7 @@ func RegisterSesameHandlerClient(ctx context.Context, mux *runtime.ServeMux, cli
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
-		ctx, err = runtime.AnnotateContext(ctx, mux, req, "/sesame.v1alpha1.Sesame/UpdateRemote", runtime.WithHTTPPathPattern("/v1alpha1/{remote.name=namespaces/*/remotes/*}"))
+		ctx, err = runtime.AnnotateContext(ctx, mux, req, "/sesame.v1alpha1.Sesame/UpdateRemote", runtime.WithHTTPPathPattern("/v1alpha1/{name=namespaces/*/remotes/*}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1261,7 +1261,7 @@ func RegisterSesameHandlerClient(ctx context.Context, mux *runtime.ServeMux, cli
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
-		ctx, err = runtime.AnnotateContext(ctx, mux, req, "/sesame.v1alpha1.Sesame/UpdateEndpoint", runtime.WithHTTPPathPattern("/v1alpha1/{endpoint.name=namespaces/*/remotes/*/endpoints/*}"))
+		ctx, err = runtime.AnnotateContext(ctx, mux, req, "/sesame.v1alpha1.Sesame/UpdateEndpoint", runtime.WithHTTPPathPattern("/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1329,7 +1329,7 @@ var (
 
 	pattern_Sesame_DeleteRemote_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 2, 2, 1, 0, 4, 4, 5, 3}, []string{"v1alpha1", "namespaces", "remotes", "name"}, ""))
 
-	pattern_Sesame_UpdateRemote_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 2, 2, 1, 0, 4, 4, 5, 3}, []string{"v1alpha1", "namespaces", "remotes", "remote.name"}, ""))
+	pattern_Sesame_UpdateRemote_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 2, 2, 1, 0, 4, 4, 5, 3}, []string{"v1alpha1", "namespaces", "remotes", "name"}, ""))
 
 	pattern_Sesame_ListRemotes_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 2, 5, 2, 2, 3}, []string{"v1alpha1", "namespaces", "parent", "remotes"}, ""))
 
@@ -1339,7 +1339,7 @@ var (
 
 	pattern_Sesame_DeleteEndpoint_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 2, 2, 1, 0, 2, 3, 1, 0, 4, 6, 5, 4}, []string{"v1alpha1", "namespaces", "remotes", "endpoints", "name"}, ""))
 
-	pattern_Sesame_UpdateEndpoint_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 2, 2, 1, 0, 2, 3, 1, 0, 4, 6, 5, 4}, []string{"v1alpha1", "namespaces", "remotes", "endpoints", "endpoint.name"}, ""))
+	pattern_Sesame_UpdateEndpoint_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 2, 2, 1, 0, 2, 3, 1, 0, 4, 6, 5, 4}, []string{"v1alpha1", "namespaces", "remotes", "endpoints", "name"}, ""))
 
 	pattern_Sesame_ListEndpoints_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 2, 2, 1, 0, 4, 4, 5, 3, 2, 4}, []string{"v1alpha1", "namespaces", "remotes", "parent", "endpoints"}, ""))
 

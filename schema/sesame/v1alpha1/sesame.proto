@@ -36,7 +36,7 @@ service Sesame {
 
   rpc UpdateRemote (UpdateRemoteRequest) returns (Remote) {
     option (google.api.http) = {
-      patch: "/v1alpha1/{remote.name=namespaces/*/remotes/*}"
+      patch: "/v1alpha1/{name=namespaces/*/remotes/*}"
       body: "remote"
     };
   }
@@ -68,7 +68,7 @@ service Sesame {
 
   rpc UpdateEndpoint (UpdateEndpointRequest) returns (Endpoint) {
     option (google.api.http) = {
-      patch: "/v1alpha1/{endpoint.name=namespaces/*/remotes/*/endpoints/*}"
+      patch: "/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"
       body: "endpoint"
     };
   }
@@ -91,7 +91,7 @@ service Sesame {
 
 // Remote is a network device or other resource that may be accessed by Sesame clients.
 message Remote {
-  string name = 1;
+  string name = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
   string display_name = 2;
   string description = 3;
   google.protobuf.Timestamp create_time = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
@@ -99,7 +99,7 @@ message Remote {
 
 // Endpoint is a gRPC service available via a remote.
 message Endpoint {
-  string name = 1;
+  string name = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
   string display_name = 2;
   string description = 3;
   google.protobuf.Timestamp create_time = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
@@ -118,12 +118,11 @@ message Endpoint {
 
 // Namespace scopes resources in the Sesame API, and is intended to (eventually) facilitate scoped simple auth.
 message Namespace {
-  string name = 1;
+  string name = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 message CreateRemoteRequest {
-  // parent for the remote, note that the remote.name MUST NOT be set
-  // generated names may be based on the other input
+  // The name of the parent Namespace, note that remote.name MUST NOT be set.
   string parent = 1;
   // May be specified to request a specific (non-trailing) resource id, note it's a single path segment, w/o any "/".
   string resource_id = 2;
@@ -139,9 +138,10 @@ message DeleteRemoteRequest {
 }
 
 message UpdateRemoteRequest {
-  Remote remote = 1;
+  string name = 1;
   // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#fieldmask
   google.protobuf.FieldMask update_mask = 2;
+  Remote remote = 11;
 }
 
 message ListRemotesRequest {
@@ -172,9 +172,10 @@ message DeleteEndpointRequest {
 }
 
 message UpdateEndpointRequest {
-  Endpoint endpoint = 1;
+  string name = 1;
   // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#fieldmask
   google.protobuf.FieldMask update_mask = 2;
+  Endpoint endpoint = 11;
 }
 
 message ListEndpointsRequest {

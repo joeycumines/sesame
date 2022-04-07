@@ -31,26 +31,54 @@ command -v protoc-gen-go-grpc >/dev/null 2>&1
 command -v protoc-gen-go-copy >/dev/null 2>&1
 command -v protoc-gen-sesame >/dev/null 2>&1
 
-cmd=(
-    bash -c '
-common=(-I . -I ./api-common-protos) &&
-set -x &&
-protoc \
-    "${common[@]}" \
-    --go_out=. --go_opt=paths=source_relative \
-    --go-grpc_out=. --go-grpc_opt=paths=source_relative \
-    --go-copy_out=. --go-copy_opt=paths=source_relative \
-    --grpc-gateway_out=. --grpc-gateway_opt=paths=source_relative --grpc-gateway_opt=logtostderr=true \
-    "$@" \
-&&
-protoc \
-    "${common[@]}" \
-    --sesame_out=. --sesame_opt=paths=source_relative \
-    "$@"'
-    -
-)
+main() {
+    set -euo pipefail || exit 1
 
-# TODO     --openapiv2_out=. --openapiv2_opt=logtostderr=true
+    common=(-I . -I ./api-common-protos)
+
+    schema_prefix=sesame/v1alpha1/sesame.
+    schema_openapi="$schema_prefix"openapi.yaml
+
+    client_name=genrest
+    client_dir=../internal/"$client_name"
+
+    set -x
+
+    protoc \
+        "${common[@]}" \
+        --go_out=. --go_opt=paths=source_relative \
+        --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+        --go-copy_out=. --go-copy_opt=paths=source_relative \
+        --grpc-gateway_out=. --grpc-gateway_opt=paths=source_relative --grpc-gateway_opt=logtostderr=true \
+        "$@"
+
+    protoc \
+        "${common[@]}" \
+        --sesame_out=. --sesame_opt=paths=source_relative \
+        "$@"
+
+    protoc \
+        "${common[@]}" \
+        --openapiv2_out=. --openapiv2_opt=logtostderr=true \
+        "$schema_prefix"proto
+
+    curl 'https://converter.swagger.io/api/convert' \
+        -sf \
+        -H 'accept: application/yaml' \
+        -H 'content-type: application/json' \
+        --data-binary '@'"$schema_prefix"swagger.json \
+        --compressed \
+        -o "$schema_openapi"
+
+    mkdir -p "$client_dir"
+    oapi-codegen -generate types,client -package "$client_name" -o "$client_dir"/"$client_name".gen.go "$schema_openapi"
+    cd "$client_dir"
+    go vet
+    go build
+    go test
+}
+
+cmd=(bash -c "$(declare -f main && echo 'main "$@"')" -)
 
 cd "$script_path/../schema"
 echo "Schema path: $(pwd)"
