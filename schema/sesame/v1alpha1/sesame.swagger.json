@@ -2,12 +2,25 @@
   "swagger": "2.0",
   "info": {
     "title": "sesame/v1alpha1/sesame.proto",
-    "version": "version not set"
+    "version": "0.1.0-alpha1",
+    "contact": {
+      "name": "Sesame project",
+      "url": "https://github.com/joeycumines/sesame"
+    },
+    "license": {
+      "name": "MIT License",
+      "url": "https://github.com/joeycumines/sesame/blob/main/LICENSE"
+    }
   },
   "tags": [
     {
       "name": "Sesame"
     }
+  ],
+  "schemes": [
+    "http",
+    "https",
+    "wss"
   ],
   "consumes": [
     "application/json"
@@ -482,17 +495,6 @@
         }
       }
     },
-    "GrpcMetadataValue": {
-      "type": "object",
-      "properties": {
-        "str": {
-          "$ref": "#/definitions/GrpcMetadataStr"
-        },
-        "bin": {
-          "$ref": "#/definitions/GrpcMetadataBin"
-        }
-      }
-    },
     "ProxyRequestDial": {
       "type": "object",
       "properties": {
@@ -563,11 +565,22 @@
         "data": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/definitions/GrpcMetadataValue"
+            "$ref": "#/definitions/typeGrpcMetadataValue"
           }
         }
       },
       "description": "GrpcMetadata represents gRPC request or response (header, trailer) metadata."
+    },
+    "typeGrpcMetadataValue": {
+      "type": "object",
+      "properties": {
+        "str": {
+          "$ref": "#/definitions/GrpcMetadataStr"
+        },
+        "bin": {
+          "$ref": "#/definitions/GrpcMetadataBin"
+        }
+      }
     },
     "v1alpha1Endpoint": {
       "type": "object",
@@ -687,5 +700,9 @@
       },
       "description": "Remote is a network device or other resource that may be accessed by Sesame clients."
     }
+  },
+  "externalDocs": {
+    "description": "Source repository",
+    "url": "https://github.com/joeycumines/sesame"
   }
 }

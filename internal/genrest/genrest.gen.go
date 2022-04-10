@@ -37,12 +37,6 @@ type GrpcMetadataStr struct {
 	Values *[]string `json:"values,omitempty"`
 }
 
-// GrpcMetadataValue defines model for GrpcMetadataValue.
-type GrpcMetadataValue struct {
-	Bin *GrpcMetadataBin `json:"bin,omitempty"`
-	Str *GrpcMetadataStr `json:"str,omitempty"`
-}
-
 // Dial models the initial request routing of a method call.
 type ProxyRequestDial struct {
 	// conn_mask is an optional field mask for ProxyResponse.conn.
@@ -205,7 +199,13 @@ type TypeGrpcMetadata struct {
 
 // TypeGrpcMetadata_Data defines model for TypeGrpcMetadata.Data.
 type TypeGrpcMetadata_Data struct {
-	AdditionalProperties map[string]GrpcMetadataValue `json:"-"`
+	AdditionalProperties map[string]TypeGrpcMetadataValue `json:"-"`
+}
+
+// TypeGrpcMetadataValue defines model for typeGrpcMetadataValue.
+type TypeGrpcMetadataValue struct {
+	Bin *GrpcMetadataBin `json:"bin,omitempty"`
+	Str *GrpcMetadataStr `json:"str,omitempty"`
 }
 
 // Endpoint is a gRPC service available via a remote.
@@ -578,7 +578,7 @@ func (a ProtobufAny) MarshalJSON() ([]byte, error) {
 
 // Getter for additional properties for TypeGrpcMetadata_Data. Returns the specified
 // element and whether it was found
-func (a TypeGrpcMetadata_Data) Get(fieldName string) (value GrpcMetadataValue, found bool) {
+func (a TypeGrpcMetadata_Data) Get(fieldName string) (value TypeGrpcMetadataValue, found bool) {
 	if a.AdditionalProperties != nil {
 		value, found = a.AdditionalProperties[fieldName]
 	}
@@ -586,9 +586,9 @@ func (a TypeGrpcMetadata_Data) Get(fieldName string) (value GrpcMetadataValue, f
 }
 
 // Setter for additional properties for TypeGrpcMetadata_Data
-func (a *TypeGrpcMetadata_Data) Set(fieldName string, value GrpcMetadataValue) {
+func (a *TypeGrpcMetadata_Data) Set(fieldName string, value TypeGrpcMetadataValue) {
 	if a.AdditionalProperties == nil {
-		a.AdditionalProperties = make(map[string]GrpcMetadataValue)
+		a.AdditionalProperties = make(map[string]TypeGrpcMetadataValue)
 	}
 	a.AdditionalProperties[fieldName] = value
 }
@@ -602,9 +602,9 @@ func (a *TypeGrpcMetadata_Data) UnmarshalJSON(b []byte) error {
 	}
 
 	if len(object) != 0 {
-		a.AdditionalProperties = make(map[string]GrpcMetadataValue)
+		a.AdditionalProperties = make(map[string]TypeGrpcMetadataValue)
 		for fieldName, fieldBuf := range object {
-			var fieldVal GrpcMetadataValue
+			var fieldVal TypeGrpcMetadataValue
 			err := json.Unmarshal(fieldBuf, &fieldVal)
 			if err != nil {
 				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)

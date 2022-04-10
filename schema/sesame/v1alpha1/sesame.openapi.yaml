@@ -1,7 +1,16 @@
 openapi: 3.0.1
 info:
   title: sesame/v1alpha1/sesame.proto
-  version: version not set
+  contact:
+    name: Sesame project
+    url: https://github.com/joeycumines/sesame
+  license:
+    name: MIT License
+    url: https://github.com/joeycumines/sesame/blob/main/LICENSE
+  version: 0.1.0-alpha1
+externalDocs:
+  description: Source repository
+  url: https://github.com/joeycumines/sesame
 servers:
 - url: /
 tags:
@@ -383,13 +392,6 @@ components:
           type: array
           items:
             type: string
-    GrpcMetadataValue:
-      type: object
-      properties:
-        str:
-          $ref: '#/components/schemas/GrpcMetadataStr'
-        bin:
-          $ref: '#/components/schemas/GrpcMetadataBin'
     ProxyRequestDial:
       type: object
       properties:
@@ -563,9 +565,16 @@ components:
         data:
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/GrpcMetadataValue'
+            $ref: '#/components/schemas/typeGrpcMetadataValue'
       description: GrpcMetadata represents gRPC request or response (header, trailer)
         metadata.
+    typeGrpcMetadataValue:
+      type: object
+      properties:
+        str:
+          $ref: '#/components/schemas/GrpcMetadataStr'
+        bin:
+          $ref: '#/components/schemas/GrpcMetadataBin'
     v1alpha1Endpoint:
       type: object
       properties:
