@@ -71,7 +71,7 @@ main() {
         -o "$schema_openapi"
 
     mkdir -p "$client_dir"
-    oapi-codegen -generate types,client -package "$client_name" -o "$client_dir"/"$client_name".gen.go "$schema_openapi"
+    oapi-codegen -old-config-style -generate types,client -package "$client_name" -o "$client_dir"/"$client_name".gen.go "$schema_openapi"
     cd "$client_dir"
     go vet
     go build
