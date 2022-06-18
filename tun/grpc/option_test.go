@@ -3,7 +3,7 @@ package grpc
 import (
 	"errors"
 	"github.com/fullstorydev/grpchan/grpchantesting"
-	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
+	"github.com/joeycumines/sesame/type/grpctunnel"
 	"google.golang.org/grpc/reflection"
 	"reflect"
 	"testing"

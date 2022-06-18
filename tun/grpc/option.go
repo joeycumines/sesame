@@ -3,7 +3,7 @@ package grpc
 import (
 	"fmt"
 	"github.com/fullstorydev/grpchan"
-	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
+	"github.com/joeycumines/sesame/type/grpctunnel"
 	"google.golang.org/grpc"
 )
 

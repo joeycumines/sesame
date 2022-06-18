@@ -1,7 +1,7 @@
 package grpc
 
 import (
-	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
+	"github.com/joeycumines/sesame/type/grpctunnel"
 )
 
 type (

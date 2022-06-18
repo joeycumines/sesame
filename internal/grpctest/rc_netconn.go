@@ -3,12 +3,12 @@ package grpctest
 import (
 	"context"
 	"fmt"
-	"github.com/joeycumines/sesame/genproto/type/netaddr"
 	"github.com/joeycumines/sesame/internal/nettest"
 	"github.com/joeycumines/sesame/internal/testutil"
 	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
 	streamutil "github.com/joeycumines/sesame/stream"
+	"github.com/joeycumines/sesame/type/netaddr"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"

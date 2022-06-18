@@ -7,7 +7,7 @@
 package rc
 
 import (
-	netaddr "github.com/joeycumines/sesame/genproto/type/netaddr"
+	netaddr "github.com/joeycumines/sesame/type/netaddr"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"

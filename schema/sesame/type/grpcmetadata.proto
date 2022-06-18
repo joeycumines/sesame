@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sesame.type;
 
-option go_package = "github.com/joeycumines/sesame/genproto/type/grpcmetadata";
+option go_package = "github.com/joeycumines/sesame/type/grpcmetadata";
 
 // GrpcMetadata represents gRPC request or response (header, trailer) metadata.
 message GrpcMetadata {

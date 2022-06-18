@@ -210,7 +210,7 @@ syntax = "proto3";
 
 package sesame.type;
 
-option go_package = "github.com/joeycumines/sesame/genproto/type/grpctunnel";
+option go_package = "github.com/joeycumines/sesame/type/grpctunnel";
 
 import "google/protobuf/empty.proto";
 import "google/rpc/status.proto";

@@ -41,14 +41,6 @@ These will be added/updated as they're adopted or change... that's the hope, any
         2. [Google API schemas](https://github.com/googleapis/googleapis)
         3. [GAPIC (Generated API Client) showcase](https://github.com/googleapis/gapic-showcase)
            TODO evaluate this
-    2. Packages under `genproto` should be entirely auto-generated
-        1. Exceptions may be made where sensible, e.g. the `New` factory and `As<Go type>` methods, commonly implemented
-           by the Go packages for the core "well-known types", provided by protobuf
-    3. Generating all Protobuf and gRPC source under `genproto` is not required, but should be considered
-        1. The top-level `genproto` path/structure is ok
-        2. Similar `genproto` paths/structures (under other path(s)) are ok
-        3. Leaf `genproto` packages are ok
-        4. No `genproto` path segment at all is ok
 3. General codegen
     1. As Go (unlike Python) doesn't implicitly import packages, it's fine to generate code above other code which
        doesn't import it, though it should be at least related

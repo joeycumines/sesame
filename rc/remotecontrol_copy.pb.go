@@ -3,7 +3,7 @@
 
 package rc
 
-import "github.com/joeycumines/sesame/genproto/type/netaddr"
+import "github.com/joeycumines/sesame/type/netaddr"
 import "google.golang.org/protobuf/types/known/durationpb"
 
 // Proto_ShallowCopy copies fields, from v to the receiver, using field getters.

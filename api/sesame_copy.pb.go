@@ -3,7 +3,7 @@
 
 package api
 
-import "github.com/joeycumines/sesame/genproto/type/grpcmetadata"
+import "github.com/joeycumines/sesame/type/grpcmetadata"
 import "google.golang.org/genproto/googleapis/rpc/status"
 import "google.golang.org/protobuf/types/known/anypb"
 import "google.golang.org/protobuf/types/known/fieldmaskpb"

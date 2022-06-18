@@ -3,8 +3,8 @@ package grpc
 import (
 	"errors"
 	"fmt"
-	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
 	"github.com/joeycumines/sesame/internal/flowcontrol"
+	"github.com/joeycumines/sesame/type/grpctunnel"
 	"golang.org/x/net/context"
 	"io"
 	"math"

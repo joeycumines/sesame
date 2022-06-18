@@ -7,7 +7,7 @@
 package tun
 
 import (
-	grpctunnel "github.com/joeycumines/sesame/genproto/type/grpctunnel"
+	grpctunnel "github.com/joeycumines/sesame/type/grpctunnel"
 	status "google.golang.org/genproto/googleapis/rpc/status"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"

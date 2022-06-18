@@ -16,7 +16,7 @@ package grpc
 
 import (
 	"github.com/fullstorydev/grpchan"
-	"github.com/joeycumines/sesame/genproto/type/grpctunnel"
+	"github.com/joeycumines/sesame/type/grpctunnel"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

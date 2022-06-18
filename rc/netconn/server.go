@@ -3,10 +3,10 @@ package netconn
 import (
 	"context"
 	"fmt"
-	"github.com/joeycumines/sesame/genproto/type/netaddr"
 	grpcstream "github.com/joeycumines/sesame/grpc"
 	"github.com/joeycumines/sesame/rc"
 	streamutil "github.com/joeycumines/sesame/stream"
+	"github.com/joeycumines/sesame/type/netaddr"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"

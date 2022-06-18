@@ -2,8 +2,8 @@ package netconn
 
 import (
 	"fmt"
-	"github.com/joeycumines/sesame/genproto/type/netaddr"
 	"github.com/joeycumines/sesame/rc"
+	"github.com/joeycumines/sesame/type/netaddr"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"testing"
 	"time"

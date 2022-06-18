@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package sesame.type;
 
-option go_package = "github.com/joeycumines/sesame/genproto/type/netaddr";
+option go_package = "github.com/joeycumines/sesame/type/netaddr";
 
 // NetAddr represents a network end point address.
 //

@@ -3,7 +3,7 @@
 
 package tun
 
-import "github.com/joeycumines/sesame/genproto/type/grpctunnel"
+import "github.com/joeycumines/sesame/type/grpctunnel"
 import "google.golang.org/genproto/googleapis/rpc/status"
 
 // Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
