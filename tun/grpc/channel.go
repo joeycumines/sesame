@@ -17,7 +17,6 @@ package grpc
 import (
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/joeycumines/sesame/internal/flowcontrol"
 	"github.com/joeycumines/sesame/type/grpctunnel"
 	"golang.org/x/net/context"
@@ -27,6 +26,7 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"io"
 	"math"
 	"sync"
@@ -411,7 +411,7 @@ func (st *tunnelClientStream) CloseSend() error {
 	_ = st.stream.Send(&grpctunnel.ClientToServer{
 		StreamId: st.streamID,
 		Frame: &grpctunnel.ClientToServer_HalfClose{
-			HalfClose: &empty.Empty{},
+			HalfClose: &emptypb.Empty{},
 		},
 	})
 	return nil
@@ -628,7 +628,7 @@ func (st *tunnelClientStream) cancel(err error) error {
 	return st.stream.Send(&grpctunnel.ClientToServer{
 		StreamId: st.streamID,
 		Frame: &grpctunnel.ClientToServer_Cancel{
-			Cancel: &empty.Empty{},
+			Cancel: &emptypb.Empty{},
 		},
 	})
 }
