@@ -6,13 +6,13 @@ require (
 	github.com/deepmap/oapi-codegen v1.11.0
 	github.com/fullstorydev/grpchan v1.1.1
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.10.3
-	github.com/joeycumines/protoc-gen-go-copy v0.1.0
-	golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d
+	github.com/joeycumines/protoc-gen-go-copy v0.1.1
+	golang.org/x/exp v0.0.0-20220713135740-79cabaa25d75
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4
-	golang.org/x/net v0.0.0-20220621193019-9d032be2e588
+	golang.org/x/net v0.0.0-20220708220712-1185a9018129
 	golang.org/x/tools v0.1.11
-	google.golang.org/genproto v0.0.0-20220621134657-43db42f103f7
-	google.golang.org/grpc v1.47.0
+	google.golang.org/genproto v0.0.0-20220715211116-798f69b842b9
+	google.golang.org/grpc v1.48.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.2.0
 	google.golang.org/protobuf v1.28.0
 	honnef.co/go/tools v0.3.2
@@ -38,10 +38,10 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.1 // indirect
-	github.com/yuin/goldmark v1.4.12 // indirect
-	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
-	golang.org/x/exp/typeparams v0.0.0-20220613132600-b0d781184e0d // indirect
-	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c // indirect
+	github.com/yuin/goldmark v1.4.13 // indirect
+	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
+	golang.org/x/exp/typeparams v0.0.0-20220713135740-79cabaa25d75 // indirect
+	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
