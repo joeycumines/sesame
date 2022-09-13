@@ -294,12 +294,12 @@ func (flowControlConfig) RecvConfig(streamID uint64) flowcontrol.Config {
 }
 
 func clientToServerMessageSize(msg *grpctunnel.ClientToServer) (uint32, bool) {
-	var size int
+	var size int64
 	switch frame := msg.GetFrame().(type) {
 	case *grpctunnel.ClientToServer_Message:
-		size = len(frame.Message.GetData())
+		size = int64(len(frame.Message.GetData()))
 	case *grpctunnel.ClientToServer_MessageData:
-		size = len(frame.MessageData)
+		size = int64(len(frame.MessageData))
 	default:
 		return 0, false
 	}
@@ -309,12 +309,12 @@ func clientToServerMessageSize(msg *grpctunnel.ClientToServer) (uint32, bool) {
 	return uint32(size), true
 }
 func serverToClientMessageSize(msg *grpctunnel.ServerToClient) (uint32, bool) {
-	var size int
+	var size int64
 	switch frame := msg.GetFrame().(type) {
 	case *grpctunnel.ServerToClient_Message:
-		size = len(frame.Message.GetData())
+		size = int64(len(frame.Message.GetData()))
 	case *grpctunnel.ServerToClient_MessageData:
-		size = len(frame.MessageData)
+		size = int64(len(frame.MessageData))
 	default:
 		return 0, false
 	}
