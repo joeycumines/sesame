@@ -7,6 +7,7 @@ package grpcmetadata
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *GrpcMetadata) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *GrpcMetadata:
@@ -33,6 +34,7 @@ func (x *GrpcMetadata) Proto_ShallowClone() (c *GrpcMetadata) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *GrpcMetadata_Value) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *GrpcMetadata_Value:
@@ -76,6 +78,7 @@ func (x *GrpcMetadata_Value) Proto_ShallowClone() (c *GrpcMetadata_Value) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *GrpcMetadata_Str) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *GrpcMetadata_Str:
@@ -100,6 +103,7 @@ func (x *GrpcMetadata_Str) Proto_ShallowClone() (c *GrpcMetadata_Str) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *GrpcMetadata_Bin) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *GrpcMetadata_Bin:

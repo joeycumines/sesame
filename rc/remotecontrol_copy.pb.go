@@ -10,6 +10,7 @@ import "google.golang.org/protobuf/types/known/durationpb"
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *NetConnRequest) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *NetConnRequest:
@@ -50,6 +51,7 @@ func (x *NetConnRequest) Proto_ShallowClone() (c *NetConnRequest) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *NetConnRequest_Dial) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *NetConnRequest_Dial:
@@ -79,6 +81,7 @@ func (x *NetConnRequest_Dial) Proto_ShallowClone() (c *NetConnRequest_Dial) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *NetConnResponse) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *NetConnResponse:
@@ -119,6 +122,7 @@ func (x *NetConnResponse) Proto_ShallowClone() (c *NetConnResponse) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *NetConnResponse_Conn) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *NetConnResponse_Conn:

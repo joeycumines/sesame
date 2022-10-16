@@ -11,6 +11,7 @@ import "google.golang.org/protobuf/types/known/emptypb"
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *ClientToServer) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *ClientToServer:
@@ -86,6 +87,7 @@ func (x *ClientToServer) Proto_ShallowClone() (c *ClientToServer) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *ClientToServer_NewStream) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *ClientToServer_NewStream:
@@ -117,6 +119,7 @@ func (x *ClientToServer_NewStream) Proto_ShallowClone() (c *ClientToServer_NewSt
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *ServerToClient) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *ServerToClient:
@@ -187,6 +190,7 @@ func (x *ServerToClient) Proto_ShallowClone() (c *ServerToClient) {
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *ServerToClient_CloseStream) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *ServerToClient_CloseStream:
@@ -218,6 +222,7 @@ func (x *ServerToClient_CloseStream) Proto_ShallowClone() (c *ServerToClient_Clo
 // Note that v is of an arbitrary type, which may implement any number of the
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
 func (x *EncodedMessage) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *EncodedMessage:
