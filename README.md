@@ -1,5 +1,11 @@
 # Sesame
 
+**Note: Development has been halted** - I got bored after I felt I proved the concept. For now, this module is simply a collection of utilities, including a _working_ implementation of jhump/grpctunnel.
+
+Take a look at the docs: [tun/grpc](https://pkg.go.dev/github.com/joeycumines/sesame/tun/grpc), [rc/netconn](https://pkg.go.dev/github.com/joeycumines/sesame/rc/netconn), [stream](https://pkg.go.dev/github.com/joeycumines/sesame/stream), [ionet](https://pkg.go.dev/github.com/joeycumines/sesame/ionet), [grpc](https://pkg.go.dev/github.com/joeycumines/sesame/grpc).
+
+---
+
 The goal of this module is to implement tooling to implement a sensible and performant "reverse tunnel" (i.e. NAT proxy
 / hole punching) mechanism, suitable for production use in a cloud context, using gRPC streams. It is intended that this
 project will expose a suite of useful, modular tooling (as packages or commands), to best address this inherently niche
