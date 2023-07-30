@@ -34,6 +34,7 @@ func ExampleNewBufconnClient() {
 		panic(err)
 	}
 
+	//lint:ignore SA1019 v1 isnt completely released yet
 	if err := stream.Send(&refl.ServerReflectionRequest{MessageRequest: &refl.ServerReflectionRequest_ListServices{}}); err != nil {
 		panic(err)
 	}
@@ -41,8 +42,11 @@ func ExampleNewBufconnClient() {
 	if msg, err := stream.Recv(); err != nil {
 		panic(err)
 	} else {
+		//lint:ignore SA1019 v1 isnt completely released yet
 		services := make([]string, 0, len(msg.GetListServicesResponse().GetService()))
+		//lint:ignore SA1019 v1 isnt completely released yet
 		for _, v := range msg.GetListServicesResponse().GetService() {
+			//lint:ignore SA1019 v1 isnt completely released yet
 			services = append(services, v.GetName())
 		}
 		fmt.Printf("there are %d available services: %q\n", len(services), services)
@@ -53,7 +57,7 @@ func ExampleNewBufconnClient() {
 	}
 
 	// output:
-	// there are 1 available services: ["grpc.reflection.v1alpha.ServerReflection"]
+	// there are 2 available services: ["grpc.reflection.v1.ServerReflection" "grpc.reflection.v1alpha.ServerReflection"]
 }
 
 func TestGrpchanClientConnFactory(t *testing.T) {

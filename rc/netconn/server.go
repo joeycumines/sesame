@@ -17,6 +17,7 @@ type (
 	// Server implements rc.RemoteControlServer's NetConn method.
 	Server struct {
 		Dialer DialerFactory
+		//lint:ignore U1000 it is actually used
 		unimplementedRemoteControlServer
 	}
 
@@ -35,6 +36,7 @@ type (
 		DialContext(ctx context.Context, network, address string) (net.Conn, error)
 	}
 
+	//lint:ignore U1000 it is actually used
 	unimplementedRemoteControlServer = rc.UnimplementedRemoteControlServer
 )
 

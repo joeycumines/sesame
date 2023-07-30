@@ -61,6 +61,7 @@ type TunnelServer struct {
 	mu           sync.RWMutex
 	reverseByKey map[interface{}]*reverseChannels
 
+	//lint:ignore U1000 it is actually used
 	unimplementedTunnelServiceServer
 }
 

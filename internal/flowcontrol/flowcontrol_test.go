@@ -99,7 +99,15 @@ func (x *streamCounterMap) String() string {
 		kv = append(kv, k)
 		keys[k] = fmt.Sprint(k)
 	}
-	slices.SortFunc(kv, func(a, b mockKey) bool { return keys[a] < keys[b] })
+	slices.SortFunc(kv, func(a, b mockKey) int {
+		if keys[a] < keys[b] {
+			return -1
+		} else if keys[a] > keys[b] {
+			return 1
+		} else {
+			return 0
+		}
+	})
 	for _, k := range kv {
 		if b.Len() != 0 {
 			b.WriteByte('\n')

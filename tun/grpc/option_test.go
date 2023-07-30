@@ -183,7 +183,7 @@ func Test_tunnelConfig_validate(t *testing.T) {
 					t.Error(hm)
 				} else if c.handlers.get().val != hm[0] {
 					t.Error()
-				} else if len(c.handlers.get().val.m) != 2 {
+				} else if len(c.handlers.get().val.m) != 3 {
 					t.Error(c.handlers.get().val.m)
 				}
 

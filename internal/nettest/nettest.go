@@ -8,6 +8,7 @@ package nettest
 import (
 	"errors"
 	"fmt"
+	//lint:ignore SA1019 v1 isnt completely released yet
 	"io/ioutil"
 	"net"
 	"os"

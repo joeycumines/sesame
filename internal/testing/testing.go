@@ -13,6 +13,7 @@ type (
 		Run(name string, f func(t T)) bool
 	}
 
+	//lint:ignore U1000 it is actually used
 	tI = T
 
 	// TG is all of T except the recursive method.

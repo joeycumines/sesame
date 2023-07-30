@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	//lint:ignore SA1019 v1 isnt completely released yet
 	"io/ioutil"
 	"math/rand"
 	"net"

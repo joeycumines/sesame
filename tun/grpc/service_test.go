@@ -136,6 +136,7 @@ func ExampleTunnelServer_reflection() {
 		panic(err)
 	}
 
+	//lint:ignore SA1019 v1 isnt completely released yet
 	if err := stream.Send(&refl.ServerReflectionRequest{MessageRequest: &refl.ServerReflectionRequest_ListServices{}}); err != nil {
 		panic(err)
 	}
@@ -146,7 +147,9 @@ func ExampleTunnelServer_reflection() {
 	}
 
 	var names []string
+	//lint:ignore SA1019 v1 isnt completely released yet
 	for _, svc := range res.GetListServicesResponse().GetService() {
+		//lint:ignore SA1019 v1 isnt completely released yet
 		names = append(names, svc.GetName())
 	}
 	sort.Strings(names)
@@ -155,6 +158,7 @@ func ExampleTunnelServer_reflection() {
 	}
 
 	// output:
+	// grpc.reflection.v1.ServerReflection
 	// grpc.reflection.v1alpha.ServerReflection
 	// grpchantesting.TestService
 }
