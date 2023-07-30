@@ -12,7 +12,11 @@ GO_TEST_FLAGS ?=
 GODOC ?= godoc
 GODOC_FLAGS ?= -http=:6060
 
-LIST_TOOLS = grep -P '^\t_' tools.go | cut -d '"' -f 2
+ifeq ($(OS),Windows_NT)
+LIST_TOOLS ?= if exist tools.go (for /f tokens^=2^ delims^=^" %%a in ('findstr /r "^[\t ]*_" tools.go') do echo %%a)
+else
+LIST_TOOLS ?= [ ! -e tools.go ] || grep -E '^[	 ]*_' tools.go | cut -d '"' -f 2
+endif
 
 .PHONY: all
 all: lint build test
@@ -55,22 +59,25 @@ godoc:
 	@echo 'Running godoc, the default URL is http://localhost:6060/pkg/github.com/joeycumines/sesame/'
 	$(GODOC) $(GODOC_FLAGS)
 
-# this won't work on all systems
 .PHONY: update
+update: GO_TOOLS := $(shell $(LIST_TOOLS))
 update:
 	$(GO) get -u -t ./...
-	run_command() { echo "$$@" && "$$@"; } && \
-		$(LIST_TOOLS) | \
-		while read -r line; do run_command $(GO) get -u "$$line" || exit 1; done
+	$(foreach tool,$(GO_TOOLS),$(update__TEMPLATE))
 	$(GO) mod tidy
+define update__TEMPLATE =
+$(GO) get -u $(tool)
 
-# this won't work on all systems
+endef
+
 .PHONY: tools
+tools: GO_TOOLS := $(shell $(LIST_TOOLS))
 tools:
-	export CGO_ENABLED=0 && \
-		run_command() { echo "$$@" && "$$@"; } && \
-		$(LIST_TOOLS) | \
-		while read -r line; do run_command $(GO) install "$$line" || exit 1; done
+	$(foreach tool,$(GO_TOOLS),$(tools__TEMPLATE))
+define tools__TEMPLATE =
+$(GO) install $(tool)
+
+endef
 
 # this won't work on all systems
 .PHONY: generate
