@@ -108,11 +108,6 @@ paths:
         schema:
           pattern: namespaces/[^/]+/remotes/[^/]+/endpoints/[^/]+
           type: string
-      - name: updateMask
-        in: query
-        description: https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#fieldmask
-        schema:
-          type: string
       requestBody:
         content:
           application/json:
@@ -192,11 +187,6 @@ paths:
         required: true
         schema:
           pattern: namespaces/[^/]+/remotes/[^/]+
-          type: string
-      - name: updateMask
-        in: query
-        description: https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#fieldmask
-        schema:
           type: string
       requestBody:
         content:
@@ -375,7 +365,10 @@ components:
         around access and usage behavior.
     EndpointTunnel:
       type: object
-      description: Tunnel models an endpoint exposed directly over a tunnel provider.
+      description: |-
+        Tunnel models an endpoint exposed directly over a tunnel provider.
+
+        TODO might eventually make this configurable (more than one tunnel pattern)
     GrpcMetadataBin:
       type: object
       properties:
@@ -473,8 +466,12 @@ components:
             if (any.is(Foo.class)) {
               foo = any.unpack(Foo.class);
             }
+            // or ...
+            if (any.isSameTypeAs(Foo.getDefaultInstance())) {
+              foo = any.unpack(Foo.getDefaultInstance());
+            }
 
-        Example 3: Pack and unpack a message in Python.
+         Example 3: Pack and unpack a message in Python.
 
             foo = Foo(...)
             any = Any()
@@ -484,7 +481,7 @@ components:
               any.Unpack(foo)
               ...
 
-        Example 4: Pack and unpack a message in Go
+         Example 4: Pack and unpack a message in Go
 
              foo := &pb.Foo{...}
              any, err := anypb.New(foo)
@@ -503,9 +500,8 @@ components:
         in the type URL, for example "foo.bar.com/x/y.z" will yield type
         name "y.z".
 
-
         JSON
-
+        ====
         The JSON representation of an `Any` value uses the regular
         representation of the deserialized, embedded message, with an
         additional field `@type` which contains the type URL. Example:
@@ -536,14 +532,17 @@ components:
       properties:
         code:
           type: integer
-          description: The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].
+          description: |-
+            The status code, which should be an enum value of
+            [google.rpc.Code][google.rpc.Code].
           format: int32
         message:
           type: string
           description: |-
             A developer-facing error message, which should be in English. Any
             user-facing error message should be localized and sent in the
-            [google.rpc.Status.details][google.rpc.Status.details] field, or localized by the client.
+            [google.rpc.Status.details][google.rpc.Status.details] field, or localized
+            by the client.
         details:
           type: array
           description: |-

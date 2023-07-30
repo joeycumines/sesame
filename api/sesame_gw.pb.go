@@ -32,7 +32,7 @@ var _ = utilities.NewDoubleArray
 var _ = metadata.Join
 
 var (
-	filter_Sesame_CreateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "parent": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+	filter_Sesame_CreateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "parent": 1}, Base: []int{1, 2, 4, 0, 0, 0, 0}, Check: []int{0, 1, 1, 2, 2, 3, 3}}
 )
 
 func request_Sesame_CreateRemote_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -222,7 +222,7 @@ func local_request_Sesame_DeleteRemote_0(ctx context.Context, marshaler runtime.
 }
 
 var (
-	filter_Sesame_UpdateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "name": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+	filter_Sesame_UpdateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "name": 1}, Base: []int{1, 2, 4, 0, 0, 0, 0}, Check: []int{0, 1, 1, 2, 2, 3, 3}}
 )
 
 func request_Sesame_UpdateRemote_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -322,7 +322,7 @@ func local_request_Sesame_UpdateRemote_0(ctx context.Context, marshaler runtime.
 }
 
 var (
-	filter_Sesame_ListRemotes_0 = &utilities.DoubleArray{Encoding: map[string]int{"parent": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_Sesame_ListRemotes_0 = &utilities.DoubleArray{Encoding: map[string]int{"parent": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 2, 2}}
 )
 
 func request_Sesame_ListRemotes_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -392,7 +392,7 @@ func local_request_Sesame_ListRemotes_0(ctx context.Context, marshaler runtime.M
 }
 
 var (
-	filter_Sesame_CreateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "parent": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+	filter_Sesame_CreateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "parent": 1}, Base: []int{1, 2, 4, 0, 0, 0, 0}, Check: []int{0, 1, 1, 2, 2, 3, 3}}
 )
 
 func request_Sesame_CreateEndpoint_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -582,7 +582,7 @@ func local_request_Sesame_DeleteEndpoint_0(ctx context.Context, marshaler runtim
 }
 
 var (
-	filter_Sesame_UpdateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "name": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
+	filter_Sesame_UpdateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "name": 1}, Base: []int{1, 2, 4, 0, 0, 0, 0}, Check: []int{0, 1, 1, 2, 2, 3, 3}}
 )
 
 func request_Sesame_UpdateEndpoint_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -682,7 +682,7 @@ func local_request_Sesame_UpdateEndpoint_0(ctx context.Context, marshaler runtim
 }
 
 var (
-	filter_Sesame_ListEndpoints_0 = &utilities.DoubleArray{Encoding: map[string]int{"parent": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_Sesame_ListEndpoints_0 = &utilities.DoubleArray{Encoding: map[string]int{"parent": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 2, 2}}
 )
 
 func request_Sesame_ListEndpoints_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -1063,7 +1063,7 @@ func RegisterSesameHandlerServer(ctx context.Context, mux *runtime.ServeMux, ser
 // RegisterSesameHandlerFromEndpoint is same as RegisterSesameHandler but
 // automatically dials to "endpoint" and closes the connection when "ctx" gets done.
 func RegisterSesameHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
-	conn, err := grpc.Dial(endpoint, opts...)
+	conn, err := grpc.DialContext(ctx, endpoint, opts...)
 	if err != nil {
 		return err
 	}
