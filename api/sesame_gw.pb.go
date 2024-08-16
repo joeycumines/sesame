@@ -32,18 +32,14 @@ var _ = utilities.NewDoubleArray
 var _ = metadata.Join
 
 var (
-	filter_Sesame_CreateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "parent": 1}, Base: []int{1, 2, 4, 0, 0, 0, 0}, Check: []int{0, 1, 1, 2, 2, 3, 3}}
+	filter_Sesame_CreateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "parent": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_Sesame_CreateRemote_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq CreateRemoteRequest
 	var metadata runtime.ServerMetadata
 
-	newReader, berr := utilities.IOReaderFactory(req.Body)
-	if berr != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
-	}
-	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq.Remote); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Remote); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -80,11 +76,7 @@ func local_request_Sesame_CreateRemote_0(ctx context.Context, marshaler runtime.
 	var protoReq CreateRemoteRequest
 	var metadata runtime.ServerMetadata
 
-	newReader, berr := utilities.IOReaderFactory(req.Body)
-	if berr != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
-	}
-	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq.Remote); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Remote); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -222,7 +214,7 @@ func local_request_Sesame_DeleteRemote_0(ctx context.Context, marshaler runtime.
 }
 
 var (
-	filter_Sesame_UpdateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "name": 1}, Base: []int{1, 2, 4, 0, 0, 0, 0}, Check: []int{0, 1, 1, 2, 2, 3, 3}}
+	filter_Sesame_UpdateRemote_0 = &utilities.DoubleArray{Encoding: map[string]int{"remote": 0, "name": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_Sesame_UpdateRemote_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -322,7 +314,7 @@ func local_request_Sesame_UpdateRemote_0(ctx context.Context, marshaler runtime.
 }
 
 var (
-	filter_Sesame_ListRemotes_0 = &utilities.DoubleArray{Encoding: map[string]int{"parent": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 2, 2}}
+	filter_Sesame_ListRemotes_0 = &utilities.DoubleArray{Encoding: map[string]int{"parent": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 )
 
 func request_Sesame_ListRemotes_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -392,18 +384,14 @@ func local_request_Sesame_ListRemotes_0(ctx context.Context, marshaler runtime.M
 }
 
 var (
-	filter_Sesame_CreateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "parent": 1}, Base: []int{1, 2, 4, 0, 0, 0, 0}, Check: []int{0, 1, 1, 2, 2, 3, 3}}
+	filter_Sesame_CreateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "parent": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_Sesame_CreateEndpoint_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq CreateEndpointRequest
 	var metadata runtime.ServerMetadata
 
-	newReader, berr := utilities.IOReaderFactory(req.Body)
-	if berr != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
-	}
-	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq.Endpoint); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Endpoint); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -440,11 +428,7 @@ func local_request_Sesame_CreateEndpoint_0(ctx context.Context, marshaler runtim
 	var protoReq CreateEndpointRequest
 	var metadata runtime.ServerMetadata
 
-	newReader, berr := utilities.IOReaderFactory(req.Body)
-	if berr != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
-	}
-	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq.Endpoint); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Endpoint); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -582,7 +566,7 @@ func local_request_Sesame_DeleteEndpoint_0(ctx context.Context, marshaler runtim
 }
 
 var (
-	filter_Sesame_UpdateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "name": 1}, Base: []int{1, 2, 4, 0, 0, 0, 0}, Check: []int{0, 1, 1, 2, 2, 3, 3}}
+	filter_Sesame_UpdateEndpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"endpoint": 0, "name": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
 )
 
 func request_Sesame_UpdateEndpoint_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -682,7 +666,7 @@ func local_request_Sesame_UpdateEndpoint_0(ctx context.Context, marshaler runtim
 }
 
 var (
-	filter_Sesame_ListEndpoints_0 = &utilities.DoubleArray{Encoding: map[string]int{"parent": 0}, Base: []int{1, 2, 0, 0}, Check: []int{0, 1, 2, 2}}
+	filter_Sesame_ListEndpoints_0 = &utilities.DoubleArray{Encoding: map[string]int{"parent": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 )
 
 func request_Sesame_ListEndpoints_0(ctx context.Context, marshaler runtime.Marshaler, client SesameClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -755,7 +739,7 @@ func request_Sesame_Proxy_0(ctx context.Context, marshaler runtime.Marshaler, cl
 	var metadata runtime.ServerMetadata
 	stream, err := client.Proxy(ctx)
 	if err != nil {
-		grpclog.Infof("Failed to start streaming: %v", err)
+		grpclog.Errorf("Failed to start streaming: %v", err)
 		return nil, metadata, err
 	}
 	dec := marshaler.NewDecoder(req.Body)
@@ -766,11 +750,11 @@ func request_Sesame_Proxy_0(ctx context.Context, marshaler runtime.Marshaler, cl
 			return err
 		}
 		if err != nil {
-			grpclog.Infof("Failed to decode request: %v", err)
+			grpclog.Errorf("Failed to decode request: %v", err)
 			return err
 		}
 		if err := stream.Send(&protoReq); err != nil {
-			grpclog.Infof("Failed to send request: %v", err)
+			grpclog.Errorf("Failed to send request: %v", err)
 			return err
 		}
 		return nil
@@ -782,12 +766,12 @@ func request_Sesame_Proxy_0(ctx context.Context, marshaler runtime.Marshaler, cl
 			}
 		}
 		if err := stream.CloseSend(); err != nil {
-			grpclog.Infof("Failed to terminate client stream: %v", err)
+			grpclog.Errorf("Failed to terminate client stream: %v", err)
 		}
 	}()
 	header, err := stream.Header()
 	if err != nil {
-		grpclog.Infof("Failed to get header from client: %v", err)
+		grpclog.Errorf("Failed to get header from client: %v", err)
 		return nil, metadata, err
 	}
 	metadata.HeaderMD = header
@@ -798,6 +782,7 @@ func request_Sesame_Proxy_0(ctx context.Context, marshaler runtime.Marshaler, cl
 // UnaryRPC     :call SesameServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterSesameHandlerFromEndpoint instead.
+// GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
 func RegisterSesameHandlerServer(ctx context.Context, mux *runtime.ServeMux, server SesameServer) error {
 
 	mux.Handle("POST", pattern_Sesame_CreateRemote_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -1063,21 +1048,21 @@ func RegisterSesameHandlerServer(ctx context.Context, mux *runtime.ServeMux, ser
 // RegisterSesameHandlerFromEndpoint is same as RegisterSesameHandler but
 // automatically dials to "endpoint" and closes the connection when "ctx" gets done.
 func RegisterSesameHandlerFromEndpoint(ctx context.Context, mux *runtime.ServeMux, endpoint string, opts []grpc.DialOption) (err error) {
-	conn, err := grpc.DialContext(ctx, endpoint, opts...)
+	conn, err := grpc.NewClient(endpoint, opts...)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if err != nil {
 			if cerr := conn.Close(); cerr != nil {
-				grpclog.Infof("Failed to close conn to %s: %v", endpoint, cerr)
+				grpclog.Errorf("Failed to close conn to %s: %v", endpoint, cerr)
 			}
 			return
 		}
 		go func() {
 			<-ctx.Done()
 			if cerr := conn.Close(); cerr != nil {
-				grpclog.Infof("Failed to close conn to %s: %v", endpoint, cerr)
+				grpclog.Errorf("Failed to close conn to %s: %v", endpoint, cerr)
 			}
 		}()
 	}()
@@ -1095,7 +1080,7 @@ func RegisterSesameHandler(ctx context.Context, mux *runtime.ServeMux, conn *grp
 // to "mux". The handlers forward requests to the grpc endpoint over the given implementation of "SesameClient".
 // Note: the gRPC framework executes interceptors within the gRPC handler. If the passed in "SesameClient"
 // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
-// "SesameClient" to call the correct interceptors.
+// "SesameClient" to call the correct interceptors. This client ignores the HTTP middlewares.
 func RegisterSesameHandlerClient(ctx context.Context, mux *runtime.ServeMux, client SesameClient) error {
 
 	mux.Handle("POST", pattern_Sesame_CreateRemote_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {

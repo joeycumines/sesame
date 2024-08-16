@@ -34,7 +34,7 @@ command -v protoc-gen-sesame >/dev/null 2>&1
 main() {
     set -euo pipefail || exit 1
 
-    common=(-I . -I ./api-common-protos)
+    common=(-I . -I ./googleapis)
 
     schema_prefix=sesame/v1alpha1/sesame.
     schema_openapi="$schema_prefix"openapi.yaml

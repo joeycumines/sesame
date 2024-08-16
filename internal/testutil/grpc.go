@@ -160,7 +160,9 @@ func newPipeClient(listenerFactory func() ListenerDialer, init func(lis net.List
 	out := make(chan error, 1)
 	go func() { out <- server.Serve(listener) }()
 
+	//lint:ignore SA1019 NewClient doesn't support empty address
 	conn, err := grpc.Dial("", append([]grpc.DialOption{
+		//lint:ignore SA1019 no real alternative offered
 		grpc.WithBlock(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }),
