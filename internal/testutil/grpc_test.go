@@ -83,3 +83,27 @@ func TestGrpchanClientConnFactory(t *testing.T) {
 		}
 	}
 }
+
+func TestInprocgrpcClientConnFactory(t *testing.T) {
+	defer CheckNumGoroutines(t, runtime.NumGoroutine(), false, 0)
+
+	conn := InprocgrpcClientConnFactory(func(h GRPCServer) {
+		grpchantesting.RegisterTestServiceServer(h, &grpchantesting.TestServer{})
+	})
+	defer conn.Close()
+
+	grpchantesting.RunChannelTestCases(t, conn, true)
+
+	if err := conn.Close(); err != nil {
+		t.Error(err)
+	}
+
+	_, errUnary := grpchantesting.NewTestServiceClient(conn).Unary(context.Background(), &grpchantesting.Message{})
+	_, errStream := grpchantesting.NewTestServiceClient(conn).ClientStream(context.Background())
+	for i, err := range [...]error{errUnary, errStream} {
+		stat, _ := status.FromError(err)
+		if stat.Code() != codes.Unavailable || stat.Message() != `transport is closing` {
+			t.Error(i, err)
+		}
+	}
+}

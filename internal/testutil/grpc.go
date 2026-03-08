@@ -2,8 +2,11 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"github.com/fullstorydev/grpchan"
-	"github.com/fullstorydev/grpchan/inprocgrpc"
+	grpchaninprocgrpc "github.com/fullstorydev/grpchan/inprocgrpc"
+	eventloop "github.com/joeycumines/go-eventloop"
+	goinprocgrpc "github.com/joeycumines/go-inprocgrpc"
 	"github.com/joeycumines/sesame/internal/pipelistener"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -60,9 +63,10 @@ type (
 
 var (
 	ClientConnFactories = map[string]ClientConnFactory{
-		`bufconn`: BufconnClientConnFactory,
-		`grpchan`: GrpchanClientConnFactory,
-		`netpipe`: NetpipeClientConnFactory,
+		`bufconn`:    BufconnClientConnFactory,
+		`grpchan`:    GrpchanClientConnFactory,
+		`inprocgrpc`: InprocgrpcClientConnFactory,
+		`netpipe`:    NetpipeClientConnFactory,
 	}
 
 	// compile time assertions
@@ -77,7 +81,7 @@ func BufconnClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
 func GrpchanClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
 	h := make(grpchan.HandlerMap)
 	fn(h)
-	var conn inprocgrpc.Channel
+	var conn grpchaninprocgrpc.Channel
 	h.ForEach(conn.RegisterService)
 	r := clientConnCancelCloser{
 		conn: &conn,
@@ -85,6 +89,45 @@ func GrpchanClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
 	}
 	r.wg.Add(1)
 	return &r
+}
+
+func InprocgrpcClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
+	loop, err := eventloop.New()
+	if err != nil {
+		panic(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	var runErr error
+	go func() {
+		defer close(done)
+		runErr = loop.Run(ctx)
+	}()
+
+	conn := goinprocgrpc.NewChannel(goinprocgrpc.WithLoop(loop))
+	fn(conn)
+	r := clientConnCancelCloser{
+		conn: conn,
+		stop: make(chan struct{}),
+	}
+	r.wg.Add(1)
+	return struct {
+		grpc.ClientConnInterface
+		io.Closer
+	}{
+		ClientConnInterface: &r,
+		Closer: Closers(
+			&r,
+			Closer(func() error {
+				cancel()
+				<-done
+				if runErr == nil || errors.Is(runErr, context.Canceled) {
+					return nil
+				}
+				return runErr
+			}).Once(),
+		),
+	}
 }
 
 func NetpipeClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
