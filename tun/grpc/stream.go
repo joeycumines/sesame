@@ -1,11 +1,11 @@
 package grpc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/joeycumines/sesame/internal/flowcontrol"
 	"github.com/joeycumines/sesame/type/grpctunnel"
-	"golang.org/x/net/context"
 	"io"
 	"math"
 	"sync"

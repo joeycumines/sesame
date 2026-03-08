@@ -9,8 +9,8 @@ STATICCHECK_FLAGS ?=
 GO_PACKAGES ?= ./...
 GO_TEST_FLAGS ?=
 
-GODOC ?= godoc
-GODOC_FLAGS ?= -http=:6060
+# provides default timeout for tests if not set by the user
+resolve_go_test_flags = $(if $(filter -timeout -timeout=%,$(GO_TEST_FLAGS)),,-timeout=15m) $(GO_TEST_FLAGS)
 
 ifeq ($(OS),Windows_NT)
 LIST_TOOLS ?= if exist tools.go (for /f tokens^=2^ delims^=^" %%a in ('findstr /r "^[\t ]*_" tools.go') do echo %%a)
@@ -36,11 +36,11 @@ test: test-cover test-race
 
 .PHONY: test-cover
 test-cover: build
-	$(GO) test $(GO_FLAGS) $(GO_TEST_FLAGS) -cover $(GO_PACKAGES)
+	$(GO) test $(GO_FLAGS) $(resolve_go_test_flags) -cover $(GO_PACKAGES)
 
 .PHONY: test-race
 test-race: build
-	$(GO) test $(GO_FLAGS) $(GO_TEST_FLAGS) -race $(GO_PACKAGES)
+	$(GO) test $(GO_FLAGS) $(resolve_go_test_flags) -race $(GO_PACKAGES)
 
 .PHONY: vet
 vet:
@@ -53,11 +53,6 @@ staticcheck:
 .PHONY: fmt
 fmt:
 	$(GO) fmt $(GO_PACKAGES)
-
-.PHONY: godoc
-godoc:
-	@echo 'Running godoc, the default URL is http://localhost:6060/pkg/github.com/joeycumines/sesame/'
-	$(GODOC) $(GODOC_FLAGS)
 
 .PHONY: update
 update: GO_TOOLS := $(shell $(LIST_TOOLS))
