@@ -17,6 +17,8 @@ GO_TEST_FLAGS ?=
 resolve_go_test_flags = $(if $(filter -timeout -timeout=%,$(GO_TEST_FLAGS)),,-timeout=15m) $(GO_TEST_FLAGS)
 
 ifeq ($(OS),Windows_NT)
+SHELL := cmd.exe
+.SHELLFLAGS := /c
 LIST_TOOLS ?= if exist tools.go (for /f tokens^=2^ delims^=^" %%a in ('findstr /r "^[\t ]*_" tools.go') do echo %%a)
 LOOP_START ?= @for %%t in ($(or $(shell $(LIST_TOOLS)),$(error failed to list tools))) do @echo + $(GO) install %%t && (
 LOOP_VAR ?= %%t
