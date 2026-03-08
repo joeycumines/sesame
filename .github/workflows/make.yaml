@@ -1,0 +1,81 @@
+name: Make
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Configure number_of_cpus (Linux)
+        if: runner.os == 'Linux'
+        run: |-
+          v="$(nproc)" &&
+          [ ! -z "$v" ] &&
+          printf 'number_of_cpus=%d\n' "$v" >>"$GITHUB_ENV"
+      - name: Configure number_of_cpus (macOS)
+        if: runner.os == 'macOS'
+        run: |-
+          v="$(sysctl -n hw.ncpu)" &&
+          [ ! -z "$v" ] &&
+          printf 'number_of_cpus=%d\n' "$v" >>"$GITHUB_ENV"
+      - name: Configure number_of_cpus (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |-
+          $v = [Environment]::ProcessorCount
+          "number_of_cpus=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Configure make_command (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |-
+          printf \
+            'make_command=make -j %d ci\n' \
+            "$number_of_cpus" \
+          >>"$GITHUB_ENV"
+      - name: Configure make_command (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |-
+          echo "make_command=make -j $env:number_of_cpus ci" >> $env:GITHUB_ENV
+
+      - uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 'stable'
+
+      - name: Install make (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |-
+          choco install make -y
+
+      - name: Run build (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ${{ env.make_command }}
+      - name: Run build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: ${{ env.make_command }}
+
+      - name: Upload test coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.os }}
+          path: |
+            **/coverage.out
+            **/coverage.html
+          retention-days: 7
+          if-no-files-found: ignore

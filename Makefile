@@ -1,3 +1,7 @@
+# Note: This Makefile is constrained to GNU Make 3 functionality.
+# This ensures out-of-the-box support for macOS (which ships with Make 3.81)
+# and proper support for Windows environments (e.g. via `choco install make -y`).
+
 -include config.mak
 
 GO ?= go
@@ -14,8 +18,14 @@ resolve_go_test_flags = $(if $(filter -timeout -timeout=%,$(GO_TEST_FLAGS)),,-ti
 
 ifeq ($(OS),Windows_NT)
 LIST_TOOLS ?= if exist tools.go (for /f tokens^=2^ delims^=^" %%a in ('findstr /r "^[\t ]*_" tools.go') do echo %%a)
+LOOP_START ?= @for %%t in ($(or $(shell $(LIST_TOOLS)),$(error failed to list tools))) do @echo + $(GO) install %%t && (
+LOOP_VAR ?= %%t
+LOOP_END ?= ) || ( echo ERROR: exit code %%errorlevel%% & exit 1 )
 else
 LIST_TOOLS ?= [ ! -e tools.go ] || grep -E '^[	 ]*_' tools.go | cut -d '"' -f 2
+LOOP_START ?= for t in $(or $(shell $(LIST_TOOLS)),$(error failed to list tools)); do if ! ( set -x;
+LOOP_VAR ?= $$t
+LOOP_END ?= ; ); then echo "ERROR: exit code $$?" >&2; exit 1; fi; done
 endif
 
 .PHONY: all
@@ -55,26 +65,22 @@ fmt:
 	$(GO) fmt $(GO_PACKAGES)
 
 .PHONY: update
-update: GO_TOOLS := $(shell $(LIST_TOOLS))
 update:
 	$(GO) get -u -t ./...
-	$(foreach tool,$(GO_TOOLS),$(update__TEMPLATE))
+	@$(LOOP_START) $(GO) get -u $(LOOP_VAR)$(LOOP_END)
 	$(GO) mod tidy
-define update__TEMPLATE =
-$(GO) get -u $(tool)
-
-endef
 
 .PHONY: tools
-tools: GO_TOOLS := $(shell $(LIST_TOOLS))
 tools:
-	$(foreach tool,$(GO_TOOLS),$(tools__TEMPLATE))
-define tools__TEMPLATE =
-$(GO) install $(tool)
-
-endef
+	@$(LOOP_START) $(GO) install $(LOOP_VAR)$(LOOP_END)
 
 # this won't work on all systems
 .PHONY: generate
 generate:
 	hack/generate.sh
+
+.PHONY: ci
+ci:
+	$(GO) env
+	$(MAKE) tools
+	$(MAKE) all
