@@ -1,6 +1,14 @@
-# Note: This Makefile is constrained to GNU Make 3 functionality.
+# Simple Go Makefile. This Makefile is restricted to GNU Make 3 functionality.
 # This ensures out-of-the-box support for macOS (which ships with Make 3.81)
 # and proper support for Windows environments (e.g. via `choco install make -y`).
+#
+# For a much more sophisticated, modular, multi-module Makefile, see also:
+# https://gist.github.com/joeycumines/3352c393c1bf43df72b120ae9134168d
+#
+# TODO: Consider migrating to the new `go tool` pattern for tools.
+# N.B. There is _some_ argument for the existing/legacy `tools.go` pattern.
+# Host dependencies aren't great but, using them _does_ have the benefit of
+# avoiding the need to mutate the PATH, to shim the protoc plugins.
 
 -include config.mak
 
