@@ -526,8 +526,52 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 	msgLen := -1
 	var b []byte
 	for {
-		msg, ok := <-st.buffer
-		if !ok {
+		var (
+			msg  *grpctunnel.ServerToClient
+			open bool
+		)
+
+		// Priority select: always prefer buffered data / buffer-close
+		// over context cancellation. This prevents returning a spurious
+		// context.Canceled when finishStream has already closed the
+		// buffer with the correct done error.
+		//
+		// Two cancellation signals are checked:
+		//   - st.ctx.Done(): the stream's own context (caller-derived),
+		//     cancelled by Channel.close → stream.cncl(), or by the
+		//     caller's context being cancelled.
+		//   - st.ch.ctx.Done(): the channel's context (tunnel-derived),
+		//     cancelled immediately when the underlying gRPC call ends.
+		//     This is critical because st.ctx cancellation depends on an
+		//     async chain (recvLoop exit → Channel.close → stream.cncl)
+		//     that may not complete if recvLoop.Recv is itself blocked.
+		select {
+		case msg, open = <-st.buffer:
+		default:
+			select {
+			case msg, open = <-st.buffer:
+			case <-st.ctx.Done():
+				select {
+				case msg, open = <-st.buffer:
+				default:
+					ctxErr := st.ctx.Err()
+					switch ctxErr {
+					case context.DeadlineExceeded:
+						return nil, false, status.Error(codes.DeadlineExceeded, ctxErr.Error())
+					default:
+						return nil, false, status.Error(codes.Canceled, ctxErr.Error())
+					}
+				}
+			case <-st.ch.ctx.Done():
+				select {
+				case msg, open = <-st.buffer:
+				default:
+					return nil, false, status.Error(codes.Canceled, st.ch.ctx.Err().Error())
+				}
+			}
+		}
+
+		if !open {
 			// don't need lock to read st.done; observing
 			// input channel close provides safe visibility
 			return nil, true, st.done
@@ -619,6 +663,7 @@ func (st *tunnelClientStream) acceptServerFrame(msg *grpctunnel.ServerToClient) 
 	select {
 	case st.buffer <- msg:
 	case <-st.ctx.Done():
+	case <-st.ch.ctx.Done():
 	}
 }
 

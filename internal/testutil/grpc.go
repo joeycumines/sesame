@@ -97,11 +97,9 @@ func InprocgrpcClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
 		panic(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	var runErr error
+	errCh := make(chan error, 1)
 	go func() {
-		defer close(done)
-		runErr = loop.Run(ctx)
+		errCh <- loop.Run(ctx)
 	}()
 
 	conn := goinprocgrpc.NewChannel(goinprocgrpc.WithLoop(loop))
@@ -120,7 +118,7 @@ func InprocgrpcClientConnFactory(fn func(h GRPCServer)) ClientConnCloser {
 			&r,
 			Closer(func() error {
 				cancel()
-				<-done
+				runErr := <-errCh
 				if runErr == nil || errors.Is(runErr, context.Canceled) {
 					return nil
 				}
