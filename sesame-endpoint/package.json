@@ -1,0 +1,46 @@
+{
+  "name": "sesame-endpoint",
+  "version": "0.1.0",
+  "description": "Sesame Endpoint Server (RemoteControl.NetConn RFC-0001)",
+  "main": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "bin": {
+    "sesame-endpoint": "build/src/cli.js"
+  },
+  "files": [
+    "build/src"
+  ],
+  "license": "Apache-2.0",
+  "keywords": [
+    "sesame",
+    "endpoint",
+    "remotecontrol",
+    "grpc",
+    "connectrpc"
+  ],
+  "scripts": {
+    "lint": "gts lint",
+    "clean": "gts clean",
+    "compile": "tsc && chmod +x build/src/cli.js",
+    "fix": "gts fix",
+    "prepare": "bun run compile",
+    "pretest": "bun run compile",
+    "posttest": "bun run lint",
+    "generate": "cd ../schema && protoc -I . -I ./googleapis --plugin=protoc-gen-es=../sesame-endpoint/node_modules/.bin/protoc-gen-es --es_out=../sesame-endpoint/src/gen --es_opt=target=ts google/rpc/status.proto sesame/type/netaddr.proto sesame/type/tls.proto sesame/type/proxy.proto sesame/v1alpha1/remotecontrol.proto",
+    "test": "bun test",
+    "test:node": "node test/node-runner.js",
+    "start": "node build/src/cli.js"
+  },
+  "devDependencies": {
+    "@bufbuild/protoc-gen-es": "2.15.0",
+    "@types/bun": "latest",
+    "@types/node": "^22.7.5",
+    "gts": "^7.0.0",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "2.15.0",
+    "@connectrpc/connect": "^2.2.0",
+    "@connectrpc/connect-node": "^2.2.0"
+  }
+}
