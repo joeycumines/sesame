@@ -3,7 +3,11 @@ syntax = "proto3";
 package sesame.v1alpha1;
 
 import "google/protobuf/duration.proto";
+import "google/protobuf/any.proto";
+import "google/rpc/status.proto";
 import "sesame/type/netaddr.proto";
+import "sesame/type/tls.proto";
+import "sesame/type/proxy.proto";
 
 option go_package = "github.com/joeycumines/sesame/rc";
 
@@ -19,10 +23,10 @@ service RemoteControl {
   //
   //     1. NetConnRequest.dial
   //     2. NetConnResponse.conn
-  //     3. Any number of NetConnRequest.bytes and NetConnResponse.bytes
+  //     3. Any number of NetConnRequest.bytes, NetConnResponse.bytes, and NetConnRequest.control / NetConnResponse.control
   //     4. Termination
   //         i. Graceful (client initiated)
-  //             a. Initiated by grpc.ClientStream.CloseSend
+  //             a. Initiated by grpc.ClientStream.CloseSend or NetConnRequest.control.half_close
   //             b. After processing all received messages the server initiates (full) connection close of the
   //                proxy target
   //             c. All data read from the proxy target is sent to the client
@@ -30,7 +34,7 @@ service RemoteControl {
   //         ii. Proxy target initiated
   //             a. The proxy target connection closes
   //             b. All buffered data received from the proxy target is sent to the client
-  //             c. An error is propagated to the client
+  //             c. An error is propagated to the client (or NetConnResponse.control.half_close on graceful FIN)
   //         iii. Server initiated
   //             a. The server encounters an error (e.g. due to context cancel)
   //             b. The proxy target connection is closed
@@ -42,13 +46,84 @@ service RemoteControl {
 // See also documentation of that method.
 message NetConnRequest {
   oneof data {
+    // 1. Initial dial configuration. MUST be the first message in the stream.
     Dial dial = 1;
+
+    // 2. Opaque payload data chunk.
     bytes bytes = 2;
+
+    // 3. In-stream signaling and transformation commands.
+    Control control = 3;
   };
+
   // Dial models the initial request.
   message Dial {
+    // Target destination address (REQUIRED).
     type.NetAddr address = 1;
+
+    // Dial connection timeout (OPTIONAL).
     google.protobuf.Duration timeout = 2;
+
+    // Remote TLS termination and impersonation configuration (OPTIONAL).
+    // If present, Server MUST terminate TLS at the endpoint.
+    type.TLSOptions tls = 3;
+
+    // Egress proxy chaining configuration (OPTIONAL).
+    type.ProxyOptions proxy = 4;
+
+    // Client-advertised capabilities.
+    Capabilities capabilities = 5;
+
+    // Extensible options for proprietary or third-party middleware plugins.
+    repeated google.protobuf.Any options = 15;
+  }
+
+  // Control models client-to-server in-stream signaling.
+  message Control {
+    oneof action {
+      // Command to perform an opportunistic in-stream TLS upgrade.
+      UpgradeTLS upgrade_tls = 1;
+
+      // Credit-based stream flow control window update.
+      WindowUpdate window_update = 2;
+
+      // Unilateral write-side connection close (TCP FIN / TLS close_notify).
+      HalfClose half_close = 3;
+
+      // Liveness probe ping.
+      Ping ping = 4;
+
+      // Abrupt stream reset / cancellation.
+      Reset reset = 5;
+
+      // Arbitrary plugin extension command.
+      google.protobuf.Any custom = 15;
+    }
+
+    message UpgradeTLS {
+      type.TLSOptions options = 1;
+    }
+
+    message WindowUpdate {
+      uint32 credit_bytes = 1;
+    }
+
+    message HalfClose {}
+
+    message Ping {
+      uint64 id = 1;
+      int64 timestamp_ns = 2;
+    }
+
+    message Reset {
+      google.rpc.Status reason = 1;
+    }
+  }
+
+  message Capabilities {
+    bool supports_flow_control = 1;
+    bool supports_opportunistic_tls = 2;
+    uint32 initial_window_size = 3;
   }
 }
 
@@ -56,12 +131,91 @@ message NetConnRequest {
 // See also documentation of that method.
 message NetConnResponse {
   oneof data {
+    // 1. Initial connection response. MUST be the first message emitted by Server.
     Conn conn = 1;
+
+    // 2. Opaque payload data chunk.
     bytes bytes = 2;
+
+    // 3. In-stream signaling and transformation events.
+    Control control = 3;
   };
+
   // Conn models the initial response.
   message Conn {
     type.NetAddr local = 1;
     type.NetAddr remote = 2;
+
+    // Handshake state if TLS termination was executed during Dial.
+    type.TLSHandshakeResult tls = 3;
+
+    // Confirmation if proxy chaining was executed during Dial.
+    type.ProxyResult proxy = 4;
+
+    // Server-advertised capabilities.
+    Capabilities capabilities = 5;
+
+    // Extensible connection metadata.
+    repeated google.protobuf.Any custom_attributes = 15;
+  }
+
+  // Control models server-to-client in-stream signaling.
+  message Control {
+    oneof event {
+      // Notification that an in-stream UpgradeTLS command has completed.
+      TLSUpgraded tls_upgraded = 1;
+
+      // Notification that an in-stream UpgradeTLS command has failed.
+      TLSUpgradeFailed tls_upgrade_failed = 2;
+
+      // Credit-based stream flow control window update.
+      WindowUpdate window_update = 3;
+
+      // Upstream write-side closure (TCP FIN or TLS close_notify).
+      HalfClose half_close = 4;
+
+      // Response to a Client Ping.
+      Pong pong = 5;
+
+      // Diagnostics and stream metrics.
+      Metrics metrics = 6;
+
+      // Arbitrary plugin extension event.
+      google.protobuf.Any custom = 15;
+    }
+
+    message TLSUpgraded {
+      type.TLSHandshakeResult result = 1;
+    }
+
+    message TLSUpgradeFailed {
+      google.rpc.Status error = 1;
+    }
+
+    message WindowUpdate {
+      uint32 credit_bytes = 1;
+    }
+
+    message HalfClose {}
+
+    message Pong {
+      uint64 id = 1;
+      int64 timestamp_ns = 2;
+    }
+
+    message Metrics {
+      uint64 bytes_sent = 1;
+      uint64 bytes_received = 2;
+      uint32 rtt_ms = 3;
+    }
+  }
+
+  message Capabilities {
+    bool supports_flow_control = 1;
+    bool supports_opportunistic_tls = 2;
+    bool supports_impersonation = 3;
+    uint32 max_chunk_size = 4;
+    uint32 initial_window_size = 5;
+    repeated type.FingerprintPreset supported_presets = 6;
   }
 }

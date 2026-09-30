@@ -7,6 +7,8 @@ import (
 	"github.com/joeycumines/sesame/rc"
 	streamutil "github.com/joeycumines/sesame/stream"
 	"github.com/joeycumines/sesame/type/netaddr"
+	sesameproxy "github.com/joeycumines/sesame/type/proxy"
+	sesametls "github.com/joeycumines/sesame/type/tls"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
@@ -16,7 +18,9 @@ import (
 type (
 	// Server implements rc.RemoteControlServer's NetConn method.
 	Server struct {
-		Dialer DialerFactory
+		Dialer       DialerFactory
+		Capabilities *rc.NetConnResponse_Capabilities
+		TLSProvider  TLSProvider
 		//lint:ignore U1000 it is actually used
 		unimplementedRemoteControlServer
 	}
@@ -68,25 +72,66 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 		return status.Errorf(codes.InvalidArgument, `sesame/rc/netconn: unexpected request: %T`, msg.GetData())
 	}
 
+	dialReq := msg.GetDial()
+
 	// dialer factory handles timeout etc
-	dialer, err := x.dial(msg.GetDial())
+	dialer, err := x.dial(dialReq)
 	if err != nil {
 		// code unknown, or provided by the dialer factory
 		return err
 	}
 
-	// factory-provided dialer handles the actual dial operation
-	conn, err := dialer.DialContext(ctx, msg.GetDial().GetAddress().GetNetwork(), msg.GetDial().GetAddress().GetAddress())
-	if err != nil {
-		// code unknown, or provided by the dialer
-		return err
+	// factory-provided dialer handles the actual dial operation (with optional proxy chaining)
+	var (
+		conn        net.Conn
+		proxyResult *sesameproxy.ProxyResult
+		tlsResult   *sesametls.TLSHandshakeResult
+	)
+
+	targetNet := dialReq.GetAddress().GetNetwork()
+	targetAddr := dialReq.GetAddress().GetAddress()
+
+	if dialReq.GetProxy() != nil && len(dialReq.GetProxy().GetHops()) > 0 {
+		var hopErr error
+		conn, proxyResult, hopErr = ExecuteProxyHops(ctx, dialer, dialReq.GetProxy(), targetNet, targetAddr)
+		if hopErr != nil {
+			return hopErr
+		}
+	} else {
+		var dialErr error
+		conn, dialErr = dialer.DialContext(ctx, targetNet, targetAddr)
+		if dialErr != nil {
+			return dialErr
+		}
 	}
 	defer conn.Close()
 
+	if dialReq.GetTls() != nil {
+		var tlsErr error
+		conn, tlsResult, tlsErr = ExecuteTLSHandshake(ctx, conn, dialReq.GetTls(), targetAddr, x.TLSProvider)
+		if tlsErr != nil {
+			return tlsErr
+		}
+	}
+
+	serverCaps := x.Capabilities
+	if serverCaps == nil {
+		serverCaps = &rc.NetConnResponse_Capabilities{
+			SupportsFlowControl:      true,
+			SupportsOpportunisticTls: true,
+			MaxChunkSize:             DefaultChunkSize,
+			InitialWindowSize:        DefaultInitialWindowSize,
+			SupportedPresets:         []sesametls.FingerprintPreset{sesametls.FingerprintPreset_RUNTIME_DEFAULT},
+		}
+	}
+
 	// 2. NetConnResponse.conn
 	if err := stream.Send(&rc.NetConnResponse{Data: &rc.NetConnResponse_Conn_{Conn: &rc.NetConnResponse_Conn{
-		Local:  netaddr.New(conn.LocalAddr()),
-		Remote: netaddr.New(conn.RemoteAddr()),
+		Local:        netaddr.New(conn.LocalAddr()),
+		Remote:       netaddr.New(conn.RemoteAddr()),
+		Tls:          tlsResult,
+		Proxy:        proxyResult,
+		Capabilities: serverCaps,
 	}}}); err != nil {
 		// code unknown
 		return err
@@ -95,13 +140,19 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 	// 3. Any number of NetConnRequest.bytes and NetConnResponse.bytes
 	// until (at least the start of)
 	// 4. Termination
-	type streamIO struct {
-		ioReader
-		ioWriter
-	}
-	if err := streamutil.Proxy(ctx, streamIO{newStreamServerReader(stream), newStreamServerWriter(stream)}, conn); err != nil {
-		// code unknown
-		return fmt.Errorf(`sesame/rc/netconn: copy stream error: %w`, err)
+	if dialReq.GetCapabilities() != nil {
+		if err := RunServerDemux(ctx, stream, conn, serverCaps, dialReq.GetCapabilities(), x.TLSProvider, targetAddr); err != nil {
+			return fmt.Errorf(`sesame/rc/netconn: copy stream error: %w`, err)
+		}
+	} else {
+		type streamIO struct {
+			ioReader
+			ioWriter
+		}
+		if err := streamutil.Proxy(ctx, streamIO{newStreamServerReader(stream), newStreamServerWriter(stream)}, conn); err != nil {
+			// code unknown
+			return fmt.Errorf(`sesame/rc/netconn: copy stream error: %w`, err)
+		}
 	}
 
 	// ensure successful flush e.g. buffered conns

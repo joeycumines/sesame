@@ -8,6 +8,8 @@ import (
 	"github.com/joeycumines/sesame/rc"
 	streamutil "github.com/joeycumines/sesame/stream"
 	"github.com/joeycumines/sesame/type/netaddr"
+	sesameproxy "github.com/joeycumines/sesame/type/proxy"
+	sesametls "github.com/joeycumines/sesame/type/tls"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"io"
@@ -20,9 +22,12 @@ import (
 type (
 	// Client implements Dialer using rc.RemoteControlClient's NetConn method.
 	Client struct {
-		API         ClientAPI
-		Timeout     time.Duration
-		ClosePolicy streamutil.ClosePolicy
+		API          ClientAPI
+		Timeout      time.Duration
+		ClosePolicy  streamutil.ClosePolicy
+		TLS          *sesametls.TLSOptions
+		Proxy        *sesameproxy.ProxyOptions
+		Capabilities *rc.NetConnRequest_Capabilities
 	}
 
 	// ClientAPI models a subset of rc.RemoteControlClient, as used by Client.
@@ -53,9 +58,10 @@ type (
 var (
 	// compile time assertions
 
-	_ net.Conn = (*netConn)(nil)
-	_ Dialer   = (*Client)(nil)
-	_          = Client{API: rc.RemoteControlClient(nil)}
+	_ net.Conn            = (*netConn)(nil)
+	_ Dialer              = (*Client)(nil)
+	_ ConnTransformResult = (*netConn)(nil)
+	_                     = Client{API: rc.RemoteControlClient(nil)}
 )
 
 func (x *Client) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
@@ -72,10 +78,15 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 		return nil, err
 	}
 
-	conn := netConn{req: &rc.NetConnRequest_Dial{Address: &netaddr.NetAddr{
-		Network: network,
-		Address: address,
-	}}}
+	conn := netConn{req: &rc.NetConnRequest_Dial{
+		Address: &netaddr.NetAddr{
+			Network: network,
+			Address: address,
+		},
+		Tls:          x.TLS,
+		Proxy:        x.Proxy,
+		Capabilities: x.Capabilities,
+	}}
 	if x.Timeout > 0 {
 		conn.req.Timeout = durationpb.New(x.Timeout)
 	}
@@ -92,7 +103,38 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 		return nil, fmt.Errorf(`sesame/rc/netconn: unexpected response: %T`, res.GetData())
 	}
 
-	// encapsulates the remaining stages:
+	// Fail-closed security invariants
+	if x.TLS != nil {
+		if conn.res.GetTls() == nil {
+			return nil, fmt.Errorf("sesame/rc/netconn: security violation: server returned cleartext connection when TLS was requested")
+		}
+		preset := x.TLS.GetFingerprintPreset()
+		if preset != sesametls.FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED &&
+			preset != sesametls.FingerprintPreset_RUNTIME_DEFAULT {
+			if conn.res.GetTls().GetAppliedPreset() != preset {
+				return nil, fmt.Errorf("sesame/rc/netconn: security violation: requested fingerprint preset %v but server applied %v",
+					preset, conn.res.GetTls().GetAppliedPreset())
+			}
+		}
+	}
+
+	if x.Proxy != nil && len(x.Proxy.GetHops()) > 0 {
+		if conn.res.GetProxy() == nil {
+			return nil, fmt.Errorf("sesame/rc/netconn: security violation: server returned unproxied connection when proxy was requested")
+		}
+		if len(conn.res.GetProxy().GetTraversedHops()) != len(x.Proxy.GetHops()) {
+			return nil, fmt.Errorf("sesame/rc/netconn: proxy hop count mismatch: requested %d hops, server traversed %d",
+				len(x.Proxy.GetHops()), len(conn.res.GetProxy().GetTraversedHops()))
+		}
+	}
+
+	// If in-stream capabilities were requested, return full control wrapper
+	if x.Capabilities != nil {
+		success = true
+		return NewClientControlConn(ctx, cancel, stream, conn.res, x.Capabilities), nil
+	}
+
+	// encapsulates the remaining stages for legacy connections:
 	// 3. Any number of NetConnRequest.bytes and NetConnResponse.bytes
 	// 4. Termination
 	wp, err := ionet.WrapPipeGraceful(
@@ -124,6 +166,14 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 func (x *netConn) LocalAddr() net.Addr { return x.res.GetLocal().AsGoNetAddr() }
 
 func (x *netConn) RemoteAddr() net.Addr { return x.res.GetRemote().AsGoNetAddr() }
+
+func (x *netConn) TLSHandshakeResult() *sesametls.TLSHandshakeResult { return x.res.GetTls() }
+
+func (x *netConn) ProxyResult() *sesameproxy.ProxyResult { return x.res.GetProxy() }
+
+func (x *netConn) ServerCapabilities() *rc.NetConnResponse_Capabilities {
+	return x.res.GetCapabilities()
+}
 
 func (x *netConn) String() string {
 	var s strings.Builder

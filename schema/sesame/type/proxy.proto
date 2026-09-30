@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package sesame.type;
+
+import "sesame/type/netaddr.proto";
+
+option go_package = "github.com/joeycumines/sesame/type/proxy";
+
+// ProxyOptions specifies an ordered sequence of intermediate egress proxies.
+message ProxyOptions {
+  // Ordered sequence of proxy hops (Hop 1 -> Hop 2 -> ... -> Target).
+  repeated ProxyHop hops = 1;
+}
+
+message ProxyHop {
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    HTTP_CONNECT = 1;
+    SOCKS5 = 2;
+  }
+  Type type = 1;
+
+  // Address of the intermediate proxy server.
+  NetAddr address = 2;
+
+  // Optional authentication credentials.
+  string username = 3;
+  string password = 4;
+
+  // Optional custom authorization header (e.g. "Basic ...", "Bearer ...").
+  string auth_header = 5;
+}
+
+// ProxyResult confirms successful proxy negotiation.
+message ProxyResult {
+  // The sequence of successfully traversed proxy hops.
+  repeated NetAddr traversed_hops = 1;
+
+  // The external egress IP/port observed after the final proxy hop.
+  NetAddr egress_address = 2;
+}

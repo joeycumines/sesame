@@ -4,6 +4,10 @@
 package rc
 
 import "github.com/joeycumines/sesame/type/netaddr"
+import "github.com/joeycumines/sesame/type/proxy"
+import "github.com/joeycumines/sesame/type/tls"
+import "google.golang.org/genproto/googleapis/rpc/status"
+import "google.golang.org/protobuf/types/known/anypb"
 import "google.golang.org/protobuf/types/known/durationpb"
 
 // Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
@@ -33,6 +37,15 @@ func (x *NetConnRequest) Proto_ShallowCopy(v interface{}) {
 						return
 					}
 				}
+				if v, ok := v.(interface {
+					GetControl() *NetConnRequest_Control
+				}); ok {
+					var defaultValue *NetConnRequest_Control
+					if v := v.GetControl(); v != defaultValue {
+						x.Data = &NetConnRequest_Control_{Control: v}
+						return
+					}
+				}
 			}()
 		}
 	}
@@ -57,12 +70,30 @@ func (x *NetConnRequest_Dial) Proto_ShallowCopy(v interface{}) {
 	case *NetConnRequest_Dial:
 		x.Address = v.GetAddress()
 		x.Timeout = v.GetTimeout()
+		x.Tls = v.GetTls()
+		x.Proxy = v.GetProxy()
+		x.Capabilities = v.GetCapabilities()
+		x.Options = v.GetOptions()
 	default:
 		if v, ok := v.(interface{ GetAddress() *netaddr.NetAddr }); ok {
 			x.Address = v.GetAddress()
 		}
 		if v, ok := v.(interface{ GetTimeout() *durationpb.Duration }); ok {
 			x.Timeout = v.GetTimeout()
+		}
+		if v, ok := v.(interface{ GetTls() *tls.TLSOptions }); ok {
+			x.Tls = v.GetTls()
+		}
+		if v, ok := v.(interface{ GetProxy() *proxy.ProxyOptions }); ok {
+			x.Proxy = v.GetProxy()
+		}
+		if v, ok := v.(interface {
+			GetCapabilities() *NetConnRequest_Capabilities
+		}); ok {
+			x.Capabilities = v.GetCapabilities()
+		}
+		if v, ok := v.(interface{ GetOptions() []*anypb.Any }); ok {
+			x.Options = v.GetOptions()
 		}
 	}
 }
@@ -73,6 +104,248 @@ func (x *NetConnRequest_Dial) Proto_ShallowClone() (c *NetConnRequest_Dial) {
 		c = new(NetConnRequest_Dial)
 		c.Address = x.Address
 		c.Timeout = x.Timeout
+		c.Tls = x.Tls
+		c.Proxy = x.Proxy
+		c.Capabilities = x.Capabilities
+		c.Options = x.Options
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnRequest_Control) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnRequest_Control:
+		x.Action = v.GetAction()
+	default:
+		if v, ok := v.(interface {
+			GetAction() isNetConnRequest_Control_Action
+		}); ok {
+			x.Action = v.GetAction()
+		} else {
+			func() {
+				if v, ok := v.(interface {
+					GetUpgradeTls() *NetConnRequest_Control_UpgradeTLS
+				}); ok {
+					var defaultValue *NetConnRequest_Control_UpgradeTLS
+					if v := v.GetUpgradeTls(); v != defaultValue {
+						x.Action = &NetConnRequest_Control_UpgradeTls{UpgradeTls: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetWindowUpdate() *NetConnRequest_Control_WindowUpdate
+				}); ok {
+					var defaultValue *NetConnRequest_Control_WindowUpdate
+					if v := v.GetWindowUpdate(); v != defaultValue {
+						x.Action = &NetConnRequest_Control_WindowUpdate_{WindowUpdate: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetHalfClose() *NetConnRequest_Control_HalfClose
+				}); ok {
+					var defaultValue *NetConnRequest_Control_HalfClose
+					if v := v.GetHalfClose(); v != defaultValue {
+						x.Action = &NetConnRequest_Control_HalfClose_{HalfClose: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetPing() *NetConnRequest_Control_Ping
+				}); ok {
+					var defaultValue *NetConnRequest_Control_Ping
+					if v := v.GetPing(); v != defaultValue {
+						x.Action = &NetConnRequest_Control_Ping_{Ping: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetReset_() *NetConnRequest_Control_Reset
+				}); ok {
+					var defaultValue *NetConnRequest_Control_Reset
+					if v := v.GetReset_(); v != defaultValue {
+						x.Action = &NetConnRequest_Control_Reset_{Reset_: v}
+						return
+					}
+				}
+				if v, ok := v.(interface{ GetCustom() *anypb.Any }); ok {
+					var defaultValue *anypb.Any
+					if v := v.GetCustom(); v != defaultValue {
+						x.Action = &NetConnRequest_Control_Custom{Custom: v}
+						return
+					}
+				}
+			}()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnRequest_Control) Proto_ShallowClone() (c *NetConnRequest_Control) {
+	if x != nil {
+		c = new(NetConnRequest_Control)
+		c.Action = x.Action
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnRequest_Control_UpgradeTLS) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnRequest_Control_UpgradeTLS:
+		x.Options = v.GetOptions()
+	default:
+		if v, ok := v.(interface{ GetOptions() *tls.TLSOptions }); ok {
+			x.Options = v.GetOptions()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnRequest_Control_UpgradeTLS) Proto_ShallowClone() (c *NetConnRequest_Control_UpgradeTLS) {
+	if x != nil {
+		c = new(NetConnRequest_Control_UpgradeTLS)
+		c.Options = x.Options
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnRequest_Control_WindowUpdate) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnRequest_Control_WindowUpdate:
+		x.CreditBytes = v.GetCreditBytes()
+	default:
+		if v, ok := v.(interface{ GetCreditBytes() uint32 }); ok {
+			x.CreditBytes = v.GetCreditBytes()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnRequest_Control_WindowUpdate) Proto_ShallowClone() (c *NetConnRequest_Control_WindowUpdate) {
+	if x != nil {
+		c = new(NetConnRequest_Control_WindowUpdate)
+		c.CreditBytes = x.CreditBytes
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnRequest_Control_HalfClose) Proto_ShallowCopy(v interface{}) {
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnRequest_Control_HalfClose) Proto_ShallowClone() (c *NetConnRequest_Control_HalfClose) {
+	if x != nil {
+		c = new(NetConnRequest_Control_HalfClose)
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnRequest_Control_Ping) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnRequest_Control_Ping:
+		x.Id = v.GetId()
+		x.TimestampNs = v.GetTimestampNs()
+	default:
+		if v, ok := v.(interface{ GetId() uint64 }); ok {
+			x.Id = v.GetId()
+		}
+		if v, ok := v.(interface{ GetTimestampNs() int64 }); ok {
+			x.TimestampNs = v.GetTimestampNs()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnRequest_Control_Ping) Proto_ShallowClone() (c *NetConnRequest_Control_Ping) {
+	if x != nil {
+		c = new(NetConnRequest_Control_Ping)
+		c.Id = x.Id
+		c.TimestampNs = x.TimestampNs
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnRequest_Control_Reset) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnRequest_Control_Reset:
+		x.Reason = v.GetReason()
+	default:
+		if v, ok := v.(interface{ GetReason() *status.Status }); ok {
+			x.Reason = v.GetReason()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnRequest_Control_Reset) Proto_ShallowClone() (c *NetConnRequest_Control_Reset) {
+	if x != nil {
+		c = new(NetConnRequest_Control_Reset)
+		c.Reason = x.Reason
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnRequest_Capabilities) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnRequest_Capabilities:
+		x.SupportsFlowControl = v.GetSupportsFlowControl()
+		x.SupportsOpportunisticTls = v.GetSupportsOpportunisticTls()
+		x.InitialWindowSize = v.GetInitialWindowSize()
+	default:
+		if v, ok := v.(interface{ GetSupportsFlowControl() bool }); ok {
+			x.SupportsFlowControl = v.GetSupportsFlowControl()
+		}
+		if v, ok := v.(interface{ GetSupportsOpportunisticTls() bool }); ok {
+			x.SupportsOpportunisticTls = v.GetSupportsOpportunisticTls()
+		}
+		if v, ok := v.(interface{ GetInitialWindowSize() uint32 }); ok {
+			x.InitialWindowSize = v.GetInitialWindowSize()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnRequest_Capabilities) Proto_ShallowClone() (c *NetConnRequest_Capabilities) {
+	if x != nil {
+		c = new(NetConnRequest_Capabilities)
+		c.SupportsFlowControl = x.SupportsFlowControl
+		c.SupportsOpportunisticTls = x.SupportsOpportunisticTls
+		c.InitialWindowSize = x.InitialWindowSize
 	}
 	return
 }
@@ -104,6 +377,15 @@ func (x *NetConnResponse) Proto_ShallowCopy(v interface{}) {
 						return
 					}
 				}
+				if v, ok := v.(interface {
+					GetControl() *NetConnResponse_Control
+				}); ok {
+					var defaultValue *NetConnResponse_Control
+					if v := v.GetControl(); v != defaultValue {
+						x.Data = &NetConnResponse_Control_{Control: v}
+						return
+					}
+				}
 			}()
 		}
 	}
@@ -128,12 +410,32 @@ func (x *NetConnResponse_Conn) Proto_ShallowCopy(v interface{}) {
 	case *NetConnResponse_Conn:
 		x.Local = v.GetLocal()
 		x.Remote = v.GetRemote()
+		x.Tls = v.GetTls()
+		x.Proxy = v.GetProxy()
+		x.Capabilities = v.GetCapabilities()
+		x.CustomAttributes = v.GetCustomAttributes()
 	default:
 		if v, ok := v.(interface{ GetLocal() *netaddr.NetAddr }); ok {
 			x.Local = v.GetLocal()
 		}
 		if v, ok := v.(interface{ GetRemote() *netaddr.NetAddr }); ok {
 			x.Remote = v.GetRemote()
+		}
+		if v, ok := v.(interface {
+			GetTls() *tls.TLSHandshakeResult
+		}); ok {
+			x.Tls = v.GetTls()
+		}
+		if v, ok := v.(interface{ GetProxy() *proxy.ProxyResult }); ok {
+			x.Proxy = v.GetProxy()
+		}
+		if v, ok := v.(interface {
+			GetCapabilities() *NetConnResponse_Capabilities
+		}); ok {
+			x.Capabilities = v.GetCapabilities()
+		}
+		if v, ok := v.(interface{ GetCustomAttributes() []*anypb.Any }); ok {
+			x.CustomAttributes = v.GetCustomAttributes()
 		}
 	}
 }
@@ -144,6 +446,311 @@ func (x *NetConnResponse_Conn) Proto_ShallowClone() (c *NetConnResponse_Conn) {
 		c = new(NetConnResponse_Conn)
 		c.Local = x.Local
 		c.Remote = x.Remote
+		c.Tls = x.Tls
+		c.Proxy = x.Proxy
+		c.Capabilities = x.Capabilities
+		c.CustomAttributes = x.CustomAttributes
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnResponse_Control) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnResponse_Control:
+		x.Event = v.GetEvent()
+	default:
+		if v, ok := v.(interface {
+			GetEvent() isNetConnResponse_Control_Event
+		}); ok {
+			x.Event = v.GetEvent()
+		} else {
+			func() {
+				if v, ok := v.(interface {
+					GetTlsUpgraded() *NetConnResponse_Control_TLSUpgraded
+				}); ok {
+					var defaultValue *NetConnResponse_Control_TLSUpgraded
+					if v := v.GetTlsUpgraded(); v != defaultValue {
+						x.Event = &NetConnResponse_Control_TlsUpgraded{TlsUpgraded: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetTlsUpgradeFailed() *NetConnResponse_Control_TLSUpgradeFailed
+				}); ok {
+					var defaultValue *NetConnResponse_Control_TLSUpgradeFailed
+					if v := v.GetTlsUpgradeFailed(); v != defaultValue {
+						x.Event = &NetConnResponse_Control_TlsUpgradeFailed{TlsUpgradeFailed: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetWindowUpdate() *NetConnResponse_Control_WindowUpdate
+				}); ok {
+					var defaultValue *NetConnResponse_Control_WindowUpdate
+					if v := v.GetWindowUpdate(); v != defaultValue {
+						x.Event = &NetConnResponse_Control_WindowUpdate_{WindowUpdate: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetHalfClose() *NetConnResponse_Control_HalfClose
+				}); ok {
+					var defaultValue *NetConnResponse_Control_HalfClose
+					if v := v.GetHalfClose(); v != defaultValue {
+						x.Event = &NetConnResponse_Control_HalfClose_{HalfClose: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetPong() *NetConnResponse_Control_Pong
+				}); ok {
+					var defaultValue *NetConnResponse_Control_Pong
+					if v := v.GetPong(); v != defaultValue {
+						x.Event = &NetConnResponse_Control_Pong_{Pong: v}
+						return
+					}
+				}
+				if v, ok := v.(interface {
+					GetMetrics() *NetConnResponse_Control_Metrics
+				}); ok {
+					var defaultValue *NetConnResponse_Control_Metrics
+					if v := v.GetMetrics(); v != defaultValue {
+						x.Event = &NetConnResponse_Control_Metrics_{Metrics: v}
+						return
+					}
+				}
+				if v, ok := v.(interface{ GetCustom() *anypb.Any }); ok {
+					var defaultValue *anypb.Any
+					if v := v.GetCustom(); v != defaultValue {
+						x.Event = &NetConnResponse_Control_Custom{Custom: v}
+						return
+					}
+				}
+			}()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnResponse_Control) Proto_ShallowClone() (c *NetConnResponse_Control) {
+	if x != nil {
+		c = new(NetConnResponse_Control)
+		c.Event = x.Event
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnResponse_Control_TLSUpgraded) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnResponse_Control_TLSUpgraded:
+		x.Result = v.GetResult()
+	default:
+		if v, ok := v.(interface {
+			GetResult() *tls.TLSHandshakeResult
+		}); ok {
+			x.Result = v.GetResult()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnResponse_Control_TLSUpgraded) Proto_ShallowClone() (c *NetConnResponse_Control_TLSUpgraded) {
+	if x != nil {
+		c = new(NetConnResponse_Control_TLSUpgraded)
+		c.Result = x.Result
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnResponse_Control_TLSUpgradeFailed) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnResponse_Control_TLSUpgradeFailed:
+		x.Error = v.GetError()
+	default:
+		if v, ok := v.(interface{ GetError() *status.Status }); ok {
+			x.Error = v.GetError()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnResponse_Control_TLSUpgradeFailed) Proto_ShallowClone() (c *NetConnResponse_Control_TLSUpgradeFailed) {
+	if x != nil {
+		c = new(NetConnResponse_Control_TLSUpgradeFailed)
+		c.Error = x.Error
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnResponse_Control_WindowUpdate) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnResponse_Control_WindowUpdate:
+		x.CreditBytes = v.GetCreditBytes()
+	default:
+		if v, ok := v.(interface{ GetCreditBytes() uint32 }); ok {
+			x.CreditBytes = v.GetCreditBytes()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnResponse_Control_WindowUpdate) Proto_ShallowClone() (c *NetConnResponse_Control_WindowUpdate) {
+	if x != nil {
+		c = new(NetConnResponse_Control_WindowUpdate)
+		c.CreditBytes = x.CreditBytes
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnResponse_Control_HalfClose) Proto_ShallowCopy(v interface{}) {
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnResponse_Control_HalfClose) Proto_ShallowClone() (c *NetConnResponse_Control_HalfClose) {
+	if x != nil {
+		c = new(NetConnResponse_Control_HalfClose)
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnResponse_Control_Pong) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnResponse_Control_Pong:
+		x.Id = v.GetId()
+		x.TimestampNs = v.GetTimestampNs()
+	default:
+		if v, ok := v.(interface{ GetId() uint64 }); ok {
+			x.Id = v.GetId()
+		}
+		if v, ok := v.(interface{ GetTimestampNs() int64 }); ok {
+			x.TimestampNs = v.GetTimestampNs()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnResponse_Control_Pong) Proto_ShallowClone() (c *NetConnResponse_Control_Pong) {
+	if x != nil {
+		c = new(NetConnResponse_Control_Pong)
+		c.Id = x.Id
+		c.TimestampNs = x.TimestampNs
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnResponse_Control_Metrics) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnResponse_Control_Metrics:
+		x.BytesSent = v.GetBytesSent()
+		x.BytesReceived = v.GetBytesReceived()
+		x.RttMs = v.GetRttMs()
+	default:
+		if v, ok := v.(interface{ GetBytesSent() uint64 }); ok {
+			x.BytesSent = v.GetBytesSent()
+		}
+		if v, ok := v.(interface{ GetBytesReceived() uint64 }); ok {
+			x.BytesReceived = v.GetBytesReceived()
+		}
+		if v, ok := v.(interface{ GetRttMs() uint32 }); ok {
+			x.RttMs = v.GetRttMs()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnResponse_Control_Metrics) Proto_ShallowClone() (c *NetConnResponse_Control_Metrics) {
+	if x != nil {
+		c = new(NetConnResponse_Control_Metrics)
+		c.BytesSent = x.BytesSent
+		c.BytesReceived = x.BytesReceived
+		c.RttMs = x.RttMs
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *NetConnResponse_Capabilities) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *NetConnResponse_Capabilities:
+		x.SupportsFlowControl = v.GetSupportsFlowControl()
+		x.SupportsOpportunisticTls = v.GetSupportsOpportunisticTls()
+		x.SupportsImpersonation = v.GetSupportsImpersonation()
+		x.MaxChunkSize = v.GetMaxChunkSize()
+		x.InitialWindowSize = v.GetInitialWindowSize()
+		x.SupportedPresets = v.GetSupportedPresets()
+	default:
+		if v, ok := v.(interface{ GetSupportsFlowControl() bool }); ok {
+			x.SupportsFlowControl = v.GetSupportsFlowControl()
+		}
+		if v, ok := v.(interface{ GetSupportsOpportunisticTls() bool }); ok {
+			x.SupportsOpportunisticTls = v.GetSupportsOpportunisticTls()
+		}
+		if v, ok := v.(interface{ GetSupportsImpersonation() bool }); ok {
+			x.SupportsImpersonation = v.GetSupportsImpersonation()
+		}
+		if v, ok := v.(interface{ GetMaxChunkSize() uint32 }); ok {
+			x.MaxChunkSize = v.GetMaxChunkSize()
+		}
+		if v, ok := v.(interface{ GetInitialWindowSize() uint32 }); ok {
+			x.InitialWindowSize = v.GetInitialWindowSize()
+		}
+		if v, ok := v.(interface {
+			GetSupportedPresets() []tls.FingerprintPreset
+		}); ok {
+			x.SupportedPresets = v.GetSupportedPresets()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *NetConnResponse_Capabilities) Proto_ShallowClone() (c *NetConnResponse_Capabilities) {
+	if x != nil {
+		c = new(NetConnResponse_Capabilities)
+		c.SupportsFlowControl = x.SupportsFlowControl
+		c.SupportsOpportunisticTls = x.SupportsOpportunisticTls
+		c.SupportsImpersonation = x.SupportsImpersonation
+		c.MaxChunkSize = x.MaxChunkSize
+		c.InitialWindowSize = x.InitialWindowSize
+		c.SupportedPresets = x.SupportedPresets
 	}
 	return
 }
