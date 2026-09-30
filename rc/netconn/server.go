@@ -3,6 +3,9 @@ package netconn
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
+
 	grpcstream "github.com/joeycumines/sesame/grpc"
 	"github.com/joeycumines/sesame/rc"
 	streamutil "github.com/joeycumines/sesame/stream"
@@ -11,8 +14,6 @@ import (
 	sesametls "github.com/joeycumines/sesame/type/tls"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
-	"net"
 )
 
 type (
@@ -112,6 +113,7 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 		if tlsErr != nil {
 			return tlsErr
 		}
+		defer conn.Close()
 	}
 
 	serverCaps := x.Capabilities

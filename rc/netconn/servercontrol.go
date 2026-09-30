@@ -470,7 +470,7 @@ func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesamet
 	// 2. Perform TLS Handshake
 	upgradedConn, result, err := ExecuteTLSHandshake(ctx, c, opts, s.defaultServerName, s.tlsProvider)
 	if err != nil {
-		// RFC Section 4.4: On upgrade failure, send TLSUpgradeFailed and terminate (never fallback to cleartext)
+		// RFC Section 4.4: On upgrade failure, send TlsUpgradeFailed and terminate (never fallback to cleartext)
 		st, _ := grpcstatus.FromError(err)
 		s.sendMu.Lock()
 		_ = s.stream.Send(&rc.NetConnResponse{
@@ -491,7 +491,7 @@ func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesamet
 		return err
 	}
 
-	// 3. Send TLSUpgraded response
+	// 3. Send TlsUpgraded response
 	s.sendMu.Lock()
 	sendErr := s.stream.Send(&rc.NetConnResponse{
 		Data: &rc.NetConnResponse_Control_{

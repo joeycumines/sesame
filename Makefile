@@ -21,6 +21,9 @@ STATICCHECK_FLAGS ?=
 GO_PACKAGES ?= ./...
 GO_TEST_FLAGS ?=
 
+GO_INTEGRATION_PACKAGE ?= ./internal/integration/...
+GO_INTEGRATION_FLAGS ?= -integration
+
 # provides default timeout for tests if not set by the user
 resolve_go_test_flags = $(if $(filter -timeout -timeout=%,$(GO_TEST_FLAGS)),,-timeout=15m) $(GO_TEST_FLAGS)
 
@@ -37,6 +40,11 @@ LOOP_START ?= for t in $(or $(shell $(LIST_TOOLS)),$(error failed to list tools)
 LOOP_VAR ?= $$t
 LOOP_END ?= ; ); then echo "ERROR: exit code $$?" >&2; exit 1; fi; done
 endif
+
+.DEFAULT_GOAL := check
+
+.PHONY: check
+check: all test-integration
 
 .PHONY: all
 all: lint build test
@@ -61,6 +69,17 @@ test-cover: build
 .PHONY: test-race
 test-race: build
 	$(GO) test $(GO_FLAGS) $(resolve_go_test_flags) -race $(GO_PACKAGES)
+
+.PHONY: test-integration
+test-integration: test-integration-cover test-integration-race
+
+.PHONY: test-integration-cover
+test-integration-cover: build
+	$(GO) test $(GO_FLAGS) $(resolve_go_test_flags) -cover $(GO_INTEGRATION_PACKAGE) $(GO_INTEGRATION_FLAGS)
+
+.PHONY: test-integration-race
+test-integration-race: build
+	$(GO) test $(GO_FLAGS) $(resolve_go_test_flags) -race $(GO_INTEGRATION_PACKAGE) $(GO_INTEGRATION_FLAGS)
 
 .PHONY: vet
 vet:
