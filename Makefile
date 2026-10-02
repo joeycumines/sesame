@@ -43,8 +43,11 @@ endif
 
 .DEFAULT_GOAL := check
 
+SESAME_ENDPOINT_DIR ?= sesame-endpoint
+BUN ?= bun
+
 .PHONY: check
-check: all test-integration
+check: all test-ts test-integration
 
 .PHONY: all
 all: lint build test
@@ -72,6 +75,22 @@ test-race: build
 
 .PHONY: test-integration
 test-integration: test-integration-cover test-integration-race
+
+.PHONY: test-ts
+test-ts: build-ts test-ts-bun test-ts-node
+
+.PHONY: build-ts
+build-ts:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run compile
+
+.PHONY: test-ts-bun
+test-ts-bun:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) test
+
+# Depends on build-ts via test-ts; the runner loads build/src/index.js.
+.PHONY: test-ts-node
+test-ts-node:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run test:node
 
 .PHONY: test-integration-cover
 test-integration-cover: build

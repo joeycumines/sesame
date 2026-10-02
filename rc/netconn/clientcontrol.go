@@ -117,10 +117,56 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 		switch data := res.GetData().(type) {
 		case *rc.NetConnResponse_Bytes:
 			if len(data.Bytes) > 0 {
-				if _, writeErr := c.pipeWriter.Write(data.Bytes); writeErr != nil {
-					_ = c.pipeWriter.CloseWithError(writeErr)
-					c.abortPending(writeErr)
-					return
+				rem := data.Bytes
+				for len(rem) > 0 && !c.closed.Load() {
+					writeLen := len(rem)
+					if c.inboundFC != nil {
+						var err error
+						// Use the loop's context, not context.Background():
+						// this blocks until the application consumes the
+						// previous Read, and only Close (which cancels this
+						// context) can be relied on to release it.
+						writeLen, err = c.inboundFC.AcquirePartial(ctx, writeLen)
+						if err != nil {
+							_ = c.pipeWriter.CloseWithError(err)
+							c.abortPending(err)
+							return
+						}
+						if writeLen <= 0 {
+							// Zero credit would leave rem unchanged and spin.
+							err = io.ErrNoProgress
+							_ = c.pipeWriter.CloseWithError(err)
+							c.abortPending(err)
+							return
+						}
+					}
+					n, writeErr := c.pipeWriter.Write(rem[:writeLen])
+					rem = rem[n:]
+					if writeErr != nil {
+						_ = c.pipeWriter.CloseWithError(writeErr)
+						c.abortPending(writeErr)
+						return
+					}
+					if c.inboundFC != nil && n > 0 {
+						c.sendMu.Lock()
+						sendErr := c.stream.Send(&rc.NetConnRequest{
+							Data: &rc.NetConnRequest_Control_{
+								Control: &rc.NetConnRequest_Control{
+									Action: &rc.NetConnRequest_Control_WindowUpdate_{
+										WindowUpdate: &rc.NetConnRequest_Control_WindowUpdate{
+											CreditBytes: uint32(n),
+										},
+									},
+								},
+							},
+						})
+						c.sendMu.Unlock()
+						if sendErr != nil {
+							_ = c.pipeWriter.CloseWithError(sendErr)
+							c.abortPending(sendErr)
+							return
+						}
+					}
 				}
 			}
 
@@ -193,20 +239,8 @@ func (c *clientControlConn) abortPending(err error) {
 
 func (c *clientControlConn) Read(b []byte) (int, error) {
 	n, err := c.pipeReader.Read(b)
-	if n > 0 && c.inboundFC != nil && !c.closed.Load() {
-		c.sendMu.Lock()
-		_ = c.stream.Send(&rc.NetConnRequest{
-			Data: &rc.NetConnRequest_Control_{
-				Control: &rc.NetConnRequest_Control{
-					Action: &rc.NetConnRequest_Control_WindowUpdate_{
-						WindowUpdate: &rc.NetConnRequest_Control_WindowUpdate{
-							CreditBytes: uint32(n),
-						},
-					},
-				},
-			},
-		})
-		c.sendMu.Unlock()
+	if n > 0 && c.inboundFC != nil {
+		c.inboundFC.AddCredit(uint32(n))
 	}
 	return n, err
 }
@@ -256,6 +290,9 @@ func (c *clientControlConn) Close() error {
 		_ = c.pipeWriter.Close()
 		if c.outboundFC != nil {
 			c.outboundFC.Close()
+		}
+		if c.inboundFC != nil {
+			c.inboundFC.Close()
 		}
 		c.abortPending(io.ErrClosedPipe)
 	}

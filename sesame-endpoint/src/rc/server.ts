@@ -30,6 +30,46 @@ import {
   parseHostPort,
 } from './transform';
 
+// Resolves once the socket drains, or rejects if it terminates or the
+// request is aborted first. `events.once` alone is not enough: a clean peer
+// close emits neither 'drain' nor 'error', so the wait would never settle.
+function waitForDrain(socket: net.Socket, signal?: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      socket.removeListener('drain', onDrain);
+      socket.removeListener('close', onClose);
+      socket.removeListener('error', onError);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const onDrain = () => {
+      cleanup();
+      resolve();
+    };
+    const onClose = () => {
+      cleanup();
+      reject(
+        new ConnectError(
+          'sesame/rc/netconn: upstream socket closed before drain',
+          Code.Unavailable,
+        ),
+      );
+    };
+    const onError = (err: Error) => {
+      cleanup();
+      reject(err);
+    };
+    const onAbort = () => {
+      cleanup();
+      reject(signal?.reason ?? new Error('aborted'));
+    };
+
+    socket.once('drain', onDrain);
+    socket.once('close', onClose);
+    socket.once('error', onError);
+    signal?.addEventListener('abort', onAbort, {once: true});
+  });
+}
+
 class AsyncQueue<T> {
   private queue: T[] = [];
   private waiters: Array<{
@@ -124,7 +164,8 @@ export function createRemoteControlService(config: ServerConfig) {
         const preset = dialReq.tls.fingerprintPreset;
         if (
           preset !== FingerprintPreset.FINGERPRINT_PRESET_UNSPECIFIED &&
-          preset !== FingerprintPreset.RUNTIME_DEFAULT
+          preset !== FingerprintPreset.RUNTIME_DEFAULT &&
+          !config.supportedPresets.includes(preset)
         ) {
           throw new ConnectError(
             `sesame/rc/netconn: requested fingerprint preset ${preset} is not supported by standard runtime; custom TLSProvider required`,
@@ -369,13 +410,31 @@ export function createRemoteControlService(config: ServerConfig) {
         }
       };
 
+      const onTimeout = () => {
+        if (!isClosed) {
+          responseQueue.close(
+            new ConnectError(
+              'sesame/rc/netconn: upstream socket read timeout',
+              Code.DeadlineExceeded,
+            ),
+          );
+        }
+        cleanupAll();
+      };
+
       const attachListeners = (s: net.Socket) => {
         s.on('data', onData);
+        s.setTimeout(config.readTimeoutMs || 0, onTimeout);
         s.once('end', onEnd);
         s.once('error', onError);
       };
 
+      // Must also clear the timeout: its listener closes over cleanupAll,
+      // which acts on the current activeSocket. Leaving it armed on a
+      // superseded socket would let it tear down a live upgraded connection.
       const detachListeners = (s: net.Socket) => {
+        s.setTimeout(0);
+        s.removeListener('timeout', onTimeout);
         s.removeListener('data', onData);
         s.removeListener('end', onEnd);
         s.removeListener('error', onError);
@@ -465,31 +524,47 @@ export function createRemoteControlService(config: ServerConfig) {
             if (req.data.case === 'bytes') {
               const bytes = req.data.value;
               if (bytes.length > 0) {
-                await new Promise<void>((resolve, reject) => {
-                  activeSocket.write(Buffer.from(bytes), err => {
-                    if (err) reject(err);
-                    else resolve();
-                  });
-                });
-                if (inboundFC) {
-                  responseQueue.push(
-                    create(NetConnResponseSchema, {
-                      data: {
-                        case: 'control',
-                        value: create(NetConnResponse_ControlSchema, {
-                          event: {
-                            case: 'windowUpdate',
-                            value: create(
-                              NetConnResponse_Control_WindowUpdateSchema,
-                              {
-                                creditBytes: bytes.length,
-                              },
-                            ),
-                          },
-                        }),
-                      },
-                    }),
+                let offset = 0;
+                while (offset < bytes.length && !isClosed) {
+                  let taken = bytes.length - offset;
+                  if (inboundFC) {
+                    taken = await inboundFC.acquirePartial(taken, abortSignal);
+                  }
+                  const slice = Buffer.from(
+                    bytes.subarray(offset, offset + taken),
                   );
+                  offset += taken;
+                  const flushRequired = !activeSocket.write(slice);
+                  if (flushRequired) {
+                    await waitForDrain(activeSocket, abortSignal);
+                  }
+                  if (isClosed) {
+                    break;
+                  }
+                  if (inboundFC) {
+                    // The bytes are now owned by the socket, so the inbound
+                    // window is free again. Without this the server stalls
+                    // permanently once the client's initial window is spent.
+                    inboundFC.addCredit(taken);
+                    responseQueue.push(
+                      create(NetConnResponseSchema, {
+                        data: {
+                          case: 'control',
+                          value: create(NetConnResponse_ControlSchema, {
+                            event: {
+                              case: 'windowUpdate',
+                              value: create(
+                                NetConnResponse_Control_WindowUpdateSchema,
+                                {
+                                  creditBytes: taken,
+                                },
+                              ),
+                            },
+                          }),
+                        },
+                      }),
+                    );
+                  }
                 }
               }
             } else if (req.data.case === 'control') {

@@ -299,8 +299,17 @@ func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesameproxy.P
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Check the status first: a rejecting proxy is entitled to frame its
+	// error body, and the status is the more actionable failure.
 	if resp.StatusCode != http.StatusOK {
 		return nil, status.Errorf(codes.PermissionDenied, "sesame/rc/netconn: HTTP CONNECT to %s failed with status: %s", target, resp.Status)
+	}
+
+	// A 200 response to CONNECT must not carry a body at all. A framed one
+	// means the proxy is not actually tunnelling and its bytes would be
+	// mistaken for tunnel payload.
+	if len(resp.TransferEncoding) > 0 {
+		return nil, status.Errorf(codes.Unavailable, "sesame/rc/netconn: HTTP CONNECT to %s returned a framed response body", target)
 	}
 
 	if br.Buffered() > 0 {

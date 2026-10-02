@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/joeycumines/sesame/rc"
@@ -48,8 +49,14 @@ type (
 		inboundFC  *FlowController
 
 		pauseReq     chan struct{}
-		pausedAck    chan struct{}
 		resumeNotify chan net.Conn
+
+		// pausePending is set before handleUpgradeTLS arms the past read
+		// deadline, so the reader can tell an upgrade-induced timeout from
+		// a real one instead of spinning on the expired deadline.
+		pausePending atomic.Bool
+
+		pausedAck chan struct{}
 
 		done      chan struct{}
 		closeOnce sync.Once
@@ -245,7 +252,7 @@ func RunServerDemux(
 			case <-s.done:
 				return
 			case <-s.pauseReq:
-				// Pause requested for in-stream TLS upgrade
+				// Pause requested for in-stream TLS upgrade.
 				s.pausedAck <- struct{}{}
 				select {
 				case <-ctx.Done():
@@ -319,25 +326,12 @@ func RunServerDemux(
 					return
 				}
 
-				// Check if read unblocked due to deadline set for upgrade pause
+				// The past deadline set by handleUpgradeTLS is the only
+				// expected source of a timeout here. Any other timeout is a
+				// genuine read failure and must be reported, not retried.
 				var netErr net.Error
-				if errors.As(err, &netErr) && netErr.Timeout() {
-					select {
-					case <-s.pauseReq:
-						s.pausedAck <- struct{}{}
-						select {
-						case <-ctx.Done():
-							return
-						case <-s.done:
-							return
-						case newConn := <-s.resumeNotify:
-							s.connMu.Lock()
-							s.activeConn = newConn
-							s.connMu.Unlock()
-							continue
-						}
-					default:
-					}
+				if errors.As(err, &netErr) && netErr.Timeout() && s.pausePending.Load() {
+					continue
 				}
 
 				errCh <- err
@@ -366,11 +360,27 @@ func RunServerDemux(
 				s.connMu.RUnlock()
 
 				if c != nil && len(data.Bytes) > 0 {
-					if _, writeErr := c.Write(data.Bytes); writeErr != nil {
-						errCh <- writeErr
-						return
+					rem := data.Bytes
+					for len(rem) > 0 {
+						writeLen := len(rem)
+						if s.inboundFC != nil {
+							var acquireErr error
+							writeLen, acquireErr = s.inboundFC.AcquirePartial(ctx, writeLen)
+							if acquireErr != nil {
+								errCh <- acquireErr
+								return
+							}
+						}
+						if _, writeErr := c.Write(rem[:writeLen]); writeErr != nil {
+							errCh <- writeErr
+							return
+						}
+						if s.inboundFC != nil {
+							s.inboundFC.AddCredit(uint32(writeLen))
+						}
+						rem = rem[writeLen:]
 					}
-					// If flow control is enabled on inbound, send window update credit back to client
+					// Return inbound credit to the client after draining.
 					if s.inboundFC != nil {
 						s.sendMu.Lock()
 						_ = stream.Send(&rc.NetConnResponse{
@@ -450,14 +460,26 @@ func RunServerDemux(
 
 func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesametls.TLSOptions) error {
 	// 1. Pause outbound reader
-	s.pauseReq <- struct{}{}
 	s.connMu.RLock()
 	c := s.activeConn
 	s.connMu.RUnlock()
 
-	// Interrupt any pending read with a past deadline
+	// Flag the pause before arming the deadline so the reader recognises
+	// the resulting timeout as upgrade-induced. Without the flag the reader
+	// cannot distinguish it from a real read failure.
+	s.pausePending.Store(true)
+	defer s.pausePending.Store(false)
+
+	// Interrupt any pending read with a past deadline before requesting the
+	// pause, so the reader cannot consume the pause signal without entering
+	// the paused branch.
 	_ = c.SetReadDeadline(time.Now())
 
+	select {
+	case s.pauseReq <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	select {
 	case <-s.pausedAck:
 	case <-ctx.Done():

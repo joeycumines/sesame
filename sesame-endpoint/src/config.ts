@@ -218,6 +218,16 @@ export function parseConfig(
     proxyPassword: env.SESAME_ENDPOINT_PROXY_PASSWORD,
   };
 
+  if (
+    !supportedPresets.every(
+      preset => preset === FingerprintPreset.RUNTIME_DEFAULT,
+    )
+  ) {
+    throw new Error(
+      'Invalid supportedPresets: the standard runtime only supports RUNTIME_DEFAULT',
+    );
+  }
+
   return {
     config: {
       host,

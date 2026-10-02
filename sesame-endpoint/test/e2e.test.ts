@@ -791,4 +791,104 @@ describe('sesame-endpoint E2E Suite', () => {
 
     reqStream.close();
   });
+
+  it('replenishes the inbound window so payloads larger than it still flow', async () => {
+    // A tiny initial window makes the stall deterministic: without the
+    // server refunding credit as bytes reach the socket, the second chunk
+    // blocks forever once the window is spent.
+    const tinyWindow = 1024;
+    const total = tinyWindow * 4;
+    const payload = Buffer.alloc(total, 0x61);
+
+    const sinkSockets: net.Socket[] = [];
+    const sink = net.createServer(sock => {
+      // Consume without echoing so the only responses are window updates.
+      sinkSockets.push(sock);
+      sock.resume();
+    });
+    await new Promise<void>(r => sink.listen(0, '127.0.0.1', () => r()));
+    const sinkPort = (sink.address() as net.AddressInfo).port;
+
+    try {
+      const {config} = parseConfig([
+        '--initial-window-size',
+        String(tinyWindow),
+        '--max-chunk-size',
+        '512',
+      ]);
+      const server = createEndpointServer(config!);
+      const bound = await server.listen(0, '127.0.0.1');
+
+      try {
+        const transport = createGrpcTransport({
+          baseUrl: `http://127.0.0.1:${bound.port}`,
+        });
+        const localClient = createClient(RemoteControl, transport);
+        const reqStream = new RequestStream();
+
+        reqStream.push(
+          create(NetConnRequestSchema, {
+            data: {
+              case: 'dial',
+              value: create(NetConnRequest_DialSchema, {
+                address: create(NetAddrSchema, {
+                  network: 'tcp',
+                  address: `127.0.0.1:${sinkPort}`,
+                }),
+                capabilities: create(NetConnRequest_CapabilitiesSchema, {
+                  supportsFlowControl: true,
+                  initialWindowSize: tinyWindow,
+                }),
+              }),
+            },
+          }),
+        );
+
+        const abort = new AbortController();
+        const iterator = localClient
+          .netConn(reqStream, {
+            signal: abort.signal,
+          })
+          [Symbol.asyncIterator]();
+        const first = await iterator.next();
+        expect(first.value.data.case).toBe('conn');
+
+        // Push well past the window. Each slice is admitted only because the
+        // server returns credit after the write.
+        let acknowledged = 0;
+        const drainResponses = (async () => {
+          while (acknowledged < total) {
+            const resp = await iterator.next();
+            if (resp.done) break;
+            if (resp.value.data.case !== 'control') continue;
+            const event = resp.value.data.value.event;
+            if (event.case === 'windowUpdate') {
+              acknowledged += Number(event.value.creditBytes);
+            }
+          }
+        })();
+
+        for (let offset = 0; offset < total; offset += 512) {
+          reqStream.push(
+            create(NetConnRequestSchema, {
+              data: {
+                case: 'bytes',
+                value: new Uint8Array(payload.subarray(offset, offset + 512)),
+              },
+            }),
+          );
+        }
+
+        await drainResponses;
+        expect(acknowledged).toBe(total);
+        reqStream.close();
+        abort.abort();
+      } finally {
+        await server.close();
+      }
+    } finally {
+      for (const sock of sinkSockets) sock.destroy();
+      await new Promise<void>(r => sink.close(() => r()));
+    }
+  });
 });

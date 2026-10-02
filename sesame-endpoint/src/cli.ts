@@ -5,7 +5,15 @@ import {createEndpointServer} from './server';
 const VERSION = '0.1.0';
 
 async function main() {
-  const result = parseConfig(process.argv.slice(2), process.env);
+  let result: ReturnType<typeof parseConfig>;
+  try {
+    result = parseConfig(process.argv.slice(2), process.env);
+  } catch (err: unknown) {
+    process.stderr.write(
+      `sesame-endpoint: ${err instanceof Error ? err.message : String(err)}\n\n${formatHelp()}\n`,
+    );
+    process.exit(1);
+  }
 
   if (result.helpRequested) {
     process.stdout.write(formatHelp());

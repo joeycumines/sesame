@@ -54,13 +54,16 @@ export function tlsVersionToProto(v: string | null | undefined): TLSVersion {
 export function parseHostPort(addr: string): {host: string; port: number} {
   const lastColon = addr.lastIndexOf(':');
   if (lastColon === -1) {
-    return {host: addr, port: 0};
+    throw new Error(`Invalid host:port address: ${addr}`);
   }
   let host = addr.slice(0, lastColon);
   if (host.startsWith('[') && host.endsWith(']')) {
     host = host.slice(1, -1);
   }
-  const port = parseInt(addr.slice(lastColon + 1), 10) || 0;
+  const port = parseInt(addr.slice(lastColon + 1), 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid port in address: ${addr}`);
+  }
   return {host, port};
 }
 
@@ -103,9 +106,10 @@ export async function executeTLSHandshake(
   }
 
   let serverName = opts.serverName || defaultServerName;
-  const hp = parseHostPort(serverName);
-  if (hp.port !== 0) {
-    serverName = hp.host;
+  // A bare IPv6 literal is already a valid SNI value; only strip a port when
+  // the value is a bracketed literal or a name:port pair.
+  if (serverName.includes(':') && !net.isIPv6(serverName)) {
+    serverName = parseHostPort(serverName).host;
   }
 
   const tlsConnectOptions: tls.ConnectionOptions = {
@@ -584,16 +588,13 @@ function socks5Handshake(
       const hp = parseHostPort(target);
       const isIpv4 = net.isIPv4(hp.host);
       const isIpv6 = net.isIPv6(hp.host);
-
       const header = Buffer.from([0x05, 0x01, 0x00]);
       let addrBuf: Buffer;
       if (isIpv4) {
         const parts = hp.host.split('.').map(p => parseInt(p, 10));
         addrBuf = Buffer.concat([Buffer.from([0x01]), Buffer.from(parts)]);
       } else if (isIpv6) {
-        // Simple domain fallback if raw ipv6 parsing is complex
-        const domain = Buffer.from(hp.host, 'utf-8');
-        addrBuf = Buffer.concat([Buffer.from([0x03, domain.length]), domain]);
+        addrBuf = Buffer.concat([Buffer.from([0x04]), ipv6ToBytes(hp.host)]);
       } else {
         const domain = Buffer.from(hp.host, 'utf-8');
         addrBuf = Buffer.concat([Buffer.from([0x03, domain.length]), domain]);
@@ -615,4 +616,86 @@ function socks5Handshake(
       : Buffer.from([0x05, 0x01, 0x00]);
     socket.write(greeting);
   });
+}
+
+function parseIPv4Octets(literal: string, host: string): number[] {
+  const parts = literal.split('.');
+  if (parts.length !== 4) {
+    throw new Error(`Invalid IPv6 address: ${host}`);
+  }
+  return parts.map(part => {
+    if (!/^\d{1,3}$/.test(part)) {
+      throw new Error(`Invalid IPv6 address: ${host}`);
+    }
+    const octet = parseInt(part, 10);
+    if (octet > 255) {
+      throw new Error(`Invalid IPv6 address: ${host}`);
+    }
+    return octet;
+  });
+}
+
+// Parses an IPv6 literal into its 16 wire-order bytes. `::` expands to exactly
+// one run of zero groups, and a trailing dotted-quad occupies the final two
+// groups (the IPv4-mapped form, e.g. ::ffff:1.2.3.4).
+function ipv6ToBytes(host: string): Buffer {
+  const zoneIndex = host.indexOf('%');
+  const literal = zoneIndex === -1 ? host : host.slice(0, zoneIndex);
+  if (literal.length === 0) {
+    throw new Error(`Invalid IPv6 address: ${host}`);
+  }
+
+  const compressIndex = literal.indexOf('::');
+  if (compressIndex !== literal.lastIndexOf('::')) {
+    throw new Error(`Invalid IPv6 address: ${host}`);
+  }
+
+  // A dotted-quad may only appear as the address's final group, so it is
+  // allowed in the tail of a compressed literal or in a fully written one.
+  const parseGroups = (segment: string, allowIPv4: boolean): number[] => {
+    if (segment.length === 0) {
+      return [];
+    }
+    const parts = segment.split(':');
+    const groups: number[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part.includes('.')) {
+        if (!allowIPv4 || i !== parts.length - 1) {
+          throw new Error(`Invalid IPv6 address: ${host}`);
+        }
+        const octets = parseIPv4Octets(part, host);
+        groups.push((octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]);
+        continue;
+      }
+      if (!/^[0-9a-fA-F]{1,4}$/.test(part)) {
+        throw new Error(`Invalid IPv6 address: ${host}`);
+      }
+      groups.push(parseInt(part, 16));
+    }
+    return groups;
+  };
+
+  let groups: number[];
+  if (compressIndex === -1) {
+    groups = parseGroups(literal, true);
+  } else {
+    const head = parseGroups(literal.slice(0, compressIndex), false);
+    const tail = parseGroups(literal.slice(compressIndex + 2), true);
+    const zeroCount = 8 - head.length - tail.length;
+    if (zeroCount < 1) {
+      throw new Error(`Invalid IPv6 address: ${host}`);
+    }
+    groups = [...head, ...new Array<number>(zeroCount).fill(0), ...tail];
+  }
+
+  if (groups.length !== 8) {
+    throw new Error(`Invalid IPv6 address: ${host}`);
+  }
+
+  const bytes = Buffer.alloc(16);
+  for (let i = 0; i < 8; i++) {
+    bytes.writeUInt16BE(groups[i], i * 2);
+  }
+  return bytes;
 }

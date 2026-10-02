@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 
+	"google.golang.org/protobuf/proto"
+
 	grpcstream "github.com/joeycumines/sesame/grpc"
 	"github.com/joeycumines/sesame/rc"
 	streamutil "github.com/joeycumines/sesame/stream"
@@ -127,16 +129,22 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 		}
 	}
 
+	serverCaps = proto.Clone(serverCaps).(*rc.NetConnResponse_Capabilities)
+	if serverCaps.GetInitialWindowSize() == 0 {
+		serverCaps.InitialWindowSize = DefaultInitialWindowSize
+	}
+
 	// 2. NetConnResponse.conn
-	if err := stream.Send(&rc.NetConnResponse{Data: &rc.NetConnResponse_Conn_{Conn: &rc.NetConnResponse_Conn{
+	sendErr := stream.Send(&rc.NetConnResponse{Data: &rc.NetConnResponse_Conn_{Conn: &rc.NetConnResponse_Conn{
 		Local:        netaddr.New(conn.LocalAddr()),
 		Remote:       netaddr.New(conn.RemoteAddr()),
 		Tls:          tlsResult,
 		Proxy:        proxyResult,
 		Capabilities: serverCaps,
-	}}}); err != nil {
+	}}})
+	if sendErr != nil {
 		// code unknown
-		return err
+		return sendErr
 	}
 
 	// 3. Any number of NetConnRequest.bytes and NetConnResponse.bytes

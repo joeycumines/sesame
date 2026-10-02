@@ -35,8 +35,6 @@ describe('config parser', () => {
       '--enable-opportunistic-tls=false',
       '--enable-flow-control=false',
       '--allowed-networks=tcp,unix',
-      '--supported-presets',
-      'CHROME_120,FIREFOX_120',
     ]);
     expect(res.config).toBeDefined();
     const cfg = res.config!;
@@ -49,10 +47,7 @@ describe('config parser', () => {
     expect(cfg.enableOpportunisticTls).toBe(false);
     expect(cfg.enableFlowControl).toBe(false);
     expect(cfg.allowedNetworks).toEqual(['tcp', 'unix']);
-    expect(cfg.supportedPresets).toEqual([
-      FingerprintPreset.CHROME_120,
-      FingerprintPreset.FIREFOX_120,
-    ]);
+    expect(cfg.initialWindowSize).toBe(131072);
   });
 
   it('parses secrets from scoped environment variables (SESAME_ENDPOINT_*)', () => {
@@ -111,6 +106,9 @@ describe('config parser', () => {
     );
     expect(() => parseConfig(['--supported-presets', 'NOT_A_PRESET'])).toThrow(
       'Unknown fingerprint preset',
+    );
+    expect(() => parseConfig(['--supported-presets', 'CHROME_120'])).toThrow(
+      'Invalid supportedPresets',
     );
     expect(() => parseConfig(['--unknown-flag'])).toThrow(
       'Unknown CLI argument',
