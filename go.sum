@@ -33,6 +33,8 @@ github.com/joeycumines/go-catrate v0.0.0-20260914042225-9038431973e1 h1:i0SCUfaZ
 github.com/joeycumines/go-catrate v0.0.0-20260914042225-9038431973e1/go.mod h1:mjAh8KZ9z7HgMUWvEdHbvK7hE3/mAirLEiM3hCM3JWE=
 github.com/joeycumines/go-eventloop v0.1.0 h1:XW4vRkjDODCNOC2jq1+nMH8WQfdEnpgVobMVAP3rb8A=
 github.com/joeycumines/go-eventloop v0.1.0/go.mod h1:VhgxVSXu+CukSTWUlmoVVE2ui12dNfzgM1b0loD4gWw=
+github.com/joeycumines/go-inprocgrpc v0.1.0 h1:ij5VNDe1oDWZupZcIjj/3piv/HtSjHYab8ZqCDQMwHA=
+github.com/joeycumines/go-inprocgrpc v0.1.0/go.mod h1:DULsQsGrG9GYM04khjW8ooSzhWOCEtxNKkcv8Wqf8i8=
 github.com/joeycumines/go-utilpkg/jsonenc v0.0.0-20260908035720-54c96e4412a1 h1:nsXzY+CLB4JXeCiX66xUtP9aq0cwRrFNKLmQdIb1uck=
 github.com/joeycumines/go-utilpkg/jsonenc v0.0.0-20260908035720-54c96e4412a1/go.mod h1:GDxgeJHBdDYTUbJd3dJF/Sflw5SeULvJCFZkTHE+B5Y=
 github.com/joeycumines/gopoet-protogen v0.2.0 h1:ht9tJtB0Gh86DDcDrH7x4NBaAavTMe9K/vygj7WSShc=

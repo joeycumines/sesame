@@ -39,8 +39,3 @@ require (
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/tools v0.51.0 // indirect
 )
-
-// keep: local worktree verified byte-identical to published go-inprocgrpc v0.1.0
-// except the worktree-only internal/grpchantest dir; dropping the replace is a
-// separate portability decision, not part of this pin.
-replace github.com/joeycumines/go-inprocgrpc => /Users/joeyc/dev/go-utilpkg/inprocgrpc
