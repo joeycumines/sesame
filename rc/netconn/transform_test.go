@@ -5,6 +5,7 @@ import (
 	cryptotls "crypto/tls"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/joeycumines/sesame/type/netaddr"
 	sesameproxy "github.com/joeycumines/sesame/type/proxy"
@@ -132,6 +133,47 @@ func TestExecuteProxyHops_HTTPConnect(t *testing.T) {
 	}
 	if res.GetTraversedHops()[0].GetAddress() != proxyAddr {
 		t.Errorf("traversed hop got %s, want %s", res.GetTraversedHops()[0].GetAddress(), proxyAddr)
+	}
+}
+
+func TestHttpConnectHandshake_RejectsFramed200Body(t *testing.T) {
+	// A 200 response to CONNECT must never carry a body. Both chunked
+	// framing and a declared Content-Length mean the proxy is not
+	// tunnelling, and the bytes must not enter the tunnel as payload.
+	for _, tc := range []struct {
+		name    string
+		headers string
+	}{
+		{name: "chunked", headers: "Transfer-Encoding: chunked"},
+		{name: "content-length", headers: "Content-Length: 5"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clientPipe, serverPipe := net.Pipe()
+			defer clientPipe.Close()
+			defer serverPipe.Close()
+
+			go func() {
+				defer serverPipe.Close()
+				buf := make([]byte, 4096)
+				if _, err := serverPipe.Read(buf); err != nil {
+					return
+				}
+				_, _ = serverPipe.Write([]byte("HTTP/1.1 200 Connection Established\r\n" + tc.headers + "\r\n\r\nhello"))
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_, err := httpConnectHandshake(ctx, clientPipe, &sesameproxy.ProxyHop{
+				Type: sesameproxy.ProxyHop_HTTP_CONNECT,
+				Address: &netaddr.NetAddr{
+					Network: "tcp",
+					Address: "proxy.internal:8080",
+				},
+			}, "target.internal:443")
+			if err == nil {
+				t.Fatal("expected error for 200 with framed body, got nil")
+			}
+		})
 	}
 }
 

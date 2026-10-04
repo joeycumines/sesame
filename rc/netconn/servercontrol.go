@@ -383,9 +383,24 @@ func RunServerDemux(
 								return
 							}
 						}
-						if _, writeErr := c.Write(rem[:writeLen]); writeErr != nil {
+						nw, writeErr := c.Write(rem[:writeLen])
+						if writeErr != nil {
 							errCh <- writeErr
 							return
+						}
+						if nw != writeLen {
+							// A short write with no error must not be
+							// treated as complete: advance by what was
+							// actually consumed and refund only that.
+							if nw < 0 || nw > writeLen {
+								errCh <- io.ErrShortWrite
+								return
+							}
+							if nw == 0 {
+								errCh <- io.ErrNoProgress
+								return
+							}
+							writeLen = nw
 						}
 						if s.inboundFC != nil {
 							s.inboundFC.AddCredit(uint32(writeLen))
@@ -418,6 +433,16 @@ func RunServerDemux(
 
 				switch action := ctl.GetAction().(type) {
 				case *rc.NetConnRequest_Control_UpgradeTls:
+					// NOTE (upgrade-vs-window): runs inline so this loop
+					// keeps servicing windowUpdate only between control
+					// messages. A socket reader blocked on an exhausted
+					// outbound window while an upgrade arrives can still
+					// mutually wait; fixing that needs an interruptible
+					// credit wait on both stacks. A parked-handoff design
+					// was attempted and reverted: the pause handshake can
+					// only be answered by the reader's loop select, and
+					// every inline variant deadlocked the normal-path
+					// STARTTLS test. Narrow residual risk, recorded.
 					upgradeErr := s.handleUpgradeTLS(ctx, action.UpgradeTls.GetOptions())
 					if upgradeErr != nil {
 						errCh <- upgradeErr

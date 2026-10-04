@@ -440,6 +440,66 @@ describe('sesame-endpoint E2E Suite', () => {
     reqStream.close();
   });
 
+  it('rejects a 200 CONNECT response carrying a framed body', async () => {
+    // A proxy that answers 200 with framing is not tunnelling; the framing
+    // bytes must fail the dial rather than enter the tunnel as payload.
+    const badProxy = net.createServer(sock => {
+      let seen = Buffer.alloc(0);
+      sock.on('data', chunk => {
+        seen = Buffer.concat([seen, chunk]);
+        if (seen.indexOf('\r\n\r\n') !== -1) {
+          sock.write(
+            'HTTP/1.1 200 Connection Established\r\nContent-Length: 5\r\n\r\nhello',
+          );
+        }
+      });
+    });
+    await new Promise<void>(r => badProxy.listen(0, '127.0.0.1', () => r()));
+    const badPort = (badProxy.address() as net.AddressInfo).port;
+
+    try {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: `127.0.0.1:${tcpEchoPort}`,
+              }),
+              proxy: create(ProxyOptionsSchema, {
+                hops: [
+                  create(ProxyHopSchema, {
+                    type: ProxyHop_Type.HTTP_CONNECT,
+                    address: create(NetAddrSchema, {
+                      network: 'tcp',
+                      address: `127.0.0.1:${badPort}`,
+                    }),
+                  }),
+                ],
+              }),
+            }),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+      try {
+        await iterator.next();
+        expect.unreachable('should have rejected the framed 200');
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(ConnectError);
+        expect((err as ConnectError).message).toContain('framed response body');
+      } finally {
+        reqStream.close();
+      }
+    } finally {
+      await new Promise<void>(r => badProxy.close(() => r()));
+    }
+  });
+
   it('executes in-stream STARTTLS upgrade and exchanges encrypted data', async () => {
     // Upstream server: begins cleartext, awaits STARTTLS\n, upgrades to TLS, echoes
     const starttlsServer = net.createServer(rawSocket => {

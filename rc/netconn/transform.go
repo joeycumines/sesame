@@ -286,6 +286,12 @@ func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesameproxy.P
 	if d, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(d)
 		defer func() { _ = conn.SetDeadline(timeZero) }()
+	} else {
+		// Bound the handshake even without a caller deadline so a proxy
+		// that stalls mid-headers cannot hang ExecuteProxyHops forever.
+		// A CONNECT response is headers-only; 30s is generous.
+		_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+		defer func() { _ = conn.SetDeadline(timeZero) }()
 	}
 
 	if _, err := io.WriteString(conn, reqStr); err != nil {
@@ -305,10 +311,11 @@ func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesameproxy.P
 		return nil, status.Errorf(codes.PermissionDenied, "sesame/rc/netconn: HTTP CONNECT to %s failed with status: %s", target, resp.Status)
 	}
 
-	// A 200 response to CONNECT must not carry a body at all. A framed one
-	// means the proxy is not actually tunnelling and its bytes would be
-	// mistaken for tunnel payload.
-	if len(resp.TransferEncoding) > 0 {
+	// A 200 response to CONNECT must not carry a body at all. A declared
+	// Content-Length means the proxy is not actually tunnelling and its
+	// bytes would be mistaken for tunnel payload; the same holds for any
+	// transfer framing, which http.ReadResponse surfaces in TransferEncoding.
+	if len(resp.TransferEncoding) > 0 || resp.ContentLength > 0 {
 		return nil, status.Errorf(codes.Unavailable, "sesame/rc/netconn: HTTP CONNECT to %s returned a framed response body", target)
 	}
 

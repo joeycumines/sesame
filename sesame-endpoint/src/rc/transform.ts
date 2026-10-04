@@ -403,10 +403,56 @@ function httpConnectHandshake(
           return;
         }
 
+        // A 200 response to CONNECT must not carry a body. Any framing
+        // (chunked) or declared Content-Length means the proxy is not
+        // tunnelling, and its bytes must not enter the tunnel as payload.
+        const headerLines = headerText.split('\r\n').slice(1);
+        let framed = false;
+        let contentLength = 0;
+        for (const line of headerLines) {
+          const idx = line.indexOf(':');
+          if (idx === -1) continue;
+          const name = line.slice(0, idx).trim().toLowerCase();
+          const value = line.slice(idx + 1).trim();
+          if (name === 'transfer-encoding') {
+            // Any token other than identity means the body is framed.
+            // A bare "identity" declares no transformation and is safe.
+            const tokens = value
+              .split(',')
+              .map(t => t.trim().toLowerCase())
+              .filter(t => t.length > 0);
+            if (tokens.some(t => t !== 'identity')) framed = true;
+          } else if (name === 'content-length') {
+            // Take the max over all declared values: a second value of
+            // "Content-Length: 0, 5" must not hide a body.
+            for (const part of value.split(',')) {
+              const n = parseInt(part.trim(), 10);
+              if (!isNaN(n) && n > contentLength) contentLength = n;
+            }
+          }
+        }
+        if (framed || contentLength > 0) {
+          socket.destroy();
+          reject(
+            new ConnectError(
+              `sesame/rc/netconn: HTTP CONNECT to ${target} returned a framed response body`,
+              Code.Unavailable,
+            ),
+          );
+          return;
+        }
+
         // Unshift any remaining data back to socket
         const extra = buffer.subarray(headerEnd + 4);
         if (extra.length > 0) {
-          socket.unshift(extra);
+          socket.destroy();
+          reject(
+            new ConnectError(
+              `sesame/rc/netconn: HTTP CONNECT to ${target} returned unexpected bytes after headers`,
+              Code.Unavailable,
+            ),
+          );
+          return;
         }
 
         resolve(socket);

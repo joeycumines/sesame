@@ -585,6 +585,14 @@ export function createRemoteControlService(config: ServerConfig) {
             } else if (req.data.case === 'control') {
               const ctl = req.data.value;
               if (ctl.action.case === 'upgradeTls') {
+                // NOTE (upgrade-vs-window): this await intentionally runs
+                // the handshake inline. Parking the request for the socket
+                // side was attempted and reverted: the parked design broke
+                // the STARTTLS e2e tests (the upgrade never fired because
+                // nothing drains the park on the normal path). The residual
+                // risk is narrow — an upgrade racing an exhausted outbound
+                // window can still mutually wait — and fixing it needs an
+                // interruptible credit wait on both stacks, not a park.
                 await handleUpgradeTLS(ctl.action.value.options);
               } else if (ctl.action.case === 'windowUpdate') {
                 outboundFC?.addCredit(ctl.action.value.creditBytes);
