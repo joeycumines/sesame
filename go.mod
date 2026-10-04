@@ -4,9 +4,9 @@ go 1.27.1
 
 require (
 	github.com/fullstorydev/grpchan v1.1.2
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.31.0
 	github.com/joeycumines/go-eventloop v0.1.0
-	github.com/joeycumines/go-inprocgrpc v0.0.0-20260914045328-1c11fc213599
+	github.com/joeycumines/go-inprocgrpc v0.1.0
 	github.com/joeycumines/protoc-gen-go-copy v0.2.0
 	github.com/oapi-codegen/runtime v1.7.0
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba
@@ -37,7 +37,10 @@ require (
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
-	golang.org/x/tools v0.50.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 )
 
+// keep: local worktree verified byte-identical to published go-inprocgrpc v0.1.0
+// except the worktree-only internal/grpchantest dir; dropping the replace is a
+// separate portability decision, not part of this pin.
 replace github.com/joeycumines/go-inprocgrpc => /Users/joeyc/dev/go-utilpkg/inprocgrpc
