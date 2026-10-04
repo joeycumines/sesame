@@ -34,6 +34,9 @@ import {
 // request is aborted first. `events.once` alone is not enough: a clean peer
 // close emits neither 'drain' nor 'error', so the wait would never settle.
 function waitForDrain(socket: net.Socket, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(signal.reason ?? new Error('aborted'));
+  }
   return new Promise<void>((resolve, reject) => {
     const cleanup = () => {
       socket.removeListener('drain', onDrain);
@@ -351,6 +354,11 @@ export function createRemoteControlService(config: ServerConfig) {
             if (outboundFC) {
               acquired = await outboundFC.acquirePartial(toTake, abortSignal);
             }
+            if (acquired <= 0) {
+              // acquirePartial resolves 0 only for max <= 0, which cannot
+              // happen here; treat it as no progress rather than spinning.
+              throw new Error('sesame/rc/netconn: no flow-control progress');
+            }
             const slice = chunk.subarray(offset, offset + acquired);
             offset += acquired;
 
@@ -529,6 +537,13 @@ export function createRemoteControlService(config: ServerConfig) {
                   let taken = bytes.length - offset;
                   if (inboundFC) {
                     taken = await inboundFC.acquirePartial(taken, abortSignal);
+                  }
+                  if (taken <= 0) {
+                    // acquirePartial resolves 0 only for max <= 0, which
+                    // cannot happen here; fail rather than spinning.
+                    throw new Error(
+                      'sesame/rc/netconn: no flow-control progress',
+                    );
                   }
                   const slice = Buffer.from(
                     bytes.subarray(offset, offset + taken),

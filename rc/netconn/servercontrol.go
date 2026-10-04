@@ -287,6 +287,12 @@ func RunServerDemux(
 							errCh <- acqErr
 							return
 						}
+						if sendLen <= 0 {
+							// Zero credit would leave rem unchanged and
+							// spin on the same slice.
+							errCh <- io.ErrNoProgress
+							return
+						}
 					}
 
 					chunk := make([]byte, sendLen)
@@ -368,6 +374,12 @@ func RunServerDemux(
 							writeLen, acquireErr = s.inboundFC.AcquirePartial(ctx, writeLen)
 							if acquireErr != nil {
 								errCh <- acquireErr
+								return
+							}
+							if writeLen <= 0 {
+								// Zero credit would leave rem unchanged and
+								// spin on the same slice.
+								errCh <- io.ErrNoProgress
 								return
 							}
 						}

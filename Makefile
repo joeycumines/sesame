@@ -87,9 +87,10 @@ build-ts:
 test-ts-bun:
 	cd $(SESAME_ENDPOINT_DIR) && $(BUN) test
 
-# Depends on build-ts via test-ts; the runner loads build/src/index.js.
+# The runner loads build/src/index.js, so it must build first even when
+# invoked directly rather than through test-ts.
 .PHONY: test-ts-node
-test-ts-node:
+test-ts-node: build-ts
 	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run test:node
 
 .PHONY: test-integration-cover

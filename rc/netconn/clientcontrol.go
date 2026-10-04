@@ -32,6 +32,7 @@ type (
 	clientControlConn struct {
 		stream      rc.RemoteControl_NetConnClient
 		cancel      context.CancelFunc
+		ctx         context.Context
 		tlsResult   *sesametls.TLSHandshakeResult
 		proxyResult *sesameproxy.ProxyResult
 		serverCaps  *rc.NetConnResponse_Capabilities
@@ -76,6 +77,7 @@ func NewClientControlConn(
 	cc := &clientControlConn{
 		stream:       stream,
 		cancel:       cancel,
+		ctx:          ctx,
 		tlsResult:    connRes.GetTls(),
 		proxyResult:  connRes.GetProxy(),
 		serverCaps:   connRes.GetCapabilities(),
@@ -257,9 +259,16 @@ func (c *clientControlConn) Write(b []byte) (int, error) {
 		sendLen := len(rem)
 		if c.outboundFC != nil {
 			var err error
-			sendLen, err = c.outboundFC.AcquirePartial(context.Background(), sendLen)
+			// Use the dial-derived context, not context.Background():
+			// it is cancelled by Close and by the stream owner, so a
+			// Write blocked on an exhausted window cannot outlive them.
+			sendLen, err = c.outboundFC.AcquirePartial(c.ctx, sendLen)
 			if err != nil {
 				return totalWritten, err
+			}
+			if sendLen <= 0 {
+				// Zero credit would leave rem unchanged and spin.
+				return totalWritten, io.ErrNoProgress
 			}
 		}
 
