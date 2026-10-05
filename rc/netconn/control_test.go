@@ -9,8 +9,11 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
+	"io"
 	"math/big"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1076,4 +1079,167 @@ func generateSelfSignedCert(t *testing.T) (cryptotls.Certificate, []byte) {
 	}
 
 	return tlsCert, certPEM
+}
+
+// newDeadlineTestConn dials a control-mode conn against an echo upstream and
+// returns it alongside the raw mock-upstream side.
+func newDeadlineTestConn(t *testing.T) (netconn.InStreamConn, net.Conn) {
+	t.Helper()
+
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, serverPipe := net.Pipe()
+	t.Cleanup(func() {
+		_ = clientPipe.Close()
+		_ = serverPipe.Close()
+	})
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	t.Cleanup(func() { _ = gc.Close() })
+
+	client := netconn.Client{
+		API: rc.NewRemoteControlClient(gc),
+		Capabilities: &rc.NetConnRequest_Capabilities{
+			SupportsFlowControl: true,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+
+	conn, err := client.DialContext(ctx, "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	return conn.(netconn.InStreamConn), serverPipe
+}
+
+// TestClientControl_ReadDeadline_Expires verifies a blocked Read returns
+// os.ErrDeadlineExceeded promptly when the read deadline expires.
+func TestClientControl_ReadDeadline_Expires(t *testing.T) {
+	conn, _ := newDeadlineTestConn(t)
+
+	if err := conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline failed: %v", err)
+	}
+
+	start := time.Now()
+	buf := make([]byte, 32)
+	_, err := conn.Read(buf)
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("expected os.ErrDeadlineExceeded from blocked Read, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("Read unblocked too slowly: %v", elapsed)
+	}
+}
+
+// TestClientControl_ReadDeadline_ClearRestoresBlocking verifies clearing the
+// deadline restores blocking semantics: bytes pushed after the would-be
+// deadline are still readable.
+func TestClientControl_ReadDeadline_ClearRestoresBlocking(t *testing.T) {
+	conn, upstream := newDeadlineTestConn(t)
+
+	if err := conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline failed: %v", err)
+	}
+	buf := make([]byte, 32)
+	if _, err := conn.Read(buf); !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("expected deadline error, got %v", err)
+	}
+
+	// Clear the deadline and push bytes AFTER the would-be deadline.
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		t.Fatalf("clearing SetReadDeadline failed: %v", err)
+	}
+	time.Sleep(80 * time.Millisecond) // past the original deadline
+
+	if _, err := upstream.Write([]byte("post-deadline\n")); err != nil {
+		t.Fatalf("upstream write failed: %v", err)
+	}
+
+	got := make([]byte, len("post-deadline\n"))
+	if _, err := io.ReadFull(conn, got); err != nil {
+		t.Fatalf("Read after deadline clear failed: %v", err)
+	}
+	if string(got) != "post-deadline\n" {
+		t.Fatalf("unexpected data: %q", got)
+	}
+}
+
+// TestClientControl_WriteDeadline_ExpiresOnExhaustedWindow verifies Write
+// blocked on an exhausted flow-control window returns os.ErrDeadlineExceeded
+// when the write deadline expires.
+func TestClientControl_WriteDeadline_ExpiresOnExhaustedWindow(t *testing.T) {
+	conn, upstream := newDeadlineTestConn(t)
+
+	// Drain the whole outbound window without letting the upstream
+	// consume anything: window is 65535 by default, so a larger single
+	// Write cannot complete... but Write sends chunks as it acquires
+	// credit, which drains the window onto the wire. Block the upstream
+	// read side so the server's own inbound path (and window updates in
+	// the reverse direction) cannot advance.
+	//
+	// Simpler deterministic exhaustion: advertise a small window, write
+	// exactly window bytes (succeeds), then write more - the second
+	// Write blocks with zero credit and no reader on the upstream side
+	// to generate window updates.
+
+	// Exhaust: default window 65535; first Write of 65535 succeeds
+	// (chunks flow to the server's inbound FC, which refunds via
+	// windowUpdate only after c.Write to the mock upstream succeeds -
+	// and the mock upstream IS read by nobody here, but server-side
+	// refund happens after writing to activeConn, which is the blocked
+	// net.Pipe... so the server refund is blocked too).
+	first := make([]byte, 65535)
+	if n, err := conn.Write(first); err != nil || n != len(first) {
+		t.Fatalf("window-exhausting Write failed: n=%d err=%v", n, err)
+	}
+	_ = upstream
+
+	if err := conn.SetWriteDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
+		t.Fatalf("SetWriteDeadline failed: %v", err)
+	}
+
+	start := time.Now()
+	_, err := conn.Write([]byte("blocked-on-zero-credit"))
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("expected os.ErrDeadlineExceeded from blocked Write, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("Write unblocked too slowly: %v", elapsed)
+	}
+}
+
+// TestClientControl_WriteDeadline_PastFailsImmediately verifies a write
+// deadline in the past makes the next Write fail immediately with
+// os.ErrDeadlineExceeded (net.Conn testPastTimeout semantics).
+func TestClientControl_WriteDeadline_PastFailsImmediately(t *testing.T) {
+	conn, _ := newDeadlineTestConn(t)
+
+	if err := conn.SetWriteDeadline(time.Now().Add(-time.Hour)); err != nil {
+		t.Fatalf("SetWriteDeadline failed: %v", err)
+	}
+
+	start := time.Now()
+	_, err := conn.Write([]byte("should not go anywhere"))
+	if !errors.Is(err, os.ErrDeadlineExceeded) {
+		t.Fatalf("expected os.ErrDeadlineExceeded from past-deadline Write, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("past-deadline Write blocked for %v, expected immediate failure", elapsed)
+	}
 }

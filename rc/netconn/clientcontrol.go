@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/joeycumines/sesame/ionet"
 	"github.com/joeycumines/sesame/rc"
 	sesameproxy "github.com/joeycumines/sesame/type/proxy"
 	sesametls "github.com/joeycumines/sesame/type/tls"
@@ -39,12 +41,30 @@ type (
 		localAddr   net.Addr
 		remoteAddr  net.Addr
 
-		pipeReader *io.PipeReader
-		pipeWriter *io.PipeWriter
+		// Inbound data flows readLoop -> pipe end A writer -> pipe end B
+		// reader -> the application. ionet.ConnPipe is a deadline-capable
+		// synchronous pipe (os.ErrDeadlineExceeded on expired deadlines),
+		// unlike io.Pipe, giving clientControlConn real net.Conn deadlines.
+		// Only the A->B direction carries data.
+		//
+		// demuxLocalW writes inbound bytes and propagates stream errors to
+		// the app via CloseWithError (io.EOF for a clean HalfClose).
+		// demuxRemote is the app's end: Read + SetReadDeadline, and Close()
+		// closes BOTH directions so a blocked readLoop Write unblocks with
+		// io.ErrClosedPipe (net.Pipe-equivalent full-close semantics).
+		demuxLocalW *ionet.ConnPipeWriter
+		demuxRemote *ionet.ConnPipe
 
 		sendMu     sync.Mutex
 		outboundFC *FlowController
 		inboundFC  *FlowController
+
+		// writeDeadline bounds the outboundFC.AcquirePartial wait in Write.
+		// The gRPC stream.Send call itself is not deadline-interruptible
+		// (residual, common to net.Pipe-class transports); only the
+		// flow-control wait is.
+		writeDeadlineMu sync.Mutex
+		writeDeadline   time.Time
 
 		pingCounter  atomic.Uint64
 		pingsMu      sync.Mutex
@@ -78,7 +98,10 @@ func NewClientControlConn(
 	connRes *rc.NetConnResponse_Conn,
 	clientCaps *rc.NetConnRequest_Capabilities,
 ) InStreamConn {
-	pr, pw := io.Pipe()
+	local, remote := ionet.Pipe()
+	// local's SendPipe writer is the readLoop's write end; remote is the
+	// application's end (Read + deadline + full Close).
+	_, localWriter := local.SendPipe()
 
 	cc := &clientControlConn{
 		stream:       stream,
@@ -89,8 +112,8 @@ func NewClientControlConn(
 		serverCaps:   connRes.GetCapabilities(),
 		localAddr:    connRes.GetLocal().AsGoNetAddr(),
 		remoteAddr:   connRes.GetRemote().AsGoNetAddr(),
-		pipeReader:   pr,
-		pipeWriter:   pw,
+		demuxLocalW:  localWriter,
+		demuxRemote:  remote,
 		pendingPings: make(map[uint64]chan int64),
 	}
 
@@ -125,7 +148,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 	for {
 		res, err := c.stream.Recv()
 		if err != nil {
-			_ = c.pipeWriter.CloseWithError(err)
+			_ = c.demuxLocalW.CloseWithError(err)
 			c.abortPending(err)
 			return
 		}
@@ -144,22 +167,22 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 						// context) can be relied on to release it.
 						writeLen, err = c.inboundFC.AcquirePartial(ctx, writeLen)
 						if err != nil {
-							_ = c.pipeWriter.CloseWithError(err)
+							_ = c.demuxLocalW.CloseWithError(err)
 							c.abortPending(err)
 							return
 						}
 						if writeLen <= 0 {
 							// Zero credit would leave rem unchanged and spin.
 							err = io.ErrNoProgress
-							_ = c.pipeWriter.CloseWithError(err)
+							_ = c.demuxLocalW.CloseWithError(err)
 							c.abortPending(err)
 							return
 						}
 					}
-					n, writeErr := c.pipeWriter.Write(rem[:writeLen])
+					n, writeErr := c.demuxLocalW.Write(rem[:writeLen])
 					rem = rem[n:]
 					if writeErr != nil {
-						_ = c.pipeWriter.CloseWithError(writeErr)
+						_ = c.demuxLocalW.CloseWithError(writeErr)
 						c.abortPending(writeErr)
 						return
 					}
@@ -178,7 +201,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 						})
 						c.sendMu.Unlock()
 						if sendErr != nil {
-							_ = c.pipeWriter.CloseWithError(sendErr)
+							_ = c.demuxLocalW.CloseWithError(sendErr)
 							c.abortPending(sendErr)
 							return
 						}
@@ -226,7 +249,9 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 				}
 
 			case *rc.NetConnResponse_Control_HalfClose_:
-				_ = c.pipeWriter.Close()
+				// Clean EOF to the app; nil error stores io.EOF on the
+				// pipe, matching io.Pipe Close semantics.
+				_ = c.demuxLocalW.Close()
 
 			case *rc.NetConnResponse_Control_WindowUpdate_:
 				if c.outboundFC != nil {
@@ -254,7 +279,7 @@ func (c *clientControlConn) abortPending(err error) {
 }
 
 func (c *clientControlConn) Read(b []byte) (int, error) {
-	n, err := c.pipeReader.Read(b)
+	n, err := c.demuxRemote.Read(b)
 	if n > 0 && c.inboundFC != nil {
 		c.inboundFC.AddCredit(uint32(n))
 	}
@@ -282,7 +307,32 @@ func (c *clientControlConn) Write(b []byte) (int, error) {
 			// Use the dial-derived context, not context.Background():
 			// it is cancelled by Close and by the stream owner, so a
 			// Write blocked on an exhausted window cannot outlive them.
-			sendLen, err = c.outboundFC.AcquirePartial(c.ctx, sendLen)
+			// A write deadline, when set, further bounds the credit
+			// wait; the gRPC Send itself is not deadline-interruptible.
+			c.writeDeadlineMu.Lock()
+			deadline := c.writeDeadline
+			c.writeDeadlineMu.Unlock()
+
+			acquireCtx := c.ctx
+			if !deadline.IsZero() {
+				if !time.Now().Before(deadline) {
+					// A past deadline fails immediately, matching
+					// net.Conn semantics (testPastTimeout).
+					return totalWritten, os.ErrDeadlineExceeded
+				}
+				var cancelAcquire context.CancelFunc
+				acquireCtx, cancelAcquire = context.WithDeadline(c.ctx, deadline)
+				sendLen, err = c.outboundFC.AcquirePartial(acquireCtx, sendLen)
+				cancelAcquire()
+				if errors.Is(err, context.DeadlineExceeded) && c.ctx.Err() == nil {
+					// Only our per-write deadline fired; the dial
+					// context is still alive. Report the net.Conn
+					// standard error.
+					err = os.ErrDeadlineExceeded
+				}
+			} else {
+				sendLen, err = c.outboundFC.AcquirePartial(acquireCtx, sendLen)
+			}
 			if err != nil {
 				return totalWritten, err
 			}
@@ -315,8 +365,8 @@ func (c *clientControlConn) Close() error {
 		if c.cancel != nil {
 			c.cancel()
 		}
-		_ = c.pipeReader.Close()
-		_ = c.pipeWriter.Close()
+		_ = c.demuxRemote.Close()
+		_ = c.demuxLocalW.Close()
 		if c.outboundFC != nil {
 			c.outboundFC.Close()
 		}
@@ -466,14 +516,27 @@ func (c *clientControlConn) RemoteAddr() net.Addr {
 }
 
 func (c *clientControlConn) SetDeadline(t time.Time) error {
-	return nil
+	err := c.SetReadDeadline(t)
+	if werr := c.SetWriteDeadline(t); err == nil {
+		err = werr
+	}
+	return err
 }
 
 func (c *clientControlConn) SetReadDeadline(t time.Time) error {
-	return nil
+	// The app reads from the demux pipe's remote end, which has native
+	// deadline support; an expired deadline makes a blocked Read return
+	// os.ErrDeadlineExceeded.
+	return c.demuxRemote.SetReadDeadline(t)
 }
 
 func (c *clientControlConn) SetWriteDeadline(t time.Time) error {
+	// The gRPC stream.Send call is not deadline-interruptible, so a
+	// write deadline can only bound the flow-control credit wait in
+	// Write (a net.Pipe-class limitation, recorded in T3).
+	c.writeDeadlineMu.Lock()
+	c.writeDeadline = t
+	c.writeDeadlineMu.Unlock()
 	return nil
 }
 
