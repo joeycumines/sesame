@@ -13,6 +13,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/joeycumines/sesame/type/netaddr"
 	sesameproxy "github.com/joeycumines/sesame/type/proxy"
 	sesametls "github.com/joeycumines/sesame/type/tls"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -483,6 +485,221 @@ func TestClientServer_Dial_TLSTermination(t *testing.T) {
 	if string(echo) != string(payload) {
 		t.Errorf("echo got %q, want %q", string(echo), string(payload))
 	}
+}
+
+// recordingNetConnClient delegates to a real NetConn stream while recording
+// the length of every NetConnRequest_Bytes payload sent through it.
+type recordingNetConnClient struct {
+	rc.RemoteControl_NetConnClient
+
+	mu      sync.Mutex
+	lengths []int
+}
+
+func (r *recordingNetConnClient) Send(req *rc.NetConnRequest) error {
+	if b, ok := req.GetData().(*rc.NetConnRequest_Bytes); ok {
+		r.mu.Lock()
+		r.lengths = append(r.lengths, len(b.Bytes))
+		r.mu.Unlock()
+	}
+	return r.RemoteControl_NetConnClient.Send(req)
+}
+
+func TestClientControl_WriteRespectsMaxChunkSize(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, serverPipe := net.Pipe()
+	defer clientPipe.Close()
+	defer serverPipe.Close()
+
+	// Concurrently drain the mock upstream so client writes cannot stall
+	// on the net.Pipe rendezvous; count received bytes.
+	var received atomic.Int64
+	go func() {
+		buf := make([]byte, 8192)
+		for {
+			n, err := serverPipe.Read(buf)
+			received.Add(int64(n))
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+		Capabilities: &rc.NetConnResponse_Capabilities{
+			SupportsFlowControl:      true,
+			SupportsOpportunisticTls: true,
+			MaxChunkSize:             4096,
+			InitialWindowSize:        1 << 20,
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	recording := &recordingNetConnClient{}
+	client := netconn.Client{
+		API: recordingNetConnClientFactory{
+			inner:    rc.NewRemoteControlClient(gc),
+			recorder: recording,
+		},
+		Capabilities: &rc.NetConnRequest_Capabilities{
+			SupportsFlowControl: true,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := client.DialContext(ctx, "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	defer conn.Close()
+
+	payload := make([]byte, 64*1024)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+	if n, err := conn.Write(payload); err != nil || n != len(payload) {
+		t.Fatalf("Write failed: n=%d err=%v", n, err)
+	}
+
+	// Wait for the drained bytes to arrive at the mock upstream.
+	deadline := time.Now().Add(3 * time.Second)
+	for received.Load() < int64(len(payload)) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := received.Load(); got != int64(len(payload)) {
+		t.Fatalf("upstream received %d bytes, want %d", got, len(payload))
+	}
+
+	recording.mu.Lock()
+	lengths := append([]int(nil), recording.lengths...)
+	recording.mu.Unlock()
+
+	if len(lengths) == 0 {
+		t.Fatal("no byte chunks were recorded")
+	}
+	for _, l := range lengths {
+		if l > 4096 {
+			t.Fatalf("chunk of %d bytes exceeds advertised MaxChunkSize 4096 (chunks: %v)", l, lengths)
+		}
+	}
+	if len(lengths) < 2 {
+		t.Fatalf("expected chunking for a 64KB write, got %d chunk(s)", len(lengths))
+	}
+}
+
+// TestClientControl_WriteChunksAtDefaultWithoutAdvertisement verifies the
+// fallback granularity: no advertised MaxChunkSize means DefaultChunkSize
+// chunks even with a huge flow-control window.
+func TestClientControl_WriteChunksAtDefaultWithoutAdvertisement(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, serverPipe := net.Pipe()
+	defer clientPipe.Close()
+	defer serverPipe.Close()
+
+	var received atomic.Int64
+	go func() {
+		buf := make([]byte, 8192)
+		for {
+			n, err := serverPipe.Read(buf)
+			received.Add(int64(n))
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// Capabilities deliberately absent -> server advertises its defaults
+	// (MaxChunkSize normalized to DefaultChunkSize by Server.NetConn).
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	recording := &recordingNetConnClient{}
+	client := netconn.Client{
+		API: recordingNetConnClientFactory{
+			inner:    rc.NewRemoteControlClient(gc),
+			recorder: recording,
+		},
+		Capabilities: &rc.NetConnRequest_Capabilities{
+			SupportsFlowControl: true,
+			InitialWindowSize:   1 << 20,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := client.DialContext(ctx, "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	defer conn.Close()
+
+	payload := make([]byte, 100*1024)
+	if n, err := conn.Write(payload); err != nil || n != len(payload) {
+		t.Fatalf("Write failed: n=%d err=%v", n, err)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for received.Load() < int64(len(payload)) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := received.Load(); got != int64(len(payload)) {
+		t.Fatalf("upstream received %d bytes, want %d", got, len(payload))
+	}
+
+	recording.mu.Lock()
+	lengths := append([]int(nil), recording.lengths...)
+	recording.mu.Unlock()
+
+	for _, l := range lengths {
+		if l > netconn.DefaultChunkSize {
+			t.Fatalf("chunk of %d bytes exceeds DefaultChunkSize %d (chunks: %v)", l, netconn.DefaultChunkSize, lengths)
+		}
+	}
+	if len(lengths) < 3 {
+		t.Fatalf("expected chunking for a 100KB write, got %d chunk(s)", len(lengths))
+	}
+}
+
+// recordingNetConnClientFactory adapts a recordingNetConnClient to the
+// ClientAPI interface.
+type recordingNetConnClientFactory struct {
+	inner    rc.RemoteControlClient
+	recorder *recordingNetConnClient
+}
+
+func (f recordingNetConnClientFactory) NetConn(ctx context.Context, opts ...grpc.CallOption) (rc.RemoteControl_NetConnClient, error) {
+	stream, err := f.inner.NetConn(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+	f.recorder.RemoteControl_NetConnClient = stream
+	return f.recorder, nil
 }
 
 func TestClientServer_InStream_UpgradeTLS_NilOptions(t *testing.T) {

@@ -133,6 +133,9 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 	if serverCaps.GetInitialWindowSize() == 0 {
 		serverCaps.InitialWindowSize = DefaultInitialWindowSize
 	}
+	if serverCaps.GetMaxChunkSize() == 0 {
+		serverCaps.MaxChunkSize = DefaultChunkSize
+	}
 
 	// 2. NetConnResponse.conn
 	sendErr := stream.Send(&rc.NetConnResponse{Data: &rc.NetConnResponse_Conn_{Conn: &rc.NetConnResponse_Conn{

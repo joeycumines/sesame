@@ -53,6 +53,12 @@ type (
 		upgradeMu      sync.Mutex
 		pendingUpgrade chan upgradeResult
 
+		// maxChunk bounds each NetConnRequest_Bytes payload to the
+		// server-advertised max_chunk_size. A large flow-control window
+		// must not produce gRPC messages that exceed the peer's receive
+		// limit (grpc-go default 4MiB) or its advertised chunk contract.
+		maxChunk int
+
 		closed atomic.Bool
 	}
 
@@ -100,6 +106,14 @@ func NewClientControlConn(
 			clientInitWin = DefaultInitialWindowSize
 		}
 		cc.inboundFC = NewFlowController(clientInitWin)
+	}
+
+	// Chunk granularity must hold with or without flow control; an absent
+	// advertisement falls back to DefaultChunkSize, matching the legacy
+	// ChunkWriter path.
+	cc.maxChunk = DefaultChunkSize
+	if advertised := int(connRes.GetCapabilities().GetMaxChunkSize()); advertised > 0 {
+		cc.maxChunk = advertised
 	}
 
 	go cc.readLoop(ctx)
@@ -257,6 +271,12 @@ func (c *clientControlConn) Write(b []byte) (int, error) {
 
 	for len(rem) > 0 {
 		sendLen := len(rem)
+		// Clamp to the advertised chunk cap BEFORE acquiring credit so
+		// any credit beyond this chunk stays available to later chunks
+		// (AcquirePartial claims min(credit, want)).
+		if sendLen > c.maxChunk {
+			sendLen = c.maxChunk
+		}
 		if c.outboundFC != nil {
 			var err error
 			// Use the dial-derived context, not context.Background():

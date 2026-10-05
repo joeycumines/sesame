@@ -223,6 +223,13 @@ func RunServerDemux(
 		s.inboundFC = NewFlowController(serverInitWin)
 	}
 
+	// Never emit chunks larger than our own advertised cap; an absent
+	// advertisement falls back to DefaultChunkSize.
+	readChunkSize := DefaultChunkSize
+	if advertised := int(serverCaps.GetMaxChunkSize()); advertised > 0 {
+		readChunkSize = advertised
+	}
+
 	defer func() {
 		s.closeOnce.Do(func() {
 			close(s.done)
@@ -244,7 +251,7 @@ func RunServerDemux(
 
 	// Goroutine 1: Read from activeConn -> send to stream
 	go func() {
-		buf := make([]byte, DefaultChunkSize)
+		buf := make([]byte, readChunkSize)
 		for {
 			select {
 			case <-ctx.Done():
