@@ -485,6 +485,147 @@ func TestClientServer_Dial_TLSTermination(t *testing.T) {
 	}
 }
 
+func TestClientServer_InStream_UpgradeTLS_NilOptions(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, serverPipe := net.Pipe()
+	defer clientPipe.Close()
+	defer serverPipe.Close()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	client := netconn.Client{
+		API: rc.NewRemoteControlClient(gc),
+		Capabilities: &rc.NetConnRequest_Capabilities{
+			SupportsOpportunisticTls: true,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	conn, err := client.DialContext(ctx, "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	defer conn.Close()
+
+	inStreamConn, ok := conn.(netconn.InStreamConn)
+	if !ok {
+		t.Fatalf("expected InStreamConn, got %T", conn)
+	}
+
+	// The client must reject a nil-options upgrade locally, before
+	// anything touches the wire, with InvalidArgument.
+	_, err = inStreamConn.UpgradeTLS(ctx, nil)
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument from nil-options UpgradeTLS, got %v", err)
+	}
+
+	// Fail closed, not fail broken: the connection must remain usable
+	// for data and control traffic after the rejected upgrade.
+	if _, err := inStreamConn.Write([]byte("still-alive\n")); err != nil {
+		t.Fatalf("Write after rejected upgrade failed: %v", err)
+	}
+	buf := make([]byte, 32)
+	if _, err := serverPipe.Read(buf); err != nil {
+		t.Fatalf("upstream read after rejected upgrade failed: %v", err)
+	}
+
+	if _, err := inStreamConn.Ping(ctx); err != nil {
+		t.Fatalf("Ping after rejected upgrade failed: %v", err)
+	}
+}
+
+func TestClientServer_InStream_UpgradeTLS_NilOptions_ServerRejects(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, _ := net.Pipe()
+	defer clientPipe.Close()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Hand-crafted stream: a protocol-level upgrade_tls with absent
+	// options must be rejected by the server itself, not silently
+	// "succeed" with a nil handshake result.
+	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	if err != nil {
+		t.Fatalf("failed opening NetConn stream: %v", err)
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Dial_{
+			Dial: &rc.NetConnRequest_Dial{
+				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &rc.NetConnRequest_Capabilities{
+					SupportsOpportunisticTls: true,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending dial: %v", err)
+	}
+
+	res, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("failed receiving conn response: %v", err)
+	}
+	if res.GetConn() == nil {
+		t.Fatalf("expected conn response, got %T", res.GetData())
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Control_{
+			Control: &rc.NetConnRequest_Control{
+				Action: &rc.NetConnRequest_Control_UpgradeTls{
+					UpgradeTls: &rc.NetConnRequest_Control_UpgradeTLS{},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending nil-options upgrade_tls: %v", err)
+	}
+
+	// The stream must terminate with InvalidArgument (the terminal Recv
+	// surfaces the server error).
+	for {
+		_, err = stream.Recv()
+		if err != nil {
+			break
+		}
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument stream termination, got %v", err)
+	}
+}
+
 func TestClientServer_InStream_UpgradeTLS_Failure(t *testing.T) {
 	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
 	if ccFactory == nil {

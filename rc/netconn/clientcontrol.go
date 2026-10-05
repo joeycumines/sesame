@@ -328,6 +328,13 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 		return nil, statusError(codes.FailedPrecondition, "sesame/rc/netconn: server does not advertise support for opportunistic TLS")
 	}
 
+	// Fail closed: without options there is no handshake to perform, and a
+	// nil-options upgrade that "succeeds" would leave the connection
+	// cleartext while the caller believes TLS is active.
+	if opts == nil {
+		return nil, statusError(codes.InvalidArgument, "sesame/rc/netconn: upgrade_tls requires options")
+	}
+
 	ch := make(chan upgradeResult, 1)
 
 	c.upgradeMu.Lock()

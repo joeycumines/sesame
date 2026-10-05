@@ -454,7 +454,7 @@ export function createRemoteControlService(config: ServerConfig) {
       const handleUpgradeTLS = async (opts?: TLSOptions) => {
         if (!opts) {
           throw new ConnectError(
-            'sesame/rc/netconn: upgrade_tls missing options',
+            'sesame/rc/netconn: upgrade_tls requires options',
             Code.InvalidArgument,
           );
         }

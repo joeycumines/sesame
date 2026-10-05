@@ -13,6 +13,7 @@ import (
 	"github.com/joeycumines/sesame/rc"
 	sesametls "github.com/joeycumines/sesame/type/tls"
 	"google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 )
 
@@ -443,6 +444,16 @@ func RunServerDemux(
 					// only be answered by the reader's loop select, and
 					// every inline variant deadlocked the normal-path
 					// STARTTLS test. Narrow residual risk, recorded.
+					//
+					// Fail closed: reject a missing-options upgrade before
+					// the pause handshake. Accepting it would emit
+					// TlsUpgraded with a nil result (no handshake ran) and
+					// leave the peer cleartext while it believes TLS is
+					// active.
+					if action.UpgradeTls.GetOptions() == nil {
+						errCh <- grpcstatus.Error(codes.InvalidArgument, "sesame/rc/netconn: upgrade_tls requires options")
+						return
+					}
 					upgradeErr := s.handleUpgradeTLS(ctx, action.UpgradeTls.GetOptions())
 					if upgradeErr != nil {
 						errCh <- upgradeErr

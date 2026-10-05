@@ -239,6 +239,59 @@ async function run() {
   }
   reqStream4.close();
 
+  // Test 7: Reject upgrade_tls without options under Node.js
+  console.log('7. Testing options-less upgradeTls rejection under Node.js...');
+  const reqStream5 = new RequestStream();
+  reqStream5.push(create(NetConnRequestSchema, {
+    data: {
+      case: 'dial',
+      value: create(NetConnRequest_DialSchema, {
+        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tcpPort}` }),
+        capabilities: create(NetConnRequest_CapabilitiesSchema, {
+          supportsOpportunisticTls: true,
+          supportsFlowControl: true,
+        }),
+      }),
+    },
+  }));
+  const respStream5 = client.netConn(reqStream5);
+  const it5 = respStream5[Symbol.asyncIterator]();
+  const conn5 = await it5.next();
+  assert.strictEqual(conn5.value.data.case, 'conn');
+
+  reqStream5.push(create(NetConnRequestSchema, {
+    data: {
+      case: 'control',
+      value: create(NetConnRequest_ControlSchema, {
+        action: {
+          case: 'upgradeTls',
+          value: create(NetConnRequest_Control_UpgradeTLSSchema, {}),
+        },
+      }),
+    },
+  }));
+
+  let sawInvalidArgument = false;
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const resp = await it5.next();
+      if (resp.done) break;
+      if (resp.value.data.case === 'control') {
+        const evt = resp.value.data.value.event;
+        if (evt.case === 'tlsUpgraded') {
+          assert.fail('server emitted tlsUpgraded for an options-less upgrade');
+        }
+      }
+    }
+  } catch (err) {
+    assert.ok(err instanceof ConnectError, `expected ConnectError, got: ${err}`);
+    assert.strictEqual(err.code, Code.InvalidArgument);
+    sawInvalidArgument = true;
+  }
+  assert.ok(sawInvalidArgument, 'expected InvalidArgument stream termination');
+  reqStream5.close();
+
   console.log('All Node.js runtime tests passed cleanly!');
   process.exit(0);
 }

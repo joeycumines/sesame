@@ -634,6 +634,84 @@ describe('sesame-endpoint E2E Suite', () => {
     }
   });
 
+  it('rejects in-stream TLS upgrade without options with InvalidArgument', async () => {
+    const echoServer = net.createServer(rawSocket => {
+      rawSocket.pipe(rawSocket);
+    });
+    await new Promise<void>(r => echoServer.listen(0, '127.0.0.1', () => r()));
+    const echoPort = (echoServer.address() as net.AddressInfo).port;
+
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${echoPort}`,
+            }),
+            capabilities: create(NetConnRequest_CapabilitiesSchema, {
+              supportsOpportunisticTls: true,
+              supportsFlowControl: true,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    try {
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      // upgradeTls with absent options must terminate the stream with
+      // InvalidArgument - it must not emit tlsUpgraded.
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'control',
+            value: create(NetConnRequest_ControlSchema, {
+              action: {
+                case: 'upgradeTls',
+                value: create(NetConnRequest_Control_UpgradeTLSSchema, {}),
+              },
+            }),
+          },
+        }),
+      );
+
+      let sawInvalidArgument = false;
+      try {
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const resp = await iterator.next();
+          if (resp.done) break;
+          if (resp.value.data.case === 'control') {
+            const evt = resp.value.data.value.event;
+            if (evt.case === 'tlsUpgraded') {
+              throw new Error(
+                'server emitted tlsUpgraded for an options-less upgrade',
+              );
+            }
+          }
+        }
+      } catch (err: unknown) {
+        if (err instanceof ConnectError && err.code === Code.InvalidArgument) {
+          sawInvalidArgument = true;
+        } else {
+          throw err;
+        }
+      }
+      expect(sawInvalidArgument).toBe(true);
+      reqStream.close();
+    } finally {
+      await new Promise<void>(r => echoServer.close(() => r()));
+    }
+  });
+
   it('fails closed when in-stream TLS upgrade encounters handshake failure', async () => {
     // Non-TLS server that sends garbage or immediately closes when TLS handshake begins
     const nonTlsServer = net.createServer(rawSocket => {
