@@ -166,7 +166,7 @@ export async function executeTLSHandshake(
     rejectUnauthorized: !opts.insecureSkipVerify,
   };
 
-  // RFC Invariant: If alpn_protocols is empty, ALPN extension MUST NOT be sent.
+  // If alpn_protocols is empty, ALPN extension MUST NOT be sent.
   if (opts.alpnProtocols && opts.alpnProtocols.length > 0) {
     tlsConnectOptions.ALPNProtocols = [...opts.alpnProtocols];
   }

@@ -33,7 +33,7 @@ export interface ParseConfigResult {
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 50051;
 const DEFAULT_MAX_CHUNK_SIZE = 32 * 1024; // 32 KB
-const DEFAULT_INITIAL_WINDOW_SIZE = 65535; // 64 KB - 1 (RFC-0001 default)
+const DEFAULT_INITIAL_WINDOW_SIZE = 65535; // 64 KB - 1 (default)
 const DEFAULT_READ_TIMEOUT_MS = 30000;
 const DEFAULT_DIAL_TIMEOUT_MS = 10000;
 const DEFAULT_ALLOWED_NETWORKS = ['tcp', 'tcp4', 'tcp6'];
@@ -310,7 +310,7 @@ function parsePresetList(val: string): FingerprintPreset[] {
 export function formatHelp(): string {
   return `Usage: sesame-endpoint [options]
 
-Sesame Endpoint Server (RemoteControl.NetConn RFC-0001)
+Sesame Endpoint Server (RemoteControl.NetConn)
 
 Options:
   --host <string>                 Bind host address (default: 127.0.0.1)

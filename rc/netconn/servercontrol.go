@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	// DefaultInitialWindowSize is the flow control window defined in RFC-0001 (65,535 bytes).
+	// DefaultInitialWindowSize is the default flow control window (65,535 bytes).
 	DefaultInitialWindowSize uint32 = 65535
 
 	// DefaultChunkSize is the maximum chunk size for streaming payload bytes.
@@ -26,7 +26,7 @@ const (
 )
 
 type (
-	// FlowController implements credit-based stream flow control per RFC-0001 Section 4.5.
+	// FlowController implements credit-based stream flow control for RemoteControl.NetConn.
 	FlowController struct {
 		mu     sync.Mutex
 		cond   *sync.Cond
@@ -547,7 +547,7 @@ func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesamet
 	// 2. Perform TLS Handshake
 	upgradedConn, result, err := ExecuteTLSHandshake(ctx, c, opts, s.defaultServerName, s.tlsProvider)
 	if err != nil {
-		// RFC Section 4.4: On upgrade failure, send TlsUpgradeFailed and terminate (never fallback to cleartext)
+		// On upgrade failure, send TlsUpgradeFailed and terminate (never fallback to cleartext)
 		st, _ := grpcstatus.FromError(err)
 		s.sendMu.Lock()
 		_ = s.stream.Send(&rc.NetConnResponse{

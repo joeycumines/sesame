@@ -1,8 +1,8 @@
 # sesame-endpoint
 
 `sesame-endpoint` is a gRPC endpoint server implementing `RemoteControl.NetConn`
-per RFC-0001. It is configured exclusively through CLI arguments and
-`SESAME_ENDPOINT_*` environment variables.
+(see `../schema/sesame/v1alpha1/remotecontrol.proto`). It is configured
+exclusively through CLI arguments and `SESAME_ENDPOINT_*` environment variables.
 
 ```bash
 bun run start --help

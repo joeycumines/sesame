@@ -1,7 +1,7 @@
 {
   "name": "sesame-endpoint",
   "version": "0.1.0",
-  "description": "Sesame Endpoint Server (RemoteControl.NetConn RFC-0001)",
+  "description": "Sesame Endpoint Server (RemoteControl.NetConn)",
   "main": "build/src/index.js",
   "types": "build/src/index.d.ts",
   "bin": {

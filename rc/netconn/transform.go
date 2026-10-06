@@ -180,7 +180,7 @@ func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.
 	if preset != sesametls.FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED &&
 		preset != sesametls.FingerprintPreset_RUNTIME_DEFAULT {
 		if provider == nil {
-			// RFC Section 4.1: Server MUST return FAILED_PRECONDITION if it cannot satisfy requested preset
+			// Server MUST return FAILED_PRECONDITION if it cannot satisfy requested preset
 			return nil, nil, status.Errorf(codes.FailedPrecondition,
 				"sesame/rc/netconn: requested fingerprint preset %v is not supported by standard runtime; custom TLSProvider required",
 				preset)

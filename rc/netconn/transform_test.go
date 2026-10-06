@@ -72,7 +72,7 @@ func TestBuildTLSConfig_ALPN_Rule(t *testing.T) {
 }
 
 func TestExecuteTLSHandshake_UnsupportedPreset(t *testing.T) {
-	// RFC Section 4.1: Server MUST return FAILED_PRECONDITION if preset cannot be satisfied
+	// Server MUST return FAILED_PRECONDITION if preset cannot be satisfied
 	opts := &sesametls.TLSOptions{
 		FingerprintPreset: sesametls.FingerprintPreset_CHROME_131,
 	}
