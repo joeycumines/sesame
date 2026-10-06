@@ -52,6 +52,15 @@ export function tlsVersionToProto(v: string | null | undefined): TLSVersion {
 }
 
 export function parseHostPort(addr: string): {host: string; port: number} {
+  // A bare IPv6 literal has no port to extract; without this check it
+  // garbage-parses (lastIndexOf(':') splits mid-address) and only fails
+  // later at dial time with a confusing error.
+  if (net.isIPv6(addr)) {
+    throw new ConnectError(
+      `sesame/rc/netconn: target address must specify a port: [${addr}]:port`,
+      Code.InvalidArgument,
+    );
+  }
   const lastColon = addr.lastIndexOf(':');
   if (lastColon === -1) {
     throw new Error(`Invalid host:port address: ${addr}`);

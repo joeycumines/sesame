@@ -38,6 +38,25 @@ const DEFAULT_READ_TIMEOUT_MS = 30000;
 const DEFAULT_DIAL_TIMEOUT_MS = 10000;
 const DEFAULT_ALLOWED_NETWORKS = ['tcp', 'tcp4', 'tcp6'];
 
+// Parses a boolean strictly: only true/false/1/0 (case-insensitive) are
+// accepted. Security-relevant flags must not silently enable on values
+// like 'no', 'off', or '2'.
+function parseStrictBoolean(val: string, flagName: string): boolean {
+  const normalized = val.trim().toLowerCase();
+  switch (normalized) {
+    case 'true':
+    case '1':
+      return true;
+    case 'false':
+    case '0':
+      return false;
+    default:
+      throw new Error(
+        `Invalid boolean for ${flagName}: "${val}". Must be true, false, 1, or 0`,
+      );
+  }
+}
+
 const PRESET_MAP: Record<string, FingerprintPreset> = {
   RUNTIME_DEFAULT: FingerprintPreset.RUNTIME_DEFAULT,
   CHROME_AUTO: FingerprintPreset.CHROME_AUTO,
@@ -75,10 +94,16 @@ export function parseConfig(
     ? parseInt(env.SESAME_ENDPOINT_DIAL_TIMEOUT_MS, 10)
     : DEFAULT_DIAL_TIMEOUT_MS;
   let enableOpportunisticTls = env.SESAME_ENDPOINT_ENABLE_OPPORTUNISTIC_TLS
-    ? env.SESAME_ENDPOINT_ENABLE_OPPORTUNISTIC_TLS.toLowerCase() !== 'false'
+    ? parseStrictBoolean(
+        env.SESAME_ENDPOINT_ENABLE_OPPORTUNISTIC_TLS,
+        'SESAME_ENDPOINT_ENABLE_OPPORTUNISTIC_TLS',
+      )
     : true;
   let enableFlowControl = env.SESAME_ENDPOINT_ENABLE_FLOW_CONTROL
-    ? env.SESAME_ENDPOINT_ENABLE_FLOW_CONTROL.toLowerCase() !== 'false'
+    ? parseStrictBoolean(
+        env.SESAME_ENDPOINT_ENABLE_FLOW_CONTROL,
+        'SESAME_ENDPOINT_ENABLE_FLOW_CONTROL',
+      )
     : true;
   let allowedNetworks: string[] = env.SESAME_ENDPOINT_ALLOWED_NETWORKS
     ? env.SESAME_ENDPOINT_ALLOWED_NETWORKS.split(',').map(s => s.trim())
@@ -147,18 +172,27 @@ export function parseConfig(
     } else if (arg === '--enable-opportunistic-tls') {
       if (i + 1 >= argv.length)
         throw new Error('Missing value for --enable-opportunistic-tls');
-      enableOpportunisticTls = argv[++i].toLowerCase() !== 'false';
+      enableOpportunisticTls = parseStrictBoolean(
+        argv[++i],
+        '--enable-opportunistic-tls',
+      );
     } else if (arg.startsWith('--enable-opportunistic-tls=')) {
-      enableOpportunisticTls =
-        arg.slice('--enable-opportunistic-tls='.length).toLowerCase() !==
-        'false';
+      enableOpportunisticTls = parseStrictBoolean(
+        arg.slice('--enable-opportunistic-tls='.length),
+        '--enable-opportunistic-tls',
+      );
     } else if (arg === '--enable-flow-control') {
       if (i + 1 >= argv.length)
         throw new Error('Missing value for --enable-flow-control');
-      enableFlowControl = argv[++i].toLowerCase() !== 'false';
+      enableFlowControl = parseStrictBoolean(
+        argv[++i],
+        '--enable-flow-control',
+      );
     } else if (arg.startsWith('--enable-flow-control=')) {
-      enableFlowControl =
-        arg.slice('--enable-flow-control='.length).toLowerCase() !== 'false';
+      enableFlowControl = parseStrictBoolean(
+        arg.slice('--enable-flow-control='.length),
+        '--enable-flow-control',
+      );
     } else if (arg === '--allowed-networks') {
       if (i + 1 >= argv.length)
         throw new Error('Missing value for --allowed-networks');
@@ -218,16 +252,6 @@ export function parseConfig(
     proxyPassword: env.SESAME_ENDPOINT_PROXY_PASSWORD,
   };
 
-  if (
-    !supportedPresets.every(
-      preset => preset === FingerprintPreset.RUNTIME_DEFAULT,
-    )
-  ) {
-    throw new Error(
-      'Invalid supportedPresets: the standard runtime only supports RUNTIME_DEFAULT',
-    );
-  }
-
   return {
     config: {
       host,
@@ -262,6 +286,15 @@ function parsePresetList(val: string): FingerprintPreset[] {
     if (preset === undefined) {
       throw new Error(
         `Unknown fingerprint preset: "${part}". Valid presets are: ${Object.keys(PRESET_MAP).join(', ')}`,
+      );
+    }
+    if (preset !== FingerprintPreset.RUNTIME_DEFAULT) {
+      // Known name, but the standard runtime cannot honor it: reject at
+      // parse time with an accurate message rather than letting the
+      // surface express a configuration that would fail later at
+      // handshake time.
+      throw new Error(
+        `Fingerprint preset ${part} requires a custom TLSProvider; the standard runtime only supports RUNTIME_DEFAULT`,
       );
     }
     if (!presets.includes(preset)) {

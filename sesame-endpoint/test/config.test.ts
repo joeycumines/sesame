@@ -108,11 +108,67 @@ describe('config parser', () => {
       'Unknown fingerprint preset',
     );
     expect(() => parseConfig(['--supported-presets', 'CHROME_120'])).toThrow(
-      'Invalid supportedPresets',
+      'requires a custom TLSProvider',
     );
     expect(() => parseConfig(['--unknown-flag'])).toThrow(
       'Unknown CLI argument',
     );
+  });
+
+  it('parses enable flags strictly: only true/false/1/0 are accepted', () => {
+    // Accepted spellings, flag form.
+    expect(
+      parseConfig(['--enable-flow-control', 'false']).config!.enableFlowControl,
+    ).toBe(false);
+    expect(
+      parseConfig(['--enable-flow-control', '0']).config!.enableFlowControl,
+    ).toBe(false);
+    expect(
+      parseConfig(['--enable-flow-control', 'true']).config!.enableFlowControl,
+    ).toBe(true);
+    expect(
+      parseConfig(['--enable-flow-control', '1']).config!.enableFlowControl,
+    ).toBe(true);
+    expect(
+      parseConfig(['--enable-flow-control=TRUE']).config!.enableFlowControl,
+    ).toBe(true);
+    expect(
+      parseConfig(['--enable-opportunistic-tls', 'false']).config!
+        .enableOpportunisticTls,
+    ).toBe(false);
+
+    // Accepted spellings, env form. Critically, '0' must DISABLE - the
+    // old parser enabled on anything that was not the literal 'false'.
+    expect(
+      parseConfig([], {SESAME_ENDPOINT_ENABLE_FLOW_CONTROL: '0'}).config!
+        .enableFlowControl,
+    ).toBe(false);
+    expect(
+      parseConfig([], {SESAME_ENDPOINT_ENABLE_FLOW_CONTROL: 'false'}).config!
+        .enableFlowControl,
+    ).toBe(false);
+    expect(
+      parseConfig([], {SESAME_ENDPOINT_ENABLE_FLOW_CONTROL: '1'}).config!
+        .enableFlowControl,
+    ).toBe(true);
+
+    // Rejected spellings: previously these silently ENABLED.
+    for (const bad of ['no', 'off', '2', 'yes ']) {
+      expect(() =>
+        parseConfig([], {SESAME_ENDPOINT_ENABLE_FLOW_CONTROL: bad}),
+      ).toThrow(/Invalid boolean/);
+      expect(() => parseConfig(['--enable-flow-control', bad])).toThrow(
+        /Invalid boolean/,
+      );
+      expect(() =>
+        parseConfig([], {SESAME_ENDPOINT_ENABLE_OPPORTUNISTIC_TLS: bad}),
+      ).toThrow(/Invalid boolean/);
+    }
+  });
+
+  it('defaults enable flags to true when env vars are absent', () => {
+    expect(parseConfig([]).config!.enableFlowControl).toBe(true);
+    expect(parseConfig([]).config!.enableOpportunisticTls).toBe(true);
   });
 
   it('formatHelp produces non-empty text mentioning scoped env vars', () => {
