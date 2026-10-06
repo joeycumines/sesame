@@ -1243,3 +1243,181 @@ func TestClientControl_WriteDeadline_PastFailsImmediately(t *testing.T) {
 		t.Fatalf("past-deadline Write blocked for %v, expected immediate failure", elapsed)
 	}
 }
+
+// blockingTLSProvider is a Server.TLSProvider whose handshake blocks until
+// released, letting tests control exactly when TlsUpgraded/TlsUpgradeFailed
+// is emitted.
+type blockingTLSProvider struct {
+	release chan struct{}
+	once    sync.Once
+}
+
+func (p *blockingTLSProvider) Handshake(ctx context.Context, rawConn net.Conn, opts *sesametls.TLSOptions) (net.Conn, *sesametls.TLSHandshakeResult, error) {
+	select {
+	case <-p.release:
+		return rawConn, &sesametls.TLSHandshakeResult{ServerName: opts.GetServerName()}, nil
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+}
+
+func (p *blockingTLSProvider) unblock() { p.once.Do(func() { close(p.release) }) }
+
+// dialControlConnWithProvider is newDeadlineTestConn's harness plus a
+// Server.TLSProvider and a longer-lived dial ctx.
+func dialControlConnWithProvider(t *testing.T, provider netconn.TLSProvider) (netconn.InStreamConn, net.Conn) {
+	t.Helper()
+
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, serverPipe := net.Pipe()
+	t.Cleanup(func() {
+		_ = clientPipe.Close()
+		_ = serverPipe.Close()
+	})
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+		TLSProvider: provider,
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	t.Cleanup(func() { _ = gc.Close() })
+
+	client := netconn.Client{
+		API: rc.NewRemoteControlClient(gc),
+		Capabilities: &rc.NetConnRequest_Capabilities{
+			SupportsFlowControl:      true,
+			SupportsOpportunisticTls: true,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	conn, err := client.DialContext(ctx, "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+
+	return conn.(netconn.InStreamConn), serverPipe
+}
+
+// TestClientServer_UpgradeTLS_TimeoutClearsPending: a timed-out UpgradeTLS
+// must clear the pending slot so a subsequent UpgradeTLS does not return
+// AlreadyExists for a dead request.
+func TestClientServer_UpgradeTLS_TimeoutClearsPending(t *testing.T) {
+	provider := &blockingTLSProvider{release: make(chan struct{})}
+	conn, _ := dialControlConnWithProvider(t, provider)
+
+	upgradeCtx, upgradeCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer upgradeCancel()
+
+	_, err := conn.UpgradeTLS(upgradeCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded from blocked upgrade, got %v", err)
+	}
+
+	// The pending slot must be clear: a second UpgradeTLS must not fail
+	// with AlreadyExists (it gets a fresh pending registration and then
+	// hits its own short timeout).
+	secondCtx, secondCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer secondCancel()
+	_, err = conn.UpgradeTLS(secondCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+	if status.Code(err) == codes.AlreadyExists {
+		t.Fatalf("second UpgradeTLS failed with AlreadyExists; pending slot was not cleared: %v", err)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded from second blocked upgrade, got %v", err)
+	}
+}
+
+// TestClientServer_UpgradeTLS_LateResultPoisons: after a timed-out upgrade,
+// a late TlsUpgraded arriving with no waiter must tear the connection down -
+// subsequent Read/Write/UpgradeTLS all fail rather than continuing cleartext
+// against a peer that switched to TLS. Teardown must happen promptly: a
+// healthy connection only ever yields our own probe deadlines.
+func TestClientServer_UpgradeTLS_LateResultPoisons(t *testing.T) {
+	provider := &blockingTLSProvider{release: make(chan struct{})}
+	conn, _ := dialControlConnWithProvider(t, provider)
+
+	upgradeCtx, upgradeCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer upgradeCancel()
+
+	_, err := conn.UpgradeTLS(upgradeCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded from blocked upgrade, got %v", err)
+	}
+
+	// Release the provider so the server completes the upgrade and emits
+	// TlsUpgraded with nobody waiting for it.
+	provider.unblock()
+
+	// Probe with a read deadline: on a torn-down conn, Read fails with a
+	// close error; on a healthy conn it can only time out with
+	// os.ErrDeadlineExceeded (no inbound data is flowing).
+	var tornDown bool
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		_ = conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		_, rerr := conn.Read(make([]byte, 16))
+		_ = conn.SetReadDeadline(time.Time{})
+		if rerr != nil && !errors.Is(rerr, os.ErrDeadlineExceeded) {
+			tornDown = true
+			break
+		}
+	}
+	if !tornDown {
+		t.Fatal("connection was not torn down within 2s of the unsolicited TlsUpgraded event")
+	}
+
+	// With teardown detected, every subsequent operation must fail.
+	if _, werr := conn.Write([]byte("probe")); werr == nil {
+		t.Fatal("expected Write to fail on poisoned connection, got nil")
+	}
+	thirdCtx, thirdCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer thirdCancel()
+	if _, uerr := conn.UpgradeTLS(thirdCtx, &sesametls.TLSOptions{ServerName: "example.com"}); uerr == nil {
+		t.Fatal("expected UpgradeTLS to fail on poisoned connection, got nil")
+	}
+}
+
+// TestClientServer_TLSResult_ConcurrentAccessDuringUpgrade: TLSResult reads
+// racing a completing upgrade must be race-clean.
+func TestClientServer_TLSResult_ConcurrentAccessDuringUpgrade(t *testing.T) {
+	provider := &blockingTLSProvider{release: make(chan struct{})}
+	conn, _ := dialControlConnWithProvider(t, provider)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Repeatedly read TLSResult from a separate goroutine while
+		// the upgrade completes.
+		for i := 0; i < 2000; i++ {
+			_ = conn.TLSResult()
+		}
+	}()
+
+	// Release the handshake shortly after the upgrade request is in
+	// flight so the completing write to tlsResult races the reader.
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		provider.unblock()
+	}()
+
+	upCtx, upCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer upCancel()
+	if _, err := conn.UpgradeTLS(upCtx, &sesametls.TLSOptions{ServerName: "example.com"}); err != nil {
+		t.Fatalf("UpgradeTLS failed: %v", err)
+	}
+	wg.Wait()
+}

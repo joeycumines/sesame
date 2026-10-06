@@ -220,23 +220,49 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 				c.upgradeMu.Lock()
 				ch := c.pendingUpgrade
 				c.pendingUpgrade = nil
-				c.upgradeMu.Unlock()
 				if ch != nil {
 					c.tlsResult = event.TlsUpgraded.GetResult()
+					// Send under the mutex: the buffered cap-1 channel and
+					// the single-send-per-slot invariant make this
+					// non-blocking, and it linearizes result delivery
+					// against a concurrently timing-out UpgradeTLS - the
+					// result is either honored by its drain or the slot
+					// is already nil and we poison. Never both nor neither.
 					ch <- upgradeResult{result: event.TlsUpgraded.GetResult()}
+				}
+				c.upgradeMu.Unlock()
+				if ch == nil {
+					// TlsUpgraded with no pending upgrade: the TLS state
+					// of the connection is now unknowable (a previous
+					// upgrade timed out and the server upgraded anyway, or
+					// a duplicate/malicious event). Fail closed: tear the
+					// connection down rather than let it continue in a
+					// state the caller cannot reason about.
+					c.poison(errors.New("sesame/rc/netconn: unsolicited TlsUpgraded event"))
+					return
 				}
 
 			case *rc.NetConnResponse_Control_TlsUpgradeFailed:
 				c.upgradeMu.Lock()
 				ch := c.pendingUpgrade
 				c.pendingUpgrade = nil
-				c.upgradeMu.Unlock()
 				if ch != nil {
 					errMsg := "sesame/rc/netconn: TLS upgrade failed"
 					if st := event.TlsUpgradeFailed.GetError(); st != nil {
 						errMsg = fmt.Sprintf("sesame/rc/netconn: TLS upgrade failed (code %d): %s", st.GetCode(), st.GetMessage())
 					}
+					// Under the mutex, for the same linearization as above
+					// (cosmetic here - the server stays cleartext on
+					// failure - but the pattern must not diverge).
 					ch <- upgradeResult{err: errors.New(errMsg)}
+				}
+				c.upgradeMu.Unlock()
+				if ch == nil {
+					// Same unknowable-state reasoning as TlsUpgraded: a
+					// failure result nobody is waiting for means lost
+					// synchronization with the server's upgrade state.
+					c.poison(errors.New("sesame/rc/netconn: unsolicited TlsUpgradeFailed event"))
+					return
 				}
 
 			case *rc.NetConnResponse_Control_Pong_:
@@ -276,6 +302,28 @@ func (c *clientControlConn) abortPending(err error) {
 		c.pendingUpgrade = nil
 	}
 	c.upgradeMu.Unlock()
+}
+
+// poison tears the connection down without the Close() idempotence gate,
+// for use by the readLoop when it encounters a state from which the
+// connection can no longer be trusted (e.g. an unsolicited upgrade
+// result). Mirrors Close()'s cleanup so every subsequent operation
+// fails instead of continuing in an unknowable state.
+func (c *clientControlConn) poison(err error) {
+	if c.closed.CompareAndSwap(false, true) {
+		if c.cancel != nil {
+			c.cancel()
+		}
+		_ = c.demuxRemote.Close()
+		_ = c.demuxLocalW.CloseWithError(err)
+		if c.outboundFC != nil {
+			c.outboundFC.Close()
+		}
+		if c.inboundFC != nil {
+			c.inboundFC.Close()
+		}
+		c.abortPending(err)
+	}
 }
 
 func (c *clientControlConn) Read(b []byte) (int, error) {
@@ -394,6 +442,10 @@ func (c *clientControlConn) CloseWrite() error {
 }
 
 func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSOptions) (*sesametls.TLSHandshakeResult, error) {
+	if c.closed.Load() {
+		return nil, io.ErrClosedPipe
+	}
+
 	if !c.serverCaps.GetSupportsOpportunisticTls() {
 		return nil, statusError(codes.FailedPrecondition, "sesame/rc/netconn: server does not advertise support for opportunistic TLS")
 	}
@@ -438,6 +490,19 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 
 	select {
 	case <-ctx.Done():
+		// Clear the pending slot so a later UpgradeTLS does not fail
+		// with AlreadyExists for a dead request. If the result raced
+		// us and already arrived, it was buffered into ch - drain it.
+		c.upgradeMu.Lock()
+		c.pendingUpgrade = nil
+		c.upgradeMu.Unlock()
+		select {
+		case res := <-ch:
+			// The result arrived before the cancellation took effect;
+			// honor it rather than the timeout.
+			return res.result, res.err
+		default:
+		}
 		return nil, ctx.Err()
 	case res := <-ch:
 		return res.result, res.err
@@ -492,10 +557,16 @@ func (c *clientControlConn) Ping(ctx context.Context) (time.Duration, error) {
 }
 
 func (c *clientControlConn) TLSResult() *sesametls.TLSHandshakeResult {
+	// Guarded: readLoop writes tlsResult under upgradeMu when an upgrade
+	// completes, and TLSResult may be called from any goroutine.
+	c.upgradeMu.Lock()
+	defer c.upgradeMu.Unlock()
 	return c.tlsResult
 }
 
 func (c *clientControlConn) TLSHandshakeResult() *sesametls.TLSHandshakeResult {
+	c.upgradeMu.Lock()
+	defer c.upgradeMu.Unlock()
 	return c.tlsResult
 }
 
