@@ -4,12 +4,15 @@ import (
 	"context"
 	cryptotls "crypto/tls"
 	"net"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/joeycumines/sesame/type/netaddr"
 	sesameproxy "github.com/joeycumines/sesame/type/proxy"
 	sesametls "github.com/joeycumines/sesame/type/tls"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestProtoToTLSVersion(t *testing.T) {
@@ -196,4 +199,109 @@ func indexOf(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+// deadlineRecordingConn wraps a net.Conn recording SetDeadline calls.
+type deadlineRecordingConn struct {
+	net.Conn
+
+	mu        sync.Mutex
+	deadlines []time.Time
+}
+
+func (c *deadlineRecordingConn) SetDeadline(t time.Time) error {
+	c.mu.Lock()
+	c.deadlines = append(c.deadlines, t)
+	c.mu.Unlock()
+	return c.Conn.SetDeadline(t)
+}
+
+func TestSocks5Handshake_ArmsFallbackDeadline(t *testing.T) {
+	// A SOCKS5 proxy that accepts and never responds. The handshake must
+	// arm a bounded deadline even when the caller ctx has none, matching
+	// the HTTP CONNECT fallback. The test asserts the deadline was ARMED
+	// and later restored - it does not wait for it to fire.
+	blackhole, blackholeConn := net.Pipe()
+	defer blackhole.Close()
+	defer blackholeConn.Close()
+
+	recording := &deadlineRecordingConn{Conn: blackholeConn}
+
+	// Never service the SOCKS5 greeting; reads on `blackhole` are simply
+	// dropped so the dialer's write does not block the test.
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			if _, err := blackhole.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	// The fallback is 30s; use a short deadline only to bound the test,
+	// via a ctx whose deadline is what setProxyHandshakeDeadline will
+	// arm... instead, call with a deadline-less ctx to exercise the
+	// fallback path. The handshake will block until the armed 30s
+	// deadline fires - too long for a test. So drive it through
+	// socks5Handshake directly and close the conn concurrently to
+	// unblock.
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_ = recording.Close()
+	}()
+
+	_, err := socks5Handshake(context.Background(), recording, &sesameproxy.ProxyHop{
+		Type:     sesameproxy.ProxyHop_SOCKS5,
+		Username: "user",
+		Password: "pass",
+	}, "target.internal:443")
+	if err == nil {
+		t.Fatal("expected error from closed blackhole SOCKS5 handshake")
+	}
+
+	recording.mu.Lock()
+	deadlines := append([]time.Time(nil), recording.deadlines...)
+	recording.mu.Unlock()
+
+	if len(deadlines) == 0 {
+		t.Fatal("no deadline was armed for the SOCKS5 handshake")
+	}
+	armed := deadlines[0]
+	if armed.IsZero() {
+		t.Fatal("armed SOCKS5 deadline is zero")
+	}
+	// The fallback deadline must be in the future (roughly 30s out).
+	if !time.Now().Before(armed) {
+		t.Fatalf("armed deadline %v is not in the future", armed)
+	}
+	// The restore must have reset the deadline back to zero.
+	restored := deadlines[len(deadlines)-1]
+	if !restored.IsZero() {
+		t.Fatalf("deadline was not restored after the handshake; last SetDeadline: %v", restored)
+	}
+}
+
+func TestBuildTLSConfig_RejectsOutOfRangeCipherSuite(t *testing.T) {
+	_, err := BuildTLSConfig(&sesametls.TLSOptions{
+		ServerName:   "example.com",
+		CipherSuites: []uint32{0x1301, 1 << 20},
+	}, "")
+	if err == nil {
+		t.Fatal("expected InvalidArgument for out-of-range cipher suite")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", err)
+	}
+
+	// In-range values must still build.
+	cfg, err := BuildTLSConfig(&sesametls.TLSOptions{
+		ServerName:   "example.com",
+		CipherSuites: []uint32{0x1301},
+	}, "")
+	if err != nil {
+		t.Fatalf("BuildTLSConfig failed for valid suite: %v", err)
+	}
+	if len(cfg.CipherSuites) != 1 || cfg.CipherSuites[0] != 0x1301 {
+		t.Fatalf("unexpected cipher suites: %v", cfg.CipherSuites)
+	}
 }

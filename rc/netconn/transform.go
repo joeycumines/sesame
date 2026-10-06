@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"time"
@@ -120,6 +121,12 @@ func BuildTLSConfig(opts *sesametls.TLSOptions, defaultServerName string) (*cryp
 	if len(opts.GetCipherSuites()) > 0 {
 		cfg.CipherSuites = make([]uint16, len(opts.GetCipherSuites()))
 		for i, cs := range opts.GetCipherSuites() {
+			// cipher_suites is repeated uint32 on the wire; a value
+			// that does not fit uint16 must be rejected, not silently
+			// truncated to an unintended suite.
+			if cs > math.MaxUint16 {
+				return nil, status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: invalid cipher suite: %d", cs)
+			}
 			cfg.CipherSuites[i] = uint16(cs)
 		}
 	}
@@ -273,6 +280,22 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 	return currentConn, res, nil
 }
 
+// proxyHandshakeTimeout bounds proxy protocol handshakes (HTTP CONNECT,
+// SOCKS5) when the caller context carries no deadline, so a proxy that
+// stalls mid-handshake cannot hang ExecuteProxyHops forever.
+const proxyHandshakeTimeout = 30 * time.Second
+
+// setProxyHandshakeDeadline arms conn with either the caller's context
+// deadline or the proxyHandshakeTimeout fallback, returning a restore func.
+func setProxyHandshakeDeadline(ctx context.Context, conn net.Conn) func() {
+	if d, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(d)
+	} else {
+		_ = conn.SetDeadline(time.Now().Add(proxyHandshakeTimeout))
+	}
+	return func() { _ = conn.SetDeadline(timeZero) }
+}
+
 func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesameproxy.ProxyHop, target string) (net.Conn, error) {
 	reqStr := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n", target, target)
 	if h := hop.GetAuthHeader(); h != "" {
@@ -283,16 +306,7 @@ func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesameproxy.P
 	}
 	reqStr += "\r\n"
 
-	if d, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(d)
-		defer func() { _ = conn.SetDeadline(timeZero) }()
-	} else {
-		// Bound the handshake even without a caller deadline so a proxy
-		// that stalls mid-headers cannot hang ExecuteProxyHops forever.
-		// A CONNECT response is headers-only; 30s is generous.
-		_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
-		defer func() { _ = conn.SetDeadline(timeZero) }()
-	}
+	defer setProxyHandshakeDeadline(ctx, conn)()
 
 	if _, err := io.WriteString(conn, reqStr); err != nil {
 		return nil, status.Errorf(codes.Unavailable, "sesame/rc/netconn: failed writing HTTP CONNECT to proxy: %v", err)
@@ -344,10 +358,7 @@ func socks5Handshake(ctx context.Context, conn net.Conn, hop *sesameproxy.ProxyH
 		return nil, status.Errorf(codes.Internal, "sesame/rc/netconn: failed initializing SOCKS5 dialer: %v", err)
 	}
 
-	if d, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(d)
-		defer func() { _ = conn.SetDeadline(timeZero) }()
-	}
+	defer setProxyHandshakeDeadline(ctx, conn)()
 
 	upgradedConn, err := dialer.Dial("tcp", target)
 	if err != nil {
