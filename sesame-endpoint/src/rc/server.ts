@@ -73,6 +73,17 @@ function waitForDrain(socket: net.Socket, signal?: AbortSignal): Promise<void> {
   });
 }
 
+// Maps a google.rpc.Status code (canonical gRPC numbering) to the Connect
+// Code enum. Both share the gRPC code space; unmapped/out-of-range values
+// fall back to Canceled, matching the Go reference's reset semantics where
+// a reset is a client-side cancellation.
+function codeFromRpcStatus(code: number): Code {
+  if (code >= 0 && code <= 16) {
+    return code as Code;
+  }
+  return Code.Canceled;
+}
+
 class AsyncQueue<T> {
   private queue: T[] = [];
   private waiters: Array<{
@@ -616,13 +627,35 @@ export function createRemoteControlService(config: ServerConfig) {
                   }),
                 );
               } else if (ctl.action.case === 'reset') {
+                // Wire-contract parity with the Go reference: a client
+                // reset surfaces as a stream error carrying the reason,
+                // indistinguishable neither from a normal end nor from a
+                // generic failure.
+                const reason = ctl.action.value.reason;
+                responseQueue.close(
+                  new ConnectError(
+                    `sesame/rc/netconn: connection reset by client: ${
+                      reason?.message ?? ''
+                    }`,
+                    reason?.code
+                      ? codeFromRpcStatus(reason.code)
+                      : Code.Canceled,
+                  ),
+                );
                 cleanupAll();
                 break;
               }
             }
           }
           if (!isClosed) {
-            activeSocket.end();
+            // Wire-contract parity: request-stream EOF (CloseSend) means
+            // the server initiates a FULL close of the proxy target per
+            // the remotecontrol.proto termination contract - matching
+            // the Go reference. Responses already buffered in
+            // responseQueue still drain (AsyncQueue.next drains queued
+            // items before honoring close). Genuine half-close-and-drain
+            // is expressed with the halfClose control message instead.
+            cleanupAll();
           }
         } catch (err: unknown) {
           if (!isClosed) {

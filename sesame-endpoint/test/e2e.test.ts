@@ -14,10 +14,12 @@ import {
   NetConnRequest_DialSchema,
   NetConnRequest_ControlSchema,
   NetConnRequest_Control_UpgradeTLSSchema,
+  NetConnRequest_Control_ResetSchema,
   NetConnRequest_Control_PingSchema,
   NetConnRequest_Control_WindowUpdateSchema,
   NetConnRequest_CapabilitiesSchema,
 } from '../src/gen/sesame/v1alpha1/remotecontrol_pb';
+import {StatusSchema} from '../src/gen/google/rpc/status_pb';
 import {
   FingerprintPreset,
   TLSOptionsSchema,
@@ -308,6 +310,10 @@ describe('sesame-endpoint E2E Suite', () => {
     expect(conn.tls).toBeDefined();
     // Because ALPN was omitted, negotiatedProtocol is empty string
     expect(conn.tls?.negotiatedProtocol).toBe('');
+    // Wire-contract parity with the Go reference: the negotiated cipher
+    // suite is reported (non-zero) and the peer chain is present.
+    expect(conn.tls?.cipherSuite).not.toBe(0);
+    expect(conn.tls?.peerCertificates.length).toBeGreaterThan(0);
 
     reqStream.close();
   });
@@ -634,6 +640,140 @@ describe('sesame-endpoint E2E Suite', () => {
     }
   });
 
+  it('surfaces a client reset as an error carrying the reason', async () => {
+    const echoServer = net.createServer(rawSocket => {
+      rawSocket.pipe(rawSocket);
+    });
+    await new Promise<void>(r => echoServer.listen(0, '127.0.0.1', () => r()));
+    const echoPort = (echoServer.address() as net.AddressInfo).port;
+
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${echoPort}`,
+            }),
+            capabilities: create(NetConnRequest_CapabilitiesSchema, {
+              supportsOpportunisticTls: true,
+              supportsFlowControl: true,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    try {
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'control',
+            value: create(NetConnRequest_ControlSchema, {
+              action: {
+                case: 'reset',
+                value: create(NetConnRequest_Control_ResetSchema, {
+                  reason: create(StatusSchema, {
+                    code: Code.Canceled,
+                    message: 'client went away',
+                  }),
+                }),
+              },
+            }),
+          },
+        }),
+      );
+
+      let resetErr: unknown;
+      try {
+        while (true) {
+          const resp = await iterator.next();
+          if (resp.done) break;
+        }
+      } catch (err: unknown) {
+        resetErr = err;
+      }
+      expect(resetErr).toBeInstanceOf(ConnectError);
+      const ce = resetErr as ConnectError;
+      expect(ce.message).toContain('connection reset by client');
+      expect(ce.message).toContain('client went away');
+      expect(ce.code).toBe(Code.Canceled);
+    } finally {
+      reqStream.close();
+      await new Promise<void>(r => echoServer.close(() => r()));
+    }
+  });
+
+  it('fully closes the upstream on request-stream EOF per the termination contract', async () => {
+    // CloseSend semantics: the server initiates a FULL close of the proxy
+    // target; the response stream completes without waiting for the
+    // upstream to finish. halfClose is the mechanism for drain-then-wait.
+    let upstreamFullyClosed = false;
+    const upstream = net.createServer(rawSocket => {
+      rawSocket.on('close', () => {
+        upstreamFullyClosed = true;
+      });
+      // Never echo, never end: any response-stream completion must come
+      // from the EOF-triggered teardown, not upstream EOF.
+      rawSocket.on('data', () => {});
+    });
+    await new Promise<void>(r => upstream.listen(0, '127.0.0.1', () => r()));
+    const upstreamPort = (upstream.address() as net.AddressInfo).port;
+
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${upstreamPort}`,
+            }),
+            capabilities: create(NetConnRequest_CapabilitiesSchema, {
+              supportsOpportunisticTls: true,
+              supportsFlowControl: true,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    try {
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      // Close the request side (CloseSend equivalent).
+      reqStream.close();
+
+      // The response stream must complete even though the upstream never
+      // sent anything and never closed on its own.
+      const done = await iterator.next();
+      expect(done.done).toBe(true);
+
+      // And the upstream socket must have been fully closed (destroyed),
+      // not merely half-closed.
+      const deadline = Date.now() + 2000;
+      while (!upstreamFullyClosed && Date.now() < deadline) {
+        await new Promise<void>(r => setTimeout(r, 20));
+      }
+      expect(upstreamFullyClosed).toBe(true);
+    } finally {
+      await new Promise<void>(r => upstream.close(() => r()));
+    }
+  });
+
   it('rejects in-stream TLS upgrade without options with InvalidArgument', async () => {
     const echoServer = net.createServer(rawSocket => {
       rawSocket.pipe(rawSocket);
@@ -685,7 +825,6 @@ describe('sesame-endpoint E2E Suite', () => {
 
       let sawInvalidArgument = false;
       try {
-        // eslint-disable-next-line no-constant-condition
         while (true) {
           const resp = await iterator.next();
           if (resp.done) break;

@@ -18,12 +18,14 @@ const {
   NetConnRequest_DialSchema,
   NetConnRequest_ControlSchema,
   NetConnRequest_Control_UpgradeTLSSchema,
+  NetConnRequest_Control_ResetSchema,
   NetConnRequest_Control_PingSchema,
   NetConnRequest_CapabilitiesSchema,
   TLSOptionsSchema,
   NetAddrSchema,
   FingerprintPreset,
 } = require('../build/src/index.js');
+const { StatusSchema } = require('../build/src/gen/google/rpc/status_pb.js');
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
 const CERT_PEM = fs.readFileSync(path.join(FIXTURES_DIR, 'cert.pem'));
@@ -167,6 +169,10 @@ async function run() {
   const conn2 = await it2.next();
   assert.strictEqual(conn2.value.data.case, 'conn');
   assert.strictEqual(conn2.value.data.value.tls.negotiatedProtocol, 'test-node');
+  // Wire-contract parity: negotiated cipher suite is reported (non-zero)
+  // and the peer chain is present under Node too.
+  assert.notStrictEqual(conn2.value.data.value.tls.cipherSuite, 0);
+  assert.ok(conn2.value.data.value.tls.peerCertificates.length > 0);
   const echo2 = await it2.next();
   assert.strictEqual(echo2.value.data.case, 'bytes');
   assert.strictEqual(Buffer.from(echo2.value.data.value).toString('utf-8'), 'Node TLS Message');
@@ -291,6 +297,99 @@ async function run() {
   }
   assert.ok(sawInvalidArgument, 'expected InvalidArgument stream termination');
   reqStream5.close();
+
+  // Test 8: Reset surfaces as an error carrying the reason under Node.js
+  console.log('8. Testing reset-reason surfacing under Node.js...');
+  const resetStream = new RequestStream();
+  resetStream.push(create(NetConnRequestSchema, {
+    data: {
+      case: 'dial',
+      value: create(NetConnRequest_DialSchema, {
+        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tcpPort}` }),
+        capabilities: create(NetConnRequest_CapabilitiesSchema, {
+          supportsOpportunisticTls: true,
+          supportsFlowControl: true,
+        }),
+      }),
+    },
+  }));
+  const resetResp = client.netConn(resetStream);
+  const resetIt = resetResp[Symbol.asyncIterator]();
+  const resetConn = await resetIt.next();
+  assert.strictEqual(resetConn.value.data.case, 'conn');
+
+  resetStream.push(create(NetConnRequestSchema, {
+    data: {
+      case: 'control',
+      value: create(NetConnRequest_ControlSchema, {
+        action: {
+          case: 'reset',
+          value: create(NetConnRequest_Control_ResetSchema, {
+            reason: create(StatusSchema, {
+              code: Code.Canceled,
+              message: 'node-runner reset probe',
+            }),
+          }),
+        },
+      }),
+    },
+  }));
+
+  let resetErr;
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const resp = await resetIt.next();
+      if (resp.done) break;
+    }
+    assert.fail('expected reset to terminate the stream with an error');
+  } catch (err) {
+    resetErr = err;
+  }
+  assert.ok(resetErr instanceof ConnectError, `expected ConnectError, got: ${resetErr}`);
+  assert.ok(resetErr.message.includes('connection reset by client'), resetErr.message);
+  assert.ok(resetErr.message.includes('node-runner reset probe'), resetErr.message);
+  assert.strictEqual(resetErr.code, Code.Canceled);
+  resetStream.close();
+
+  // Test 9: Request-stream EOF fully closes the upstream under Node.js
+  console.log('9. Testing request-EOF full-close semantics under Node.js...');
+  let upstreamFullyClosed = false;
+  const silentUpstream = net.createServer(sock => {
+    sock.on('close', () => { upstreamFullyClosed = true; });
+    sock.on('data', () => {});
+  });
+  await new Promise(r => silentUpstream.listen(0, '127.0.0.1', () => r()));
+  const silentPort = silentUpstream.address().port;
+
+  const eofStream = new RequestStream();
+  eofStream.push(create(NetConnRequestSchema, {
+    data: {
+      case: 'dial',
+      value: create(NetConnRequest_DialSchema, {
+        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${silentPort}` }),
+        capabilities: create(NetConnRequest_CapabilitiesSchema, {
+          supportsOpportunisticTls: true,
+          supportsFlowControl: true,
+        }),
+      }),
+    },
+  }));
+  const eofResp = client.netConn(eofStream);
+  const eofIt = eofResp[Symbol.asyncIterator]();
+  const eofConn = await eofIt.next();
+  assert.strictEqual(eofConn.value.data.case, 'conn');
+
+  eofStream.close();
+  const eofDone = await eofIt.next();
+  assert.ok(eofDone.done, 'response stream must complete on request EOF');
+
+  const eofDeadline = Date.now() + 2000;
+  while (!upstreamFullyClosed && Date.now() < eofDeadline) {
+    await new Promise(r => setTimeout(r, 20));
+  }
+  assert.ok(upstreamFullyClosed, 'upstream socket must be fully closed on request EOF');
+  await new Promise(r => silentUpstream.close(() => r()));
 
   console.log('All Node.js runtime tests passed cleanly!');
   process.exit(0);

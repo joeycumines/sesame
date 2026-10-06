@@ -88,6 +88,45 @@ export interface TLSExecutionResult {
   readonly result: TLSHandshakeResult;
 }
 
+// IANA cipher suite identifiers for the names Node/Bun report from
+// TLSSocket.getCipher() (standardName preferred, opensslName fallback).
+// Unrecognized names yield 0; the negotiated suite is metadata, not a
+// security decision, so an unmapped runtime name must not fail the
+// handshake.
+const IANA_CIPHER_SUITES: Record<string, number> = {
+  TLS_AES_128_GCM_SHA256: 0x1301,
+  TLS_AES_256_GCM_SHA384: 0x1302,
+  TLS_CHACHA20_POLY1305_SHA256: 0x1303,
+  TLS_AES_128_CCM_SHA256: 0x1304,
+  TLS_AES_128_CCM_8_SHA256: 0x1305,
+  TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256: 0xc02f,
+  TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384: 0xc030,
+  TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256: 0xc02b,
+  TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384: 0xc02c,
+  TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256: 0xcca8,
+  TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256: 0xcca9,
+  TLS_RSA_WITH_AES_128_GCM_SHA256: 0x009c,
+  TLS_RSA_WITH_AES_256_GCM_SHA384: 0x009d,
+  TLS_RSA_WITH_AES_128_CBC_SHA256: 0x003c,
+  TLS_RSA_WITH_AES_256_CBC_SHA256: 0x003d,
+  TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256: 0xc027,
+  TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384: 0xc028,
+};
+
+function ianaCipherSuite(tlsSocket: tls.TLSSocket): number {
+  const cipher = tlsSocket.getCipher();
+  if (!cipher) {
+    return 0;
+  }
+  // CipherNameAndProtocol.name carries the OpenSSL name;
+  // standardName the IETF name.
+  return (
+    IANA_CIPHER_SUITES[cipher.standardName] ??
+    IANA_CIPHER_SUITES[cipher.name] ??
+    0
+  );
+}
+
 export async function executeTLSHandshake(
   socket: net.Socket,
   opts: TLSOptions,
@@ -159,17 +198,27 @@ export async function executeTLSHandshake(
       resolved = true;
       cleanup();
 
-      const peerCert = tlsSocket.getPeerCertificate(true);
-      const rawCert = peerCert?.raw;
+      // Peer chain: walk issuerCertificate links from the leaf to the
+      // root (self-signed or empty cert terminates the walk), mirroring
+      // the Go reference which reports the full presented chain.
+      const peerCertificates: Uint8Array[] = [];
+      let cert = tlsSocket.getPeerCertificate(true);
+      const seen = new Set<tls.PeerCertificate>();
+      while (cert && cert.raw && cert.raw.length > 0 && !seen.has(cert)) {
+        seen.add(cert);
+        peerCertificates.push(new Uint8Array(cert.raw));
+        cert = cert.issuerCertificate;
+      }
+
       const proto = tlsSocket.alpnProtocol;
       const negotiatedProtocol = typeof proto === 'string' ? proto : '';
 
       const result = create(TLSHandshakeResultSchema, {
         negotiatedProtocol,
-        cipherSuite: 0,
+        cipherSuite: ianaCipherSuite(tlsSocket),
         tlsVersion: tlsVersionToProto(tlsSocket.getProtocol()),
         serverName,
-        peerCertificates: rawCert ? [new Uint8Array(rawCert)] : [],
+        peerCertificates,
         appliedPreset: FingerprintPreset.RUNTIME_DEFAULT,
       });
 
