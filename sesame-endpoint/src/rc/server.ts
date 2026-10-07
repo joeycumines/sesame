@@ -1,6 +1,7 @@
 import * as net from 'node:net';
 import {Code, ConnectError, HandlerContext} from '@connectrpc/connect';
 import {create} from '@bufbuild/protobuf';
+import {durationMs} from '@bufbuild/protobuf/wkt';
 import {
   NetConnRequest,
   NetConnResponse,
@@ -188,17 +189,24 @@ export function createRemoteControlService(config: ServerConfig) {
         }
       }
 
-      // Connect to target
+      // Connect to target. A set, positive per-request dial timeout
+      // overrides the configured default (matching Go, where the request
+      // timeout feeds net.Dialer.Timeout directly); otherwise the server
+      // default applies.
       let activeSocket: net.Socket;
       let proxyResult: ProxyResult | undefined;
       let tlsResult: TLSHandshakeResult | undefined;
+      const requestedTimeoutMs =
+        dialReq.timeout !== undefined ? durationMs(dialReq.timeout) : 0;
+      const effectiveDialTimeoutMs =
+        requestedTimeoutMs > 0 ? requestedTimeoutMs : config.dialTimeoutMs;
 
       if (dialReq.proxy && dialReq.proxy.hops.length > 0) {
         const pRes = await executeProxyHops(
           targetNetwork,
           targetAddr,
           dialReq.proxy,
-          config.dialTimeoutMs,
+          effectiveDialTimeoutMs,
           config.secrets,
         );
         activeSocket = pRes.socket;
@@ -224,7 +232,7 @@ export function createRemoteControlService(config: ServerConfig) {
                 Code.DeadlineExceeded,
               ),
             );
-          }, config.dialTimeoutMs);
+          }, effectiveDialTimeoutMs);
 
           const onAbort = () => {
             if (resolved) return;

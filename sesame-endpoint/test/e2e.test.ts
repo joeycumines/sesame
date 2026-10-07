@@ -5,6 +5,7 @@ import * as http from 'node:http';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {create} from '@bufbuild/protobuf';
+import {durationFromMs} from '@bufbuild/protobuf/wkt';
 import {createGrpcTransport} from '@connectrpc/connect-node';
 import {createClient, Code, ConnectError} from '@connectrpc/connect';
 import {
@@ -574,6 +575,44 @@ describe('sesame-endpoint E2E Suite', () => {
       reqStream.close();
     } finally {
       await new Promise<void>(r => coalescingProxy.close(() => r()));
+    }
+  });
+
+  it('honors a short per-request dial timeout against an unroutable target', async () => {
+    // An unroutable TEST-NET-1 address (RFC 5737, 192.0.2.0/24) has no
+    // listener and no refuser on this routing, so the TCP SYN gets no
+    // answer and connect() hangs until the dial timer fires. The request
+    // asks for 500ms against a server default of 10s: DeadlineExceeded
+    // must arrive within a bound proving the request value (not the
+    // default) was honored.
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: '192.0.2.1:81',
+            }),
+            timeout: durationFromMs(500),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+    const start = Date.now();
+    try {
+      await iterator.next();
+      expect.unreachable('should have timed out on the requested bound');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(ConnectError);
+      expect((err as ConnectError).code).toBe(Code.DeadlineExceeded);
+      expect(Date.now() - start).toBeLessThan(9000);
+    } finally {
+      reqStream.close();
     }
   });
 
