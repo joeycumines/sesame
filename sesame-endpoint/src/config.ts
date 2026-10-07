@@ -1,4 +1,4 @@
-import {FingerprintPreset} from './gen/sesame/type/tls_pb';
+import {FingerprintPreset} from './gen/sesame/v1alpha1/tls_pb';
 
 export interface ServerSecrets {
   readonly tlsCert?: string;

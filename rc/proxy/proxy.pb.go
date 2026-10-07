@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        v7.36.2
-// source: sesame/type/proxy.proto
+// source: sesame/v1alpha1/proxy.proto
 
 package proxy
 
@@ -55,11 +55,11 @@ func (x ProxyHop_Type) String() string {
 }
 
 func (ProxyHop_Type) Descriptor() protoreflect.EnumDescriptor {
-	return file_sesame_type_proxy_proto_enumTypes[0].Descriptor()
+	return file_sesame_v1alpha1_proxy_proto_enumTypes[0].Descriptor()
 }
 
 func (ProxyHop_Type) Type() protoreflect.EnumType {
-	return &file_sesame_type_proxy_proto_enumTypes[0]
+	return &file_sesame_v1alpha1_proxy_proto_enumTypes[0]
 }
 
 func (x ProxyHop_Type) Number() protoreflect.EnumNumber {
@@ -68,7 +68,7 @@ func (x ProxyHop_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ProxyHop_Type.Descriptor instead.
 func (ProxyHop_Type) EnumDescriptor() ([]byte, []int) {
-	return file_sesame_type_proxy_proto_rawDescGZIP(), []int{1, 0}
+	return file_sesame_v1alpha1_proxy_proto_rawDescGZIP(), []int{1, 0}
 }
 
 // ProxyOptions specifies an ordered sequence of intermediate egress proxies.
@@ -82,7 +82,7 @@ type ProxyOptions struct {
 
 func (x *ProxyOptions) Reset() {
 	*x = ProxyOptions{}
-	mi := &file_sesame_type_proxy_proto_msgTypes[0]
+	mi := &file_sesame_v1alpha1_proxy_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -94,7 +94,7 @@ func (x *ProxyOptions) String() string {
 func (*ProxyOptions) ProtoMessage() {}
 
 func (x *ProxyOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_proxy_proto_msgTypes[0]
+	mi := &file_sesame_v1alpha1_proxy_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -107,7 +107,7 @@ func (x *ProxyOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxyOptions.ProtoReflect.Descriptor instead.
 func (*ProxyOptions) Descriptor() ([]byte, []int) {
-	return file_sesame_type_proxy_proto_rawDescGZIP(), []int{0}
+	return file_sesame_v1alpha1_proxy_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ProxyOptions) GetHops() []*ProxyHop {
@@ -119,7 +119,7 @@ func (x *ProxyOptions) GetHops() []*ProxyHop {
 
 type ProxyHop struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  ProxyHop_Type          `protobuf:"varint,1,opt,name=type,proto3,enum=sesame.type.ProxyHop_Type" json:"type,omitempty"`
+	Type  ProxyHop_Type          `protobuf:"varint,1,opt,name=type,proto3,enum=sesame.v1alpha1.proxy.ProxyHop_Type" json:"type,omitempty"`
 	// Address of the intermediate proxy server.
 	Address *netaddr.NetAddr `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
 	// Optional authentication credentials.
@@ -133,7 +133,7 @@ type ProxyHop struct {
 
 func (x *ProxyHop) Reset() {
 	*x = ProxyHop{}
-	mi := &file_sesame_type_proxy_proto_msgTypes[1]
+	mi := &file_sesame_v1alpha1_proxy_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -145,7 +145,7 @@ func (x *ProxyHop) String() string {
 func (*ProxyHop) ProtoMessage() {}
 
 func (x *ProxyHop) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_proxy_proto_msgTypes[1]
+	mi := &file_sesame_v1alpha1_proxy_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -158,7 +158,7 @@ func (x *ProxyHop) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxyHop.ProtoReflect.Descriptor instead.
 func (*ProxyHop) Descriptor() ([]byte, []int) {
-	return file_sesame_type_proxy_proto_rawDescGZIP(), []int{1}
+	return file_sesame_v1alpha1_proxy_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ProxyHop) GetType() ProxyHop_Type {
@@ -209,7 +209,7 @@ type ProxyResult struct {
 
 func (x *ProxyResult) Reset() {
 	*x = ProxyResult{}
-	mi := &file_sesame_type_proxy_proto_msgTypes[2]
+	mi := &file_sesame_v1alpha1_proxy_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -221,7 +221,7 @@ func (x *ProxyResult) String() string {
 func (*ProxyResult) ProtoMessage() {}
 
 func (x *ProxyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_proxy_proto_msgTypes[2]
+	mi := &file_sesame_v1alpha1_proxy_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -234,7 +234,7 @@ func (x *ProxyResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxyResult.ProtoReflect.Descriptor instead.
 func (*ProxyResult) Descriptor() ([]byte, []int) {
-	return file_sesame_type_proxy_proto_rawDescGZIP(), []int{2}
+	return file_sesame_v1alpha1_proxy_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ProxyResult) GetTraversedHops() []*netaddr.NetAddr {
@@ -251,15 +251,15 @@ func (x *ProxyResult) GetEgressAddress() *netaddr.NetAddr {
 	return nil
 }
 
-var File_sesame_type_proxy_proto protoreflect.FileDescriptor
+var File_sesame_v1alpha1_proxy_proto protoreflect.FileDescriptor
 
-const file_sesame_type_proxy_proto_rawDesc = "" +
+const file_sesame_v1alpha1_proxy_proto_rawDesc = "" +
 	"\n" +
-	"\x17sesame/type/proxy.proto\x12\vsesame.type\x1a\x19sesame/type/netaddr.proto\"9\n" +
-	"\fProxyOptions\x12)\n" +
-	"\x04hops\x18\x01 \x03(\v2\x15.sesame.type.ProxyHopR\x04hops\"\xff\x01\n" +
-	"\bProxyHop\x12.\n" +
-	"\x04type\x18\x01 \x01(\x0e2\x1a.sesame.type.ProxyHop.TypeR\x04type\x12.\n" +
+	"\x1bsesame/v1alpha1/proxy.proto\x12\x15sesame.v1alpha1.proxy\x1a\x19sesame/type/netaddr.proto\"C\n" +
+	"\fProxyOptions\x123\n" +
+	"\x04hops\x18\x01 \x03(\v2\x1f.sesame.v1alpha1.proxy.ProxyHopR\x04hops\"\x89\x02\n" +
+	"\bProxyHop\x128\n" +
+	"\x04type\x18\x01 \x01(\x0e2$.sesame.v1alpha1.proxy.ProxyHop.TypeR\x04type\x12.\n" +
 	"\aaddress\x18\x02 \x01(\v2\x14.sesame.type.NetAddrR\aaddress\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x12\x1a\n" +
 	"\bpassword\x18\x04 \x01(\tR\bpassword\x12\x1f\n" +
@@ -272,35 +272,35 @@ const file_sesame_type_proxy_proto_rawDesc = "" +
 	"\x06SOCKS5\x10\x02\"\x87\x01\n" +
 	"\vProxyResult\x12;\n" +
 	"\x0etraversed_hops\x18\x01 \x03(\v2\x14.sesame.type.NetAddrR\rtraversedHops\x12;\n" +
-	"\x0eegress_address\x18\x02 \x01(\v2\x14.sesame.type.NetAddrR\regressAddressB*Z(github.com/joeycumines/sesame/type/proxyb\x06proto3"
+	"\x0eegress_address\x18\x02 \x01(\v2\x14.sesame.type.NetAddrR\regressAddressB(Z&github.com/joeycumines/sesame/rc/proxyb\x06proto3"
 
 var (
-	file_sesame_type_proxy_proto_rawDescOnce sync.Once
-	file_sesame_type_proxy_proto_rawDescData []byte
+	file_sesame_v1alpha1_proxy_proto_rawDescOnce sync.Once
+	file_sesame_v1alpha1_proxy_proto_rawDescData []byte
 )
 
-func file_sesame_type_proxy_proto_rawDescGZIP() []byte {
-	file_sesame_type_proxy_proto_rawDescOnce.Do(func() {
-		file_sesame_type_proxy_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sesame_type_proxy_proto_rawDesc), len(file_sesame_type_proxy_proto_rawDesc)))
+func file_sesame_v1alpha1_proxy_proto_rawDescGZIP() []byte {
+	file_sesame_v1alpha1_proxy_proto_rawDescOnce.Do(func() {
+		file_sesame_v1alpha1_proxy_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sesame_v1alpha1_proxy_proto_rawDesc), len(file_sesame_v1alpha1_proxy_proto_rawDesc)))
 	})
-	return file_sesame_type_proxy_proto_rawDescData
+	return file_sesame_v1alpha1_proxy_proto_rawDescData
 }
 
-var file_sesame_type_proxy_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_sesame_type_proxy_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_sesame_type_proxy_proto_goTypes = []any{
-	(ProxyHop_Type)(0),      // 0: sesame.type.ProxyHop.Type
-	(*ProxyOptions)(nil),    // 1: sesame.type.ProxyOptions
-	(*ProxyHop)(nil),        // 2: sesame.type.ProxyHop
-	(*ProxyResult)(nil),     // 3: sesame.type.ProxyResult
+var file_sesame_v1alpha1_proxy_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_sesame_v1alpha1_proxy_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_sesame_v1alpha1_proxy_proto_goTypes = []any{
+	(ProxyHop_Type)(0),      // 0: sesame.v1alpha1.proxy.ProxyHop.Type
+	(*ProxyOptions)(nil),    // 1: sesame.v1alpha1.proxy.ProxyOptions
+	(*ProxyHop)(nil),        // 2: sesame.v1alpha1.proxy.ProxyHop
+	(*ProxyResult)(nil),     // 3: sesame.v1alpha1.proxy.ProxyResult
 	(*netaddr.NetAddr)(nil), // 4: sesame.type.NetAddr
 }
-var file_sesame_type_proxy_proto_depIdxs = []int32{
-	2, // 0: sesame.type.ProxyOptions.hops:type_name -> sesame.type.ProxyHop
-	0, // 1: sesame.type.ProxyHop.type:type_name -> sesame.type.ProxyHop.Type
-	4, // 2: sesame.type.ProxyHop.address:type_name -> sesame.type.NetAddr
-	4, // 3: sesame.type.ProxyResult.traversed_hops:type_name -> sesame.type.NetAddr
-	4, // 4: sesame.type.ProxyResult.egress_address:type_name -> sesame.type.NetAddr
+var file_sesame_v1alpha1_proxy_proto_depIdxs = []int32{
+	2, // 0: sesame.v1alpha1.proxy.ProxyOptions.hops:type_name -> sesame.v1alpha1.proxy.ProxyHop
+	0, // 1: sesame.v1alpha1.proxy.ProxyHop.type:type_name -> sesame.v1alpha1.proxy.ProxyHop.Type
+	4, // 2: sesame.v1alpha1.proxy.ProxyHop.address:type_name -> sesame.type.NetAddr
+	4, // 3: sesame.v1alpha1.proxy.ProxyResult.traversed_hops:type_name -> sesame.type.NetAddr
+	4, // 4: sesame.v1alpha1.proxy.ProxyResult.egress_address:type_name -> sesame.type.NetAddr
 	5, // [5:5] is the sub-list for method output_type
 	5, // [5:5] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
@@ -308,27 +308,27 @@ var file_sesame_type_proxy_proto_depIdxs = []int32{
 	0, // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_sesame_type_proxy_proto_init() }
-func file_sesame_type_proxy_proto_init() {
-	if File_sesame_type_proxy_proto != nil {
+func init() { file_sesame_v1alpha1_proxy_proto_init() }
+func file_sesame_v1alpha1_proxy_proto_init() {
+	if File_sesame_v1alpha1_proxy_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sesame_type_proxy_proto_rawDesc), len(file_sesame_type_proxy_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sesame_v1alpha1_proxy_proto_rawDesc), len(file_sesame_v1alpha1_proxy_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_sesame_type_proxy_proto_goTypes,
-		DependencyIndexes: file_sesame_type_proxy_proto_depIdxs,
-		EnumInfos:         file_sesame_type_proxy_proto_enumTypes,
-		MessageInfos:      file_sesame_type_proxy_proto_msgTypes,
+		GoTypes:           file_sesame_v1alpha1_proxy_proto_goTypes,
+		DependencyIndexes: file_sesame_v1alpha1_proxy_proto_depIdxs,
+		EnumInfos:         file_sesame_v1alpha1_proxy_proto_enumTypes,
+		MessageInfos:      file_sesame_v1alpha1_proxy_proto_msgTypes,
 	}.Build()
-	File_sesame_type_proxy_proto = out.File
-	file_sesame_type_proxy_proto_goTypes = nil
-	file_sesame_type_proxy_proto_depIdxs = nil
+	File_sesame_v1alpha1_proxy_proto = out.File
+	file_sesame_v1alpha1_proxy_proto_goTypes = nil
+	file_sesame_v1alpha1_proxy_proto_depIdxs = nil
 }

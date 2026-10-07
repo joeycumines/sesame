@@ -16,7 +16,7 @@ import (
 	cryptotls "crypto/tls"
 	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
-	sesametls "github.com/joeycumines/sesame/type/tls"
+	sesametls "github.com/joeycumines/sesame/rc/tls"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

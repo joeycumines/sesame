@@ -23,12 +23,12 @@ import {StatusSchema} from '../src/gen/google/rpc/status_pb';
 import {
   FingerprintPreset,
   TLSOptionsSchema,
-} from '../src/gen/sesame/type/tls_pb';
+} from '../src/gen/sesame/v1alpha1/tls_pb';
 import {
   ProxyHop_Type,
   ProxyHopSchema,
   ProxyOptionsSchema,
-} from '../src/gen/sesame/type/proxy_pb';
+} from '../src/gen/sesame/v1alpha1/proxy_pb';
 import {NetAddrSchema} from '../src/gen/sesame/type/netaddr_pb';
 import {createEndpointServer, EndpointServer} from '../src/server';
 import {parseConfig} from '../src/config';

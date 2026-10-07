@@ -10,17 +10,17 @@ import type { Status } from "../../google/rpc/status_pb";
 import { file_google_rpc_status } from "../../google/rpc/status_pb";
 import type { NetAddr } from "../type/netaddr_pb";
 import { file_sesame_type_netaddr } from "../type/netaddr_pb";
-import type { FingerprintPreset, TLSHandshakeResult, TLSOptions } from "../type/tls_pb";
-import { file_sesame_type_tls } from "../type/tls_pb";
-import type { ProxyOptions, ProxyResult } from "../type/proxy_pb";
-import { file_sesame_type_proxy } from "../type/proxy_pb";
+import type { FingerprintPreset, TLSHandshakeResult, TLSOptions } from "./tls_pb";
+import { file_sesame_v1alpha1_tls } from "./tls_pb";
+import type { ProxyOptions, ProxyResult } from "./proxy_pb";
+import { file_sesame_v1alpha1_proxy } from "./proxy_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file sesame/v1alpha1/remotecontrol.proto.
  */
 export const file_sesame_v1alpha1_remotecontrol: GenFile = /*@__PURE__*/
-  fileDesc("CiNzZXNhbWUvdjFhbHBoYTEvcmVtb3RlY29udHJvbC5wcm90bxIPc2VzYW1lLnYxYWxwaGExIoMJCg5OZXRDb25uUmVxdWVzdBI0CgRkaWFsGAEgASgLMiQuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkRpYWxIABIPCgVieXRlcxgCIAEoDEgAEjoKB2NvbnRyb2wYAyABKAsyJy5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbEgAGpQCCgREaWFsEiUKB2FkZHJlc3MYASABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEioKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24SJAoDdGxzGAMgASgLMhcuc2VzYW1lLnR5cGUuVExTT3B0aW9ucxIoCgVwcm94eRgEIAEoCzIZLnNlc2FtZS50eXBlLlByb3h5T3B0aW9ucxJCCgxjYXBhYmlsaXRpZXMYBSABKAsyLC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ2FwYWJpbGl0aWVzEiUKB29wdGlvbnMYDyADKAsyFC5nb29nbGUucHJvdG9idWYuQW55Gt4ECgdDb250cm9sEkkKC3VwZ3JhZGVfdGxzGAEgASgLMjIuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuVXBncmFkZVRMU0gAEk0KDXdpbmRvd191cGRhdGUYAiABKAsyNC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbC5XaW5kb3dVcGRhdGVIABJHCgpoYWxmX2Nsb3NlGAMgASgLMjEuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuSGFsZkNsb3NlSAASPAoEcGluZxgEIAEoCzIsLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlBpbmdIABI+CgVyZXNldBgFIAEoCzItLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlJlc2V0SAASJgoGY3VzdG9tGA8gASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueUgAGjYKClVwZ3JhZGVUTFMSKAoHb3B0aW9ucxgBIAEoCzIXLnNlc2FtZS50eXBlLlRMU09wdGlvbnMaJAoMV2luZG93VXBkYXRlEhQKDGNyZWRpdF9ieXRlcxgBIAEoDRoLCglIYWxmQ2xvc2UaKAoEUGluZxIKCgJpZBgBIAEoBBIUCgx0aW1lc3RhbXBfbnMYAiABKAMaKwoFUmVzZXQSIgoGcmVhc29uGAEgASgLMhIuZ29vZ2xlLnJwYy5TdGF0dXNCCAoGYWN0aW9uGm4KDENhcGFiaWxpdGllcxIdChVzdXBwb3J0c19mbG93X2NvbnRyb2wYASABKAgSIgoac3VwcG9ydHNfb3Bwb3J0dW5pc3RpY190bHMYAiABKAgSGwoTaW5pdGlhbF93aW5kb3dfc2l6ZRgDIAEoDUIGCgRkYXRhIsALCg9OZXRDb25uUmVzcG9uc2USNQoEY29ubhgBIAEoCzIlLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29ubkgAEg8KBWJ5dGVzGAIgASgMSAASOwoHY29udHJvbBgDIAEoCzIoLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbEgAGp4CCgRDb25uEiMKBWxvY2FsGAEgASgLMhQuc2VzYW1lLnR5cGUuTmV0QWRkchIkCgZyZW1vdGUYAiABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEiwKA3RscxgDIAEoCzIfLnNlc2FtZS50eXBlLlRMU0hhbmRzaGFrZVJlc3VsdBInCgVwcm94eRgEIAEoCzIYLnNlc2FtZS50eXBlLlByb3h5UmVzdWx0EkMKDGNhcGFiaWxpdGllcxgFIAEoCzItLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ2FwYWJpbGl0aWVzEi8KEWN1c3RvbV9hdHRyaWJ1dGVzGA8gAygLMhQuZ29vZ2xlLnByb3RvYnVmLkFueRqaBgoHQ29udHJvbBJMCgx0bHNfdXBncmFkZWQYASABKAsyNC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuVGxzVXBncmFkZWRIABJXChJ0bHNfdXBncmFkZV9mYWlsZWQYAiABKAsyOS5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuVGxzVXBncmFkZUZhaWxlZEgAEk4KDXdpbmRvd191cGRhdGUYAyABKAsyNS5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuV2luZG93VXBkYXRlSAASSAoKaGFsZl9jbG9zZRgEIAEoCzIyLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5IYWxmQ2xvc2VIABI9CgRwb25nGAUgASgLMi0uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLlBvbmdIABJDCgdtZXRyaWNzGAYgASgLMjAuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLk1ldHJpY3NIABImCgZjdXN0b20YDyABKAsyFC5nb29nbGUucHJvdG9idWYuQW55SAAaPgoLVGxzVXBncmFkZWQSLwoGcmVzdWx0GAEgASgLMh8uc2VzYW1lLnR5cGUuVExTSGFuZHNoYWtlUmVzdWx0GjUKEFRsc1VwZ3JhZGVGYWlsZWQSIQoFZXJyb3IYASABKAsyEi5nb29nbGUucnBjLlN0YXR1cxokCgxXaW5kb3dVcGRhdGUSFAoMY3JlZGl0X2J5dGVzGAEgASgNGgsKCUhhbGZDbG9zZRooCgRQb25nEgoKAmlkGAEgASgEEhQKDHRpbWVzdGFtcF9ucxgCIAEoAxpFCgdNZXRyaWNzEhIKCmJ5dGVzX3NlbnQYASABKAQSFgoOYnl0ZXNfcmVjZWl2ZWQYAiABKAQSDgoGcnR0X21zGAMgASgNQgcKBWV2ZW50GuEBCgxDYXBhYmlsaXRpZXMSHQoVc3VwcG9ydHNfZmxvd19jb250cm9sGAEgASgIEiIKGnN1cHBvcnRzX29wcG9ydHVuaXN0aWNfdGxzGAIgASgIEh4KFnN1cHBvcnRzX2ltcGVyc29uYXRpb24YAyABKAgSFgoObWF4X2NodW5rX3NpemUYBCABKA0SGwoTaW5pdGlhbF93aW5kb3dfc2l6ZRgFIAEoDRI5ChFzdXBwb3J0ZWRfcHJlc2V0cxgGIAMoDjIeLnNlc2FtZS50eXBlLkZpbmdlcnByaW50UHJlc2V0QgYKBGRhdGEyYwoNUmVtb3RlQ29udHJvbBJSCgdOZXRDb25uEh8uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0GiAuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZSIAKAEwAUIiWiBnaXRodWIuY29tL2pvZXljdW1pbmVzL3Nlc2FtZS9yY2IGcHJvdG8z", [file_google_protobuf_duration, file_google_protobuf_any, file_google_rpc_status, file_sesame_type_netaddr, file_sesame_type_tls, file_sesame_type_proxy]);
+  fileDesc("CiNzZXNhbWUvdjFhbHBoYTEvcmVtb3RlY29udHJvbC5wcm90bxIPc2VzYW1lLnYxYWxwaGExIp0JCg5OZXRDb25uUmVxdWVzdBI0CgRkaWFsGAEgASgLMiQuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkRpYWxIABIPCgVieXRlcxgCIAEoDEgAEjoKB2NvbnRyb2wYAyABKAsyJy5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbEgAGqYCCgREaWFsEiUKB2FkZHJlc3MYASABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEioKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24SLAoDdGxzGAMgASgLMh8uc2VzYW1lLnYxYWxwaGExLnRscy5UTFNPcHRpb25zEjIKBXByb3h5GAQgASgLMiMuc2VzYW1lLnYxYWxwaGExLnByb3h5LlByb3h5T3B0aW9ucxJCCgxjYXBhYmlsaXRpZXMYBSABKAsyLC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ2FwYWJpbGl0aWVzEiUKB29wdGlvbnMYDyADKAsyFC5nb29nbGUucHJvdG9idWYuQW55GuYECgdDb250cm9sEkkKC3VwZ3JhZGVfdGxzGAEgASgLMjIuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuVXBncmFkZVRMU0gAEk0KDXdpbmRvd191cGRhdGUYAiABKAsyNC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbC5XaW5kb3dVcGRhdGVIABJHCgpoYWxmX2Nsb3NlGAMgASgLMjEuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuSGFsZkNsb3NlSAASPAoEcGluZxgEIAEoCzIsLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlBpbmdIABI+CgVyZXNldBgFIAEoCzItLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlJlc2V0SAASJgoGY3VzdG9tGA8gASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueUgAGj4KClVwZ3JhZGVUTFMSMAoHb3B0aW9ucxgBIAEoCzIfLnNlc2FtZS52MWFscGhhMS50bHMuVExTT3B0aW9ucxokCgxXaW5kb3dVcGRhdGUSFAoMY3JlZGl0X2J5dGVzGAEgASgNGgsKCUhhbGZDbG9zZRooCgRQaW5nEgoKAmlkGAEgASgEEhQKDHRpbWVzdGFtcF9ucxgCIAEoAxorCgVSZXNldBIiCgZyZWFzb24YASABKAsyEi5nb29nbGUucnBjLlN0YXR1c0IICgZhY3Rpb24abgoMQ2FwYWJpbGl0aWVzEh0KFXN1cHBvcnRzX2Zsb3dfY29udHJvbBgBIAEoCBIiChpzdXBwb3J0c19vcHBvcnR1bmlzdGljX3RscxgCIAEoCBIbChNpbml0aWFsX3dpbmRvd19zaXplGAMgASgNQgYKBGRhdGEi4gsKD05ldENvbm5SZXNwb25zZRI1CgRjb25uGAEgASgLMiUuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db25uSAASDwoFYnl0ZXMYAiABKAxIABI7Cgdjb250cm9sGAMgASgLMiguc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sSAAasAIKBENvbm4SIwoFbG9jYWwYASABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEiQKBnJlbW90ZRgCIAEoCzIULnNlc2FtZS50eXBlLk5ldEFkZHISNAoDdGxzGAMgASgLMicuc2VzYW1lLnYxYWxwaGExLnRscy5UTFNIYW5kc2hha2VSZXN1bHQSMQoFcHJveHkYBCABKAsyIi5zZXNhbWUudjFhbHBoYTEucHJveHkuUHJveHlSZXN1bHQSQwoMY2FwYWJpbGl0aWVzGAUgASgLMi0uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5DYXBhYmlsaXRpZXMSLwoRY3VzdG9tX2F0dHJpYnV0ZXMYDyADKAsyFC5nb29nbGUucHJvdG9idWYuQW55GqIGCgdDb250cm9sEkwKDHRsc191cGdyYWRlZBgBIAEoCzI0LnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5UTFNVcGdyYWRlZEgAElcKEnRsc191cGdyYWRlX2ZhaWxlZBgCIAEoCzI5LnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5UTFNVcGdyYWRlRmFpbGVkSAASTgoNd2luZG93X3VwZGF0ZRgDIAEoCzI1LnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5XaW5kb3dVcGRhdGVIABJICgpoYWxmX2Nsb3NlGAQgASgLMjIuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLkhhbGZDbG9zZUgAEj0KBHBvbmcYBSABKAsyLS5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuUG9uZ0gAEkMKB21ldHJpY3MYBiABKAsyMC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuTWV0cmljc0gAEiYKBmN1c3RvbRgPIAEoCzIULmdvb2dsZS5wcm90b2J1Zi5BbnlIABpGCgtUTFNVcGdyYWRlZBI3CgZyZXN1bHQYASABKAsyJy5zZXNhbWUudjFhbHBoYTEudGxzLlRMU0hhbmRzaGFrZVJlc3VsdBo1ChBUTFNVcGdyYWRlRmFpbGVkEiEKBWVycm9yGAEgASgLMhIuZ29vZ2xlLnJwYy5TdGF0dXMaJAoMV2luZG93VXBkYXRlEhQKDGNyZWRpdF9ieXRlcxgBIAEoDRoLCglIYWxmQ2xvc2UaKAoEUG9uZxIKCgJpZBgBIAEoBBIUCgx0aW1lc3RhbXBfbnMYAiABKAMaRQoHTWV0cmljcxISCgpieXRlc19zZW50GAEgASgEEhYKDmJ5dGVzX3JlY2VpdmVkGAIgASgEEg4KBnJ0dF9tcxgDIAEoDUIHCgVldmVudBrpAQoMQ2FwYWJpbGl0aWVzEh0KFXN1cHBvcnRzX2Zsb3dfY29udHJvbBgBIAEoCBIiChpzdXBwb3J0c19vcHBvcnR1bmlzdGljX3RscxgCIAEoCBIeChZzdXBwb3J0c19pbXBlcnNvbmF0aW9uGAMgASgIEhYKDm1heF9jaHVua19zaXplGAQgASgNEhsKE2luaXRpYWxfd2luZG93X3NpemUYBSABKA0SQQoRc3VwcG9ydGVkX3ByZXNldHMYBiADKA4yJi5zZXNhbWUudjFhbHBoYTEudGxzLkZpbmdlcnByaW50UHJlc2V0QgYKBGRhdGEyYwoNUmVtb3RlQ29udHJvbBJSCgdOZXRDb25uEh8uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0GiAuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZSIAKAEwAUIiWiBnaXRodWIuY29tL2pvZXljdW1pbmVzL3Nlc2FtZS9yY2IGcHJvdG8z", [file_google_protobuf_duration, file_google_protobuf_any, file_google_rpc_status, file_sesame_type_netaddr, file_sesame_v1alpha1_tls, file_sesame_v1alpha1_proxy]);
 
 /**
  * NetConnRequest models a message sent from a RemoteControl.NetConn client to the server.
@@ -90,14 +90,14 @@ export type NetConnRequest_Dial = Message<"sesame.v1alpha1.NetConnRequest.Dial">
    * Remote TLS termination and impersonation configuration (OPTIONAL).
    * If present, Server MUST terminate TLS at the endpoint.
    *
-   * @generated from field: sesame.type.TLSOptions tls = 3;
+   * @generated from field: sesame.v1alpha1.tls.TLSOptions tls = 3;
    */
   tls?: TLSOptions | undefined;
 
   /**
    * Egress proxy chaining configuration (OPTIONAL).
    *
-   * @generated from field: sesame.type.ProxyOptions proxy = 4;
+   * @generated from field: sesame.v1alpha1.proxy.ProxyOptions proxy = 4;
    */
   proxy?: ProxyOptions | undefined;
 
@@ -195,7 +195,7 @@ export const NetConnRequest_ControlSchema: GenMessage<NetConnRequest_Control> = 
  */
 export type NetConnRequest_Control_UpgradeTLS = Message<"sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS"> & {
   /**
-   * @generated from field: sesame.type.TLSOptions options = 1;
+   * @generated from field: sesame.v1alpha1.tls.TLSOptions options = 1;
    */
   options?: TLSOptions | undefined;
 };
@@ -366,14 +366,14 @@ export type NetConnResponse_Conn = Message<"sesame.v1alpha1.NetConnResponse.Conn
   /**
    * Handshake state if TLS termination was executed during Dial.
    *
-   * @generated from field: sesame.type.TLSHandshakeResult tls = 3;
+   * @generated from field: sesame.v1alpha1.tls.TLSHandshakeResult tls = 3;
    */
   tls?: TLSHandshakeResult | undefined;
 
   /**
    * Confirmation if proxy chaining was executed during Dial.
    *
-   * @generated from field: sesame.type.ProxyResult proxy = 4;
+   * @generated from field: sesame.v1alpha1.proxy.ProxyResult proxy = 4;
    */
   proxy?: ProxyResult | undefined;
 
@@ -412,17 +412,17 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
     /**
      * Notification that an in-stream UpgradeTLS command has completed.
      *
-     * @generated from field: sesame.v1alpha1.NetConnResponse.Control.TlsUpgraded tls_upgraded = 1;
+     * @generated from field: sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded tls_upgraded = 1;
      */
-    value: NetConnResponse_Control_TlsUpgraded;
+    value: NetConnResponse_Control_TLSUpgraded;
     case: "tlsUpgraded";
   } | {
     /**
      * Notification that an in-stream UpgradeTLS command has failed.
      *
-     * @generated from field: sesame.v1alpha1.NetConnResponse.Control.TlsUpgradeFailed tls_upgrade_failed = 2;
+     * @generated from field: sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed tls_upgrade_failed = 2;
      */
-    value: NetConnResponse_Control_TlsUpgradeFailed;
+    value: NetConnResponse_Control_TLSUpgradeFailed;
     case: "tlsUpgradeFailed";
   } | {
     /**
@@ -475,26 +475,26 @@ export const NetConnResponse_ControlSchema: GenMessage<NetConnResponse_Control> 
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1);
 
 /**
- * @generated from message sesame.v1alpha1.NetConnResponse.Control.TlsUpgraded
+ * @generated from message sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded
  */
-export type NetConnResponse_Control_TlsUpgraded = Message<"sesame.v1alpha1.NetConnResponse.Control.TlsUpgraded"> & {
+export type NetConnResponse_Control_TLSUpgraded = Message<"sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded"> & {
   /**
-   * @generated from field: sesame.type.TLSHandshakeResult result = 1;
+   * @generated from field: sesame.v1alpha1.tls.TLSHandshakeResult result = 1;
    */
   result?: TLSHandshakeResult | undefined;
 };
 
 /**
- * Describes the message sesame.v1alpha1.NetConnResponse.Control.TlsUpgraded.
- * Use `create(NetConnResponse_Control_TlsUpgradedSchema)` to create a new message.
+ * Describes the message sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded.
+ * Use `create(NetConnResponse_Control_TLSUpgradedSchema)` to create a new message.
  */
-export const NetConnResponse_Control_TlsUpgradedSchema: GenMessage<NetConnResponse_Control_TlsUpgraded> = /*@__PURE__*/
+export const NetConnResponse_Control_TLSUpgradedSchema: GenMessage<NetConnResponse_Control_TLSUpgraded> = /*@__PURE__*/
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1, 0);
 
 /**
- * @generated from message sesame.v1alpha1.NetConnResponse.Control.TlsUpgradeFailed
+ * @generated from message sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed
  */
-export type NetConnResponse_Control_TlsUpgradeFailed = Message<"sesame.v1alpha1.NetConnResponse.Control.TlsUpgradeFailed"> & {
+export type NetConnResponse_Control_TLSUpgradeFailed = Message<"sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed"> & {
   /**
    * @generated from field: google.rpc.Status error = 1;
    */
@@ -502,10 +502,10 @@ export type NetConnResponse_Control_TlsUpgradeFailed = Message<"sesame.v1alpha1.
 };
 
 /**
- * Describes the message sesame.v1alpha1.NetConnResponse.Control.TlsUpgradeFailed.
- * Use `create(NetConnResponse_Control_TlsUpgradeFailedSchema)` to create a new message.
+ * Describes the message sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed.
+ * Use `create(NetConnResponse_Control_TLSUpgradeFailedSchema)` to create a new message.
  */
-export const NetConnResponse_Control_TlsUpgradeFailedSchema: GenMessage<NetConnResponse_Control_TlsUpgradeFailed> = /*@__PURE__*/
+export const NetConnResponse_Control_TLSUpgradeFailedSchema: GenMessage<NetConnResponse_Control_TLSUpgradeFailed> = /*@__PURE__*/
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1, 1);
 
 /**
@@ -617,7 +617,7 @@ export type NetConnResponse_Capabilities = Message<"sesame.v1alpha1.NetConnRespo
   initialWindowSize: number;
 
   /**
-   * @generated from field: repeated sesame.type.FingerprintPreset supported_presets = 6;
+   * @generated from field: repeated sesame.v1alpha1.tls.FingerprintPreset supported_presets = 6;
    */
   supportedPresets: FingerprintPreset[];
 };

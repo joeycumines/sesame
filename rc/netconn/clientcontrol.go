@@ -13,8 +13,8 @@ import (
 
 	"github.com/joeycumines/sesame/ionet"
 	"github.com/joeycumines/sesame/rc"
-	sesameproxy "github.com/joeycumines/sesame/type/proxy"
-	sesametls "github.com/joeycumines/sesame/type/tls"
+	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
+	sesametls "github.com/joeycumines/sesame/rc/tls"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 )

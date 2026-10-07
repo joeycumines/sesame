@@ -3,9 +3,9 @@
 
 package rc
 
+import "github.com/joeycumines/sesame/rc/proxy"
+import "github.com/joeycumines/sesame/rc/tls"
 import "github.com/joeycumines/sesame/type/netaddr"
-import "github.com/joeycumines/sesame/type/proxy"
-import "github.com/joeycumines/sesame/type/tls"
 import "google.golang.org/genproto/googleapis/rpc/status"
 import "google.golang.org/protobuf/types/known/anypb"
 import "google.golang.org/protobuf/types/known/durationpb"

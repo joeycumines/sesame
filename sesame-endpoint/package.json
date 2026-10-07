@@ -26,7 +26,7 @@
     "prepare": "bun run compile",
     "pretest": "bun run compile",
     "posttest": "bun run lint",
-    "generate": "cd ../schema && protoc -I . -I ./googleapis --plugin=protoc-gen-es=$(cd ../sesame-endpoint && bun pm bin)/protoc-gen-es --es_out=../sesame-endpoint/src/gen --es_opt=target=ts google/rpc/status.proto sesame/type/netaddr.proto sesame/type/tls.proto sesame/type/proxy.proto sesame/v1alpha1/remotecontrol.proto",
+    "generate": "cd ../schema && protoc -I . -I ./googleapis --plugin=protoc-gen-es=$(cd ../sesame-endpoint && bun pm bin)/protoc-gen-es --es_out=../sesame-endpoint/src/gen --es_opt=target=ts google/rpc/status.proto sesame/type/netaddr.proto sesame/v1alpha1/tls.proto sesame/v1alpha1/proxy.proto sesame/v1alpha1/remotecontrol.proto",
     "test": "bun test",
     "test:node": "node test/node-runner.js",
     "start": "node build/src/cli.js"

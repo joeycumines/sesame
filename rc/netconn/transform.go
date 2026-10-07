@@ -14,9 +14,9 @@ import (
 	"net/http"
 	"time"
 
+	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
+	sesametls "github.com/joeycumines/sesame/rc/tls"
 	"github.com/joeycumines/sesame/type/netaddr"
-	sesameproxy "github.com/joeycumines/sesame/type/proxy"
-	sesametls "github.com/joeycumines/sesame/type/tls"
 	xproxy "golang.org/x/net/proxy"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

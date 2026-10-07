@@ -10,10 +10,10 @@ import (
 
 	grpcstream "github.com/joeycumines/sesame/grpc"
 	"github.com/joeycumines/sesame/rc"
+	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
+	sesametls "github.com/joeycumines/sesame/rc/tls"
 	streamutil "github.com/joeycumines/sesame/stream"
 	"github.com/joeycumines/sesame/type/netaddr"
-	sesameproxy "github.com/joeycumines/sesame/type/proxy"
-	sesametls "github.com/joeycumines/sesame/type/tls"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

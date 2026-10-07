@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package sesame.type;
+package sesame.v1alpha1.tls;
 
-option go_package = "github.com/joeycumines/sesame/type/tls";
+option go_package = "github.com/joeycumines/sesame/rc/tls";
 
 // TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint emulation.
 message TLSOptions {

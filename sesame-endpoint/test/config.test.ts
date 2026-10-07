@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'bun:test';
 import {parseConfig, formatHelp} from '../src/config';
-import {FingerprintPreset} from '../src/gen/sesame/type/tls_pb';
+import {FingerprintPreset} from '../src/gen/sesame/v1alpha1/tls_pb';
 
 describe('config parser', () => {
   it('returns default configuration when no args or env are given', () => {

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/joeycumines/sesame/rc"
-	sesametls "github.com/joeycumines/sesame/type/tls"
+	sesametls "github.com/joeycumines/sesame/rc/tls"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"

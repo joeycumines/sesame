@@ -6,8 +6,8 @@ import "google/protobuf/duration.proto";
 import "google/protobuf/any.proto";
 import "google/rpc/status.proto";
 import "sesame/type/netaddr.proto";
-import "sesame/type/tls.proto";
-import "sesame/type/proxy.proto";
+import "sesame/v1alpha1/tls.proto";
+import "sesame/v1alpha1/proxy.proto";
 
 option go_package = "github.com/joeycumines/sesame/rc";
 
@@ -66,10 +66,10 @@ message NetConnRequest {
 
     // Remote TLS termination and impersonation configuration (OPTIONAL).
     // If present, Server MUST terminate TLS at the endpoint.
-    type.TLSOptions tls = 3;
+    tls.TLSOptions tls = 3;
 
     // Egress proxy chaining configuration (OPTIONAL).
-    type.ProxyOptions proxy = 4;
+    proxy.ProxyOptions proxy = 4;
 
     // Client-advertised capabilities.
     Capabilities capabilities = 5;
@@ -101,7 +101,7 @@ message NetConnRequest {
     }
 
     message UpgradeTLS {
-      type.TLSOptions options = 1;
+      tls.TLSOptions options = 1;
     }
 
     message WindowUpdate {
@@ -147,10 +147,10 @@ message NetConnResponse {
     type.NetAddr remote = 2;
 
     // Handshake state if TLS termination was executed during Dial.
-    type.TLSHandshakeResult tls = 3;
+    tls.TLSHandshakeResult tls = 3;
 
     // Confirmation if proxy chaining was executed during Dial.
-    type.ProxyResult proxy = 4;
+    proxy.ProxyResult proxy = 4;
 
     // Server-advertised capabilities.
     Capabilities capabilities = 5;
@@ -185,7 +185,7 @@ message NetConnResponse {
     }
 
     message TLSUpgraded {
-      type.TLSHandshakeResult result = 1;
+      tls.TLSHandshakeResult result = 1;
     }
 
     message TLSUpgradeFailed {
@@ -216,6 +216,6 @@ message NetConnResponse {
     bool supports_impersonation = 3;
     uint32 max_chunk_size = 4;
     uint32 initial_window_size = 5;
-    repeated type.FingerprintPreset supported_presets = 6;
+    repeated tls.FingerprintPreset supported_presets = 6;
   }
 }

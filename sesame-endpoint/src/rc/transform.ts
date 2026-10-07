@@ -8,14 +8,14 @@ import {
   TLSHandshakeResultSchema,
   TLSOptions,
   TLSVersion,
-} from '../gen/sesame/type/tls_pb';
+} from '../gen/sesame/v1alpha1/tls_pb';
 import {
   ProxyHop,
   ProxyHop_Type,
   ProxyOptions,
   ProxyResult,
   ProxyResultSchema,
-} from '../gen/sesame/type/proxy_pb';
+} from '../gen/sesame/v1alpha1/proxy_pb';
 import {NetAddr, NetAddrSchema} from '../gen/sesame/type/netaddr_pb';
 import {ServerSecrets} from '../config';
 

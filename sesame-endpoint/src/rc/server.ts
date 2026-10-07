@@ -8,8 +8,8 @@ import {
   NetConnResponse_ConnSchema,
   NetConnResponse_CapabilitiesSchema,
   NetConnResponse_ControlSchema,
-  NetConnResponse_Control_TlsUpgradedSchema,
-  NetConnResponse_Control_TlsUpgradeFailedSchema,
+  NetConnResponse_Control_TLSUpgradedSchema,
+  NetConnResponse_Control_TLSUpgradeFailedSchema,
   NetConnResponse_Control_WindowUpdateSchema,
   NetConnResponse_Control_HalfCloseSchema,
   NetConnResponse_Control_PongSchema,
@@ -18,8 +18,8 @@ import {
   FingerprintPreset,
   TLSHandshakeResult,
   TLSOptions,
-} from '../gen/sesame/type/tls_pb';
-import {ProxyResult} from '../gen/sesame/type/proxy_pb';
+} from '../gen/sesame/v1alpha1/tls_pb';
+import {ProxyResult} from '../gen/sesame/v1alpha1/proxy_pb';
 import {StatusSchema} from '../gen/google/rpc/status_pb';
 import {ServerConfig} from '../config';
 import {FlowController} from './flowcontrol';
@@ -494,7 +494,7 @@ export function createRemoteControlService(config: ServerConfig) {
                 value: create(NetConnResponse_ControlSchema, {
                   event: {
                     case: 'tlsUpgraded',
-                    value: create(NetConnResponse_Control_TlsUpgradedSchema, {
+                    value: create(NetConnResponse_Control_TLSUpgradedSchema, {
                       result,
                     }),
                   },
@@ -514,7 +514,7 @@ export function createRemoteControlService(config: ServerConfig) {
                   event: {
                     case: 'tlsUpgradeFailed',
                     value: create(
-                      NetConnResponse_Control_TlsUpgradeFailedSchema,
+                      NetConnResponse_Control_TLSUpgradeFailedSchema,
                       {
                         error: create(StatusSchema, {
                           code: errCode,

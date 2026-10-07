@@ -7,9 +7,9 @@
 package rc
 
 import (
+	proxy "github.com/joeycumines/sesame/rc/proxy"
+	tls "github.com/joeycumines/sesame/rc/tls"
 	netaddr "github.com/joeycumines/sesame/type/netaddr"
-	proxy "github.com/joeycumines/sesame/type/proxy"
-	tls "github.com/joeycumines/sesame/type/tls"
 	status "google.golang.org/genproto/googleapis/rpc/status"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -1024,7 +1024,7 @@ type NetConnResponse_Capabilities struct {
 	SupportsImpersonation    bool                    `protobuf:"varint,3,opt,name=supports_impersonation,json=supportsImpersonation,proto3" json:"supports_impersonation,omitempty"`
 	MaxChunkSize             uint32                  `protobuf:"varint,4,opt,name=max_chunk_size,json=maxChunkSize,proto3" json:"max_chunk_size,omitempty"`
 	InitialWindowSize        uint32                  `protobuf:"varint,5,opt,name=initial_window_size,json=initialWindowSize,proto3" json:"initial_window_size,omitempty"`
-	SupportedPresets         []tls.FingerprintPreset `protobuf:"varint,6,rep,packed,name=supported_presets,json=supportedPresets,proto3,enum=sesame.type.FingerprintPreset" json:"supported_presets,omitempty"`
+	SupportedPresets         []tls.FingerprintPreset `protobuf:"varint,6,rep,packed,name=supported_presets,json=supportedPresets,proto3,enum=sesame.v1alpha1.tls.FingerprintPreset" json:"supported_presets,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -1385,19 +1385,18 @@ var File_sesame_v1alpha1_remotecontrol_proto protoreflect.FileDescriptor
 
 const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\n" +
-	"#sesame/v1alpha1/remotecontrol.proto\x12\x0fsesame.v1alpha1\x1a\x1egoogle/protobuf/duration.proto\x1a\x19google/protobuf/any.proto\x1a\x17google/rpc/status.proto\x1a\x19sesame/type/netaddr.proto\x1a\x15sesame/type/tls.proto\x1a\x17sesame/type/proxy.proto\"\xfa\n" +
-	"\n" +
+	"#sesame/v1alpha1/remotecontrol.proto\x12\x0fsesame.v1alpha1\x1a\x1egoogle/protobuf/duration.proto\x1a\x19google/protobuf/any.proto\x1a\x17google/rpc/status.proto\x1a\x19sesame/type/netaddr.proto\x1a\x19sesame/v1alpha1/tls.proto\x1a\x1bsesame/v1alpha1/proxy.proto\"\x94\v\n" +
 	"\x0eNetConnRequest\x12:\n" +
 	"\x04dial\x18\x01 \x01(\v2$.sesame.v1alpha1.NetConnRequest.DialH\x00R\x04dial\x12\x16\n" +
 	"\x05bytes\x18\x02 \x01(\fH\x00R\x05bytes\x12C\n" +
-	"\acontrol\x18\x03 \x01(\v2'.sesame.v1alpha1.NetConnRequest.ControlH\x00R\acontrol\x1a\xc9\x02\n" +
+	"\acontrol\x18\x03 \x01(\v2'.sesame.v1alpha1.NetConnRequest.ControlH\x00R\acontrol\x1a\xdb\x02\n" +
 	"\x04Dial\x12.\n" +
 	"\aaddress\x18\x01 \x01(\v2\x14.sesame.type.NetAddrR\aaddress\x123\n" +
-	"\atimeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x12)\n" +
-	"\x03tls\x18\x03 \x01(\v2\x17.sesame.type.TLSOptionsR\x03tls\x12/\n" +
-	"\x05proxy\x18\x04 \x01(\v2\x19.sesame.type.ProxyOptionsR\x05proxy\x12P\n" +
+	"\atimeout\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\atimeout\x121\n" +
+	"\x03tls\x18\x03 \x01(\v2\x1f.sesame.v1alpha1.tls.TLSOptionsR\x03tls\x129\n" +
+	"\x05proxy\x18\x04 \x01(\v2#.sesame.v1alpha1.proxy.ProxyOptionsR\x05proxy\x12P\n" +
 	"\fcapabilities\x18\x05 \x01(\v2,.sesame.v1alpha1.NetConnRequest.CapabilitiesR\fcapabilities\x12.\n" +
-	"\aoptions\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\aoptions\x1a\xc7\x05\n" +
+	"\aoptions\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\aoptions\x1a\xcf\x05\n" +
 	"\aControl\x12U\n" +
 	"\vupgrade_tls\x18\x01 \x01(\v22.sesame.v1alpha1.NetConnRequest.Control.UpgradeTLSH\x00R\n" +
 	"upgradeTls\x12[\n" +
@@ -1406,10 +1405,10 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"half_close\x18\x03 \x01(\v21.sesame.v1alpha1.NetConnRequest.Control.HalfCloseH\x00R\thalfClose\x12B\n" +
 	"\x04ping\x18\x04 \x01(\v2,.sesame.v1alpha1.NetConnRequest.Control.PingH\x00R\x04ping\x12E\n" +
 	"\x05reset\x18\x05 \x01(\v2-.sesame.v1alpha1.NetConnRequest.Control.ResetH\x00R\x05reset\x12.\n" +
-	"\x06custom\x18\x0f \x01(\v2\x14.google.protobuf.AnyH\x00R\x06custom\x1a?\n" +
+	"\x06custom\x18\x0f \x01(\v2\x14.google.protobuf.AnyH\x00R\x06custom\x1aG\n" +
 	"\n" +
-	"UpgradeTLS\x121\n" +
-	"\aoptions\x18\x01 \x01(\v2\x17.sesame.type.TLSOptionsR\aoptions\x1a1\n" +
+	"UpgradeTLS\x129\n" +
+	"\aoptions\x18\x01 \x01(\v2\x1f.sesame.v1alpha1.tls.TLSOptionsR\aoptions\x1a1\n" +
 	"\fWindowUpdate\x12!\n" +
 	"\fcredit_bytes\x18\x01 \x01(\rR\vcreditBytes\x1a\v\n" +
 	"\tHalfClose\x1a9\n" +
@@ -1423,18 +1422,18 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x15supports_flow_control\x18\x01 \x01(\bR\x13supportsFlowControl\x12<\n" +
 	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x12.\n" +
 	"\x13initial_window_size\x18\x03 \x01(\rR\x11initialWindowSizeB\x06\n" +
-	"\x04data\"\xa7\x0e\n" +
+	"\x04data\"\xc9\x0e\n" +
 	"\x0fNetConnResponse\x12;\n" +
 	"\x04conn\x18\x01 \x01(\v2%.sesame.v1alpha1.NetConnResponse.ConnH\x00R\x04conn\x12\x16\n" +
 	"\x05bytes\x18\x02 \x01(\fH\x00R\x05bytes\x12D\n" +
-	"\acontrol\x18\x03 \x01(\v2(.sesame.v1alpha1.NetConnResponse.ControlH\x00R\acontrol\x1a\xd9\x02\n" +
+	"\acontrol\x18\x03 \x01(\v2(.sesame.v1alpha1.NetConnResponse.ControlH\x00R\acontrol\x1a\xeb\x02\n" +
 	"\x04Conn\x12*\n" +
 	"\x05local\x18\x01 \x01(\v2\x14.sesame.type.NetAddrR\x05local\x12,\n" +
-	"\x06remote\x18\x02 \x01(\v2\x14.sesame.type.NetAddrR\x06remote\x121\n" +
-	"\x03tls\x18\x03 \x01(\v2\x1f.sesame.type.TLSHandshakeResultR\x03tls\x12.\n" +
-	"\x05proxy\x18\x04 \x01(\v2\x18.sesame.type.ProxyResultR\x05proxy\x12Q\n" +
+	"\x06remote\x18\x02 \x01(\v2\x14.sesame.type.NetAddrR\x06remote\x129\n" +
+	"\x03tls\x18\x03 \x01(\v2'.sesame.v1alpha1.tls.TLSHandshakeResultR\x03tls\x128\n" +
+	"\x05proxy\x18\x04 \x01(\v2\".sesame.v1alpha1.proxy.ProxyResultR\x05proxy\x12Q\n" +
 	"\fcapabilities\x18\x05 \x01(\v2-.sesame.v1alpha1.NetConnResponse.CapabilitiesR\fcapabilities\x12A\n" +
-	"\x11custom_attributes\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\x10customAttributes\x1a\xb7\a\n" +
+	"\x11custom_attributes\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\x10customAttributes\x1a\xbf\a\n" +
 	"\aControl\x12Y\n" +
 	"\ftls_upgraded\x18\x01 \x01(\v24.sesame.v1alpha1.NetConnResponse.Control.TLSUpgradedH\x00R\vtlsUpgraded\x12i\n" +
 	"\x12tls_upgrade_failed\x18\x02 \x01(\v29.sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailedH\x00R\x10tlsUpgradeFailed\x12\\\n" +
@@ -1443,9 +1442,9 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"half_close\x18\x04 \x01(\v22.sesame.v1alpha1.NetConnResponse.Control.HalfCloseH\x00R\thalfClose\x12C\n" +
 	"\x04pong\x18\x05 \x01(\v2-.sesame.v1alpha1.NetConnResponse.Control.PongH\x00R\x04pong\x12L\n" +
 	"\ametrics\x18\x06 \x01(\v20.sesame.v1alpha1.NetConnResponse.Control.MetricsH\x00R\ametrics\x12.\n" +
-	"\x06custom\x18\x0f \x01(\v2\x14.google.protobuf.AnyH\x00R\x06custom\x1aF\n" +
-	"\vTLSUpgraded\x127\n" +
-	"\x06result\x18\x01 \x01(\v2\x1f.sesame.type.TLSHandshakeResultR\x06result\x1a<\n" +
+	"\x06custom\x18\x0f \x01(\v2\x14.google.protobuf.AnyH\x00R\x06custom\x1aN\n" +
+	"\vTLSUpgraded\x12?\n" +
+	"\x06result\x18\x01 \x01(\v2'.sesame.v1alpha1.tls.TLSHandshakeResultR\x06result\x1a<\n" +
 	"\x10TLSUpgradeFailed\x12(\n" +
 	"\x05error\x18\x01 \x01(\v2\x12.google.rpc.StatusR\x05error\x1a1\n" +
 	"\fWindowUpdate\x12!\n" +
@@ -1459,14 +1458,14 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"bytes_sent\x18\x01 \x01(\x04R\tbytesSent\x12%\n" +
 	"\x0ebytes_received\x18\x02 \x01(\x04R\rbytesReceived\x12\x15\n" +
 	"\x06rtt_ms\x18\x03 \x01(\rR\x05rttMsB\a\n" +
-	"\x05event\x1a\xda\x02\n" +
+	"\x05event\x1a\xe2\x02\n" +
 	"\fCapabilities\x122\n" +
 	"\x15supports_flow_control\x18\x01 \x01(\bR\x13supportsFlowControl\x12<\n" +
 	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x125\n" +
 	"\x16supports_impersonation\x18\x03 \x01(\bR\x15supportsImpersonation\x12$\n" +
 	"\x0emax_chunk_size\x18\x04 \x01(\rR\fmaxChunkSize\x12.\n" +
-	"\x13initial_window_size\x18\x05 \x01(\rR\x11initialWindowSize\x12K\n" +
-	"\x11supported_presets\x18\x06 \x03(\x0e2\x1e.sesame.type.FingerprintPresetR\x10supportedPresetsB\x06\n" +
+	"\x13initial_window_size\x18\x05 \x01(\rR\x11initialWindowSize\x12S\n" +
+	"\x11supported_presets\x18\x06 \x03(\x0e2&.sesame.v1alpha1.tls.FingerprintPresetR\x10supportedPresetsB\x06\n" +
 	"\x04data2c\n" +
 	"\rRemoteControl\x12R\n" +
 	"\aNetConn\x12\x1f.sesame.v1alpha1.NetConnRequest\x1a .sesame.v1alpha1.NetConnResponse\"\x00(\x010\x01B\"Z github.com/joeycumines/sesame/rcb\x06proto3"
@@ -1506,13 +1505,13 @@ var file_sesame_v1alpha1_remotecontrol_proto_goTypes = []any{
 	(*NetConnResponse_Control_Metrics)(nil),          // 18: sesame.v1alpha1.NetConnResponse.Control.Metrics
 	(*netaddr.NetAddr)(nil),                          // 19: sesame.type.NetAddr
 	(*durationpb.Duration)(nil),                      // 20: google.protobuf.Duration
-	(*tls.TLSOptions)(nil),                           // 21: sesame.type.TLSOptions
-	(*proxy.ProxyOptions)(nil),                       // 22: sesame.type.ProxyOptions
+	(*tls.TLSOptions)(nil),                           // 21: sesame.v1alpha1.tls.TLSOptions
+	(*proxy.ProxyOptions)(nil),                       // 22: sesame.v1alpha1.proxy.ProxyOptions
 	(*anypb.Any)(nil),                                // 23: google.protobuf.Any
 	(*status.Status)(nil),                            // 24: google.rpc.Status
-	(*tls.TLSHandshakeResult)(nil),                   // 25: sesame.type.TLSHandshakeResult
-	(*proxy.ProxyResult)(nil),                        // 26: sesame.type.ProxyResult
-	(tls.FingerprintPreset)(0),                       // 27: sesame.type.FingerprintPreset
+	(*tls.TLSHandshakeResult)(nil),                   // 25: sesame.v1alpha1.tls.TLSHandshakeResult
+	(*proxy.ProxyResult)(nil),                        // 26: sesame.v1alpha1.proxy.ProxyResult
+	(tls.FingerprintPreset)(0),                       // 27: sesame.v1alpha1.tls.FingerprintPreset
 }
 var file_sesame_v1alpha1_remotecontrol_proto_depIdxs = []int32{
 	2,  // 0: sesame.v1alpha1.NetConnRequest.dial:type_name -> sesame.v1alpha1.NetConnRequest.Dial
@@ -1521,8 +1520,8 @@ var file_sesame_v1alpha1_remotecontrol_proto_depIdxs = []int32{
 	11, // 3: sesame.v1alpha1.NetConnResponse.control:type_name -> sesame.v1alpha1.NetConnResponse.Control
 	19, // 4: sesame.v1alpha1.NetConnRequest.Dial.address:type_name -> sesame.type.NetAddr
 	20, // 5: sesame.v1alpha1.NetConnRequest.Dial.timeout:type_name -> google.protobuf.Duration
-	21, // 6: sesame.v1alpha1.NetConnRequest.Dial.tls:type_name -> sesame.type.TLSOptions
-	22, // 7: sesame.v1alpha1.NetConnRequest.Dial.proxy:type_name -> sesame.type.ProxyOptions
+	21, // 6: sesame.v1alpha1.NetConnRequest.Dial.tls:type_name -> sesame.v1alpha1.tls.TLSOptions
+	22, // 7: sesame.v1alpha1.NetConnRequest.Dial.proxy:type_name -> sesame.v1alpha1.proxy.ProxyOptions
 	4,  // 8: sesame.v1alpha1.NetConnRequest.Dial.capabilities:type_name -> sesame.v1alpha1.NetConnRequest.Capabilities
 	23, // 9: sesame.v1alpha1.NetConnRequest.Dial.options:type_name -> google.protobuf.Any
 	5,  // 10: sesame.v1alpha1.NetConnRequest.Control.upgrade_tls:type_name -> sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS
@@ -1531,12 +1530,12 @@ var file_sesame_v1alpha1_remotecontrol_proto_depIdxs = []int32{
 	8,  // 13: sesame.v1alpha1.NetConnRequest.Control.ping:type_name -> sesame.v1alpha1.NetConnRequest.Control.Ping
 	9,  // 14: sesame.v1alpha1.NetConnRequest.Control.reset:type_name -> sesame.v1alpha1.NetConnRequest.Control.Reset
 	23, // 15: sesame.v1alpha1.NetConnRequest.Control.custom:type_name -> google.protobuf.Any
-	21, // 16: sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS.options:type_name -> sesame.type.TLSOptions
+	21, // 16: sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS.options:type_name -> sesame.v1alpha1.tls.TLSOptions
 	24, // 17: sesame.v1alpha1.NetConnRequest.Control.Reset.reason:type_name -> google.rpc.Status
 	19, // 18: sesame.v1alpha1.NetConnResponse.Conn.local:type_name -> sesame.type.NetAddr
 	19, // 19: sesame.v1alpha1.NetConnResponse.Conn.remote:type_name -> sesame.type.NetAddr
-	25, // 20: sesame.v1alpha1.NetConnResponse.Conn.tls:type_name -> sesame.type.TLSHandshakeResult
-	26, // 21: sesame.v1alpha1.NetConnResponse.Conn.proxy:type_name -> sesame.type.ProxyResult
+	25, // 20: sesame.v1alpha1.NetConnResponse.Conn.tls:type_name -> sesame.v1alpha1.tls.TLSHandshakeResult
+	26, // 21: sesame.v1alpha1.NetConnResponse.Conn.proxy:type_name -> sesame.v1alpha1.proxy.ProxyResult
 	12, // 22: sesame.v1alpha1.NetConnResponse.Conn.capabilities:type_name -> sesame.v1alpha1.NetConnResponse.Capabilities
 	23, // 23: sesame.v1alpha1.NetConnResponse.Conn.custom_attributes:type_name -> google.protobuf.Any
 	13, // 24: sesame.v1alpha1.NetConnResponse.Control.tls_upgraded:type_name -> sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded
@@ -1546,8 +1545,8 @@ var file_sesame_v1alpha1_remotecontrol_proto_depIdxs = []int32{
 	17, // 28: sesame.v1alpha1.NetConnResponse.Control.pong:type_name -> sesame.v1alpha1.NetConnResponse.Control.Pong
 	18, // 29: sesame.v1alpha1.NetConnResponse.Control.metrics:type_name -> sesame.v1alpha1.NetConnResponse.Control.Metrics
 	23, // 30: sesame.v1alpha1.NetConnResponse.Control.custom:type_name -> google.protobuf.Any
-	27, // 31: sesame.v1alpha1.NetConnResponse.Capabilities.supported_presets:type_name -> sesame.type.FingerprintPreset
-	25, // 32: sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded.result:type_name -> sesame.type.TLSHandshakeResult
+	27, // 31: sesame.v1alpha1.NetConnResponse.Capabilities.supported_presets:type_name -> sesame.v1alpha1.tls.FingerprintPreset
+	25, // 32: sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded.result:type_name -> sesame.v1alpha1.tls.TLSHandshakeResult
 	24, // 33: sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed.error:type_name -> google.rpc.Status
 	0,  // 34: sesame.v1alpha1.RemoteControl.NetConn:input_type -> sesame.v1alpha1.NetConnRequest
 	1,  // 35: sesame.v1alpha1.RemoteControl.NetConn:output_type -> sesame.v1alpha1.NetConnResponse
