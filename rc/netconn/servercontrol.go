@@ -461,6 +461,14 @@ func RunServerDemux(
 						errCh <- grpcstatus.Error(codes.InvalidArgument, "sesame/rc/netconn: upgrade_tls requires options")
 						return
 					}
+					// An operator-disabled opportunistic-TLS flag is
+					// enforced, not advisory: reject before the pause
+					// handshake so a validation failure cannot disturb
+					// the paused reader.
+					if !s.serverCaps.GetSupportsOpportunisticTls() {
+						errCh <- grpcstatus.Error(codes.FailedPrecondition, "sesame/rc/netconn: opportunistic TLS is disabled by server policy")
+						return
+					}
 					upgradeErr := s.handleUpgradeTLS(ctx, action.UpgradeTls.GetOptions())
 					if upgradeErr != nil {
 						errCh <- upgradeErr

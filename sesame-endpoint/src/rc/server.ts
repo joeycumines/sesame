@@ -624,6 +624,16 @@ export function createRemoteControlService(config: ServerConfig) {
                 // risk is narrow — an upgrade racing an exhausted outbound
                 // window can still mutually wait — and fixing it needs an
                 // interruptible credit wait on both stacks, not a park.
+                //
+                // An operator-disabled opportunistic-TLS flag is enforced,
+                // not advisory: reject before handleUpgradeTLS pauses the
+                // socket or mutates any state.
+                if (!config.enableOpportunisticTls) {
+                  throw new ConnectError(
+                    'sesame/rc/netconn: opportunistic TLS is disabled by server policy',
+                    Code.FailedPrecondition,
+                  );
+                }
                 await handleUpgradeTLS(ctl.action.value.options);
               } else if (ctl.action.case === 'windowUpdate') {
                 outboundFC?.addCredit(ctl.action.value.creditBytes);

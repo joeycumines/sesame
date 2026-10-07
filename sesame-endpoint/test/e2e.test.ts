@@ -1000,6 +1000,108 @@ describe('sesame-endpoint E2E Suite', () => {
     }
   });
 
+  it('rejects in-stream TLS upgrade when opportunistic TLS is disabled', async () => {
+    // A server started with enableOpportunisticTls=false still advertises
+    // the flag honestly, but a buggy or malicious client may send
+    // upgrade_tls anyway. The server must reject with FailedPrecondition
+    // before any handshake or socket mutation - the flag is enforced,
+    // not advisory.
+    const echoServer = net.createServer(rawSocket => {
+      rawSocket.pipe(rawSocket);
+    });
+    await new Promise<void>(r => echoServer.listen(0, '127.0.0.1', () => r()));
+    const echoPort = (echoServer.address() as net.AddressInfo).port;
+
+    const {config: strictConfig} = parseConfig([
+      '--enable-opportunistic-tls=false',
+    ]);
+    const strictServer = createEndpointServer(strictConfig!);
+    const bound = await strictServer.listen(0, '127.0.0.1');
+    const strictTransport = createGrpcTransport({
+      baseUrl: `http://127.0.0.1:${bound.port}`,
+    });
+    const strictClient = createClient(RemoteControl, strictTransport);
+
+    try {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: `127.0.0.1:${echoPort}`,
+              }),
+              capabilities: create(NetConnRequest_CapabilitiesSchema, {
+                supportsOpportunisticTls: true,
+                supportsFlowControl: true,
+              }),
+            }),
+          },
+        }),
+      );
+
+      const respStream = strictClient.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+      expect(
+        first.value.data.value.capabilities?.supportsOpportunisticTls,
+      ).toBe(false);
+
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'control',
+            value: create(NetConnRequest_ControlSchema, {
+              action: {
+                case: 'upgradeTls',
+                value: create(NetConnRequest_Control_UpgradeTLSSchema, {
+                  options: create(TLSOptionsSchema, {
+                    serverName: 'localhost',
+                    insecureSkipVerify: true,
+                  }),
+                }),
+              },
+            }),
+          },
+        }),
+      );
+
+      let sawFailedPrecondition = false;
+      try {
+        while (true) {
+          const resp = await iterator.next();
+          if (resp.done) break;
+          if (resp.value.data.case === 'control') {
+            const evt = resp.value.data.value.event;
+            if (evt.case === 'tlsUpgraded') {
+              throw new Error(
+                'server emitted tlsUpgraded for a policy-disabled upgrade',
+              );
+            }
+          }
+        }
+      } catch (err: unknown) {
+        if (
+          err instanceof ConnectError &&
+          err.code === Code.FailedPrecondition
+        ) {
+          sawFailedPrecondition = true;
+        } else {
+          throw err;
+        }
+      }
+      expect(sawFailedPrecondition).toBe(true);
+      reqStream.close();
+    } finally {
+      await strictServer.close();
+      await new Promise<void>(r => echoServer.close(() => r()));
+    }
+  });
+
   it('fails closed when in-stream TLS upgrade encounters handshake failure', async () => {
     // Non-TLS server that sends garbage or immediately closes when TLS handshake begins
     const nonTlsServer = net.createServer(rawSocket => {

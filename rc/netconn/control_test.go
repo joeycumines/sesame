@@ -846,6 +846,97 @@ func TestClientServer_InStream_UpgradeTLS_NilOptions_ServerRejects(t *testing.T)
 	}
 }
 
+func TestClientServer_InStream_UpgradeTLS_DisabledByServerPolicy(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, _ := net.Pipe()
+	defer clientPipe.Close()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+		Capabilities: &rc.NetConnResponse_Capabilities{
+			SupportsFlowControl:      true,
+			SupportsOpportunisticTls: false,
+			MaxChunkSize:             4096,
+			InitialWindowSize:        1 << 20,
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Hand-crafted stream: the upgrade carries valid options, but the
+	// server advertised SupportsOpportunisticTls=false, so the server
+	// must reject with FailedPrecondition before any handshake or
+	// socket mutation.
+	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	if err != nil {
+		t.Fatalf("failed opening NetConn stream: %v", err)
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Dial_{
+			Dial: &rc.NetConnRequest_Dial{
+				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &rc.NetConnRequest_Capabilities{
+					SupportsOpportunisticTls: true,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending dial: %v", err)
+	}
+
+	res, err := stream.Recv()
+	if err != nil {
+		t.Fatalf("failed receiving conn response: %v", err)
+	}
+	if res.GetConn() == nil {
+		t.Fatalf("expected conn response, got %T", res.GetData())
+	}
+	if res.GetConn().GetCapabilities().GetSupportsOpportunisticTls() {
+		t.Fatalf("expected server caps to disable opportunistic TLS")
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Control_{
+			Control: &rc.NetConnRequest_Control{
+				Action: &rc.NetConnRequest_Control_UpgradeTls{
+					UpgradeTls: &rc.NetConnRequest_Control_UpgradeTLS{
+						Options: &sesametls.TLSOptions{
+							ServerName: "example.com",
+						},
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending upgrade_tls: %v", err)
+	}
+
+	// The stream must terminate with FailedPrecondition (the terminal
+	// Recv surfaces the server error).
+	for {
+		_, err = stream.Recv()
+		if err != nil {
+			break
+		}
+	}
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("expected FailedPrecondition stream termination, got %v", err)
+	}
+}
+
 func TestClientServer_InStream_UpgradeTLS_Failure(t *testing.T) {
 	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
 	if ccFactory == nil {
