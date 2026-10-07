@@ -500,17 +500,20 @@ function httpConnectHandshake(
           return;
         }
 
-        // Unshift any remaining data back to socket
+        // Any bytes coalesced after the headers are legitimate early
+        // tunnel payload (fast proxies pipeline the first upstream flight
+        // in the same TCP segment). Push them back so the tunnel reads
+        // them first, mirroring the SOCKS5 path and the Go reference
+        // (bufferedPrefixConn). Pause first: unshifted bytes are only
+        // re-emitted to a later 'data' listener if the stream is paused
+        // when the listener attaches, so an unpaused socket would drop
+        // them silently. The server pauses the socket before its first
+        // read (see server.ts onData), matching the SOCKS5 path which
+        // works because its handshake leaves the socket paused.
         const extra = buffer.subarray(headerEnd + 4);
         if (extra.length > 0) {
-          socket.destroy();
-          reject(
-            new ConnectError(
-              `sesame/rc/netconn: HTTP CONNECT to ${target} returned unexpected bytes after headers`,
-              Code.Unavailable,
-            ),
-          );
-          return;
+          socket.pause();
+          socket.unshift(extra);
         }
 
         resolve(socket);

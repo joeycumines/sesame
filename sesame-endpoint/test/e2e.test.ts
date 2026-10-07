@@ -506,6 +506,77 @@ describe('sesame-endpoint E2E Suite', () => {
     }
   });
 
+  it('preserves early tunnel bytes coalesced with the 200 CONNECT headers', async () => {
+    // A fast proxy may pipeline the first upstream flight in the same TCP
+    // segment as the 200 headers. Those bytes are tunnel payload, not a
+    // framed body, and must round-trip intact (mirrors Go bufferedPrefixConn).
+    const earlyPayload = Buffer.from('EARLY-TUNNEL-BYTES');
+    const coalescingProxy = net.createServer(sock => {
+      let seen = Buffer.alloc(0);
+      sock.on('data', chunk => {
+        seen = Buffer.concat([seen, chunk]);
+        if (seen.indexOf('\r\n\r\n') !== -1) {
+          sock.write(
+            Buffer.concat([
+              Buffer.from('HTTP/1.1 200 Connection Established\r\n\r\n'),
+              earlyPayload,
+            ]),
+          );
+        }
+      });
+    });
+    await new Promise<void>(r =>
+      coalescingProxy.listen(0, '127.0.0.1', () => r()),
+    );
+    const coalescingPort = (coalescingProxy.address() as net.AddressInfo).port;
+
+    try {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: `127.0.0.1:${tcpEchoPort}`,
+              }),
+              proxy: create(ProxyOptionsSchema, {
+                hops: [
+                  create(ProxyHopSchema, {
+                    type: ProxyHop_Type.HTTP_CONNECT,
+                    address: create(NetAddrSchema, {
+                      network: 'tcp',
+                      address: `127.0.0.1:${coalescingPort}`,
+                    }),
+                  }),
+                ],
+              }),
+            }),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      const first = await iterator.next();
+      expect(first.done).toBe(false);
+      expect(first.value.data.case).toBe('conn');
+
+      const second = await iterator.next();
+      expect(second.done).toBe(false);
+      expect(second.value.data.case).toBe('bytes');
+      expect(Buffer.from(second.value.data.value as Uint8Array)).toEqual(
+        earlyPayload,
+      );
+
+      reqStream.close();
+    } finally {
+      await new Promise<void>(r => coalescingProxy.close(() => r()));
+    }
+  });
+
   it('executes in-stream STARTTLS upgrade and exchanges encrypted data', async () => {
     // Upstream server: begins cleartext, awaits STARTTLS\n, upgrades to TLS, echoes
     const starttlsServer = net.createServer(rawSocket => {

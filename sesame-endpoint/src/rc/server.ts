@@ -460,6 +460,12 @@ export function createRemoteControlService(config: ServerConfig) {
       };
 
       attachListeners(activeSocket);
+      // The socket may arrive paused (a proxy handshake that unshifted
+      // coalesced early tunnel bytes pauses before pushing them back, so
+      // they are re-emitted to this later 'data' listener). Resume so the
+      // first flight is delivered; onData re-pauses per chunk for
+      // backpressure, and upgrade paths pause explicitly.
+      activeSocket.resume();
 
       // In-stream TLS Upgrade handler
       const handleUpgradeTLS = async (opts?: TLSOptions) => {
