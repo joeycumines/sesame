@@ -53,13 +53,13 @@ check: all test-ts test-integration
 all: lint build test
 
 .PHONY: clean
-clean:
+clean: sesame-endpoint.clean
 
 .PHONY: lint
-lint: vet staticcheck
+lint: vet staticcheck sesame-endpoint.lint
 
 .PHONY: build
-build:
+build: sesame-endpoint.build
 	$(GO) build $(GO_FLAGS) $(GO_PACKAGES)
 
 .PHONY: test
@@ -76,22 +76,61 @@ test-race: build
 .PHONY: test-integration
 test-integration: test-integration-cover test-integration-race
 
-.PHONY: test-ts
-test-ts: build-ts test-ts-bun test-ts-node
-
-.PHONY: build-ts
-build-ts:
+# sesame-endpoint (TypeScript) targets, aligned with sesame-endpoint/package.json scripts.
+# Canonical targets use the `sesame-endpoint.` prefix; the legacy `*-ts`
+# names below are thin backwards-compat aliases.
+.PHONY: sesame-endpoint.build
+sesame-endpoint.build:
 	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run compile
 
-.PHONY: test-ts-bun
-test-ts-bun:
+.PHONY: sesame-endpoint.lint
+sesame-endpoint.lint:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run lint
+
+.PHONY: sesame-endpoint.fix
+sesame-endpoint.fix:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run fix
+
+.PHONY: sesame-endpoint.clean
+sesame-endpoint.clean:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run clean
+
+.PHONY: sesame-endpoint.generate
+sesame-endpoint.generate:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run generate
+
+.PHONY: sesame-endpoint.test
+sesame-endpoint.test: sesame-endpoint.test-bun sesame-endpoint.test-node
+
+.PHONY: sesame-endpoint.test-bun
+sesame-endpoint.test-bun: sesame-endpoint.build
 	cd $(SESAME_ENDPOINT_DIR) && $(BUN) test
 
 # The runner loads build/src/index.js, so it must build first even when
-# invoked directly rather than through test-ts.
-.PHONY: test-ts-node
-test-ts-node: build-ts
+# invoked directly rather than through sesame-endpoint.test.
+.PHONY: sesame-endpoint.test-node
+sesame-endpoint.test-node: sesame-endpoint.build
 	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run test:node
+
+.PHONY: sesame-endpoint.install
+sesame-endpoint.install:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) install
+
+.PHONY: sesame-endpoint.update
+sesame-endpoint.update:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) update
+
+.PHONY: test-ts
+test-ts: sesame-endpoint.test
+
+.PHONY: build-ts
+build-ts: sesame-endpoint.build
+
+.PHONY: test-ts-bun
+test-ts-bun: sesame-endpoint.test-bun
+
+.PHONY: test-ts-node
+test-ts-node: sesame-endpoint.test-node
 
 .PHONY: test-integration-cover
 test-integration-cover: build
@@ -110,22 +149,26 @@ staticcheck:
 	$(STATICCHECK) $(STATICCHECK_FLAGS) $(GO_PACKAGES)
 
 .PHONY: fmt
-fmt:
+fmt: sesame-endpoint.fix
 	$(GO) fmt $(GO_PACKAGES)
 
+.PHONY: fix
+fix: fmt
+	$(GO) fix $(GO_FLAGS) $(GO_PACKAGES)
+
 .PHONY: update
-update:
+update: sesame-endpoint.update
 	$(GO) get -u -t ./...
 	@$(LOOP_START) $(GO) get -u $(LOOP_VAR)$(LOOP_END)
 	$(GO) mod tidy
 
 .PHONY: tools
-tools:
+tools: sesame-endpoint.install
 	@$(LOOP_START) $(GO) install $(LOOP_VAR)$(LOOP_END)
 
 # this won't work on all systems
 .PHONY: generate
-generate:
+generate: sesame-endpoint.generate
 	hack/generate.sh
 
 .PHONY: ci
