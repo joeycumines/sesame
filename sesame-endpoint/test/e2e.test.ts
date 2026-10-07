@@ -222,6 +222,45 @@ describe('sesame-endpoint E2E Suite', () => {
     reqStream.close();
   });
 
+  it('fails closed on cipher_suites instead of silently using defaults', async () => {
+    // cipher_suites overrides preset defaults per the schema, but the
+    // standard runtime has no verified IANA-ID to OpenSSL-name map.
+    // Negotiating with defaults while reporting success would be a
+    // silent security-policy downgrade, so the request must be rejected.
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${tlsEchoPort}`,
+            }),
+            tls: create(TLSOptionsSchema, {
+              serverName: 'localhost',
+              insecureSkipVerify: true,
+              cipherSuites: [0x1301],
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+    try {
+      await iterator.next();
+      expect.unreachable('should have rejected cipher_suites');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(ConnectError);
+      expect((err as ConnectError).code).toBe(Code.FailedPrecondition);
+      expect((err as ConnectError).message).toContain('cipher_suites');
+    } finally {
+      reqStream.close();
+    }
+  });
+
   it('terminates endpoint TLS with ALPN negotiation', async () => {
     const reqStream = new RequestStream();
 

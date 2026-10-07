@@ -153,6 +153,18 @@ export async function executeTLSHandshake(
     );
   }
 
+  // Explicit cipher suite restriction cannot be honored by the standard
+  // runtime (Node/Bun tls.connect takes OpenSSL names, not IANA IDs, and
+  // no verified ID-to-name map exists here). Fail closed rather than
+  // negotiating with defaults while reporting success: a client asking
+  // for a restricted suite set must never silently get runtime defaults.
+  if (opts.cipherSuites && opts.cipherSuites.length > 0) {
+    throw new ConnectError(
+      'sesame/rc/netconn: cipher_suites restriction is not supported by standard runtime; custom TLSProvider required',
+      Code.FailedPrecondition,
+    );
+  }
+
   let serverName = opts.serverName || defaultServerName;
   // A bare IPv6 literal is already a valid SNI value; only strip a port when
   // the value is a bracketed literal or a name:port pair.

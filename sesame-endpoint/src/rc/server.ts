@@ -174,7 +174,7 @@ export function createRemoteControlService(config: ServerConfig) {
         );
       }
 
-      // Check fingerprint preset upfront
+      // Check fingerprint preset and cipher suite restriction upfront
       if (dialReq.tls) {
         const preset = dialReq.tls.fingerprintPreset;
         if (
@@ -184,6 +184,12 @@ export function createRemoteControlService(config: ServerConfig) {
         ) {
           throw new ConnectError(
             `sesame/rc/netconn: requested fingerprint preset ${preset} is not supported by standard runtime; custom TLSProvider required`,
+            Code.FailedPrecondition,
+          );
+        }
+        if (dialReq.tls.cipherSuites && dialReq.tls.cipherSuites.length > 0) {
+          throw new ConnectError(
+            'sesame/rc/netconn: cipher_suites restriction is not supported by standard runtime; custom TLSProvider required',
             Code.FailedPrecondition,
           );
         }
