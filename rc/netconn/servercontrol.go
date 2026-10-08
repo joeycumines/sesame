@@ -489,14 +489,15 @@ func RunServerDemux(
 					}
 
 				case *rc.NetConnRequest_Control_WindowUpdate_:
+					// Negative credit is a protocol violation, not an
+					// unknown message: fail closed regardless of whether
+					// flow control is active, per the schema's
+					// unconditional rule and the TS endpoint.
+					if action.WindowUpdate.GetCreditBytes() < 0 {
+						errCh <- grpcstatus.Error(codes.InvalidArgument, "sesame/rc/netconn: negative window_update credit_bytes")
+						return
+					}
 					if s.outboundFC != nil {
-						// Negative credit is a protocol violation, not an
-						// unknown message: fail closed rather than letting a
-						// malformed peer silently shrink the window.
-						if action.WindowUpdate.GetCreditBytes() < 0 {
-							errCh <- grpcstatus.Error(codes.InvalidArgument, "sesame/rc/netconn: negative window_update credit_bytes")
-							return
-						}
 						s.outboundFC.AddCredit(action.WindowUpdate.GetCreditBytes())
 					}
 

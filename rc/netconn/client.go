@@ -118,6 +118,15 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 		}
 	}
 
+	// Negative server-advertised window/chunk values are protocol
+	// violations: fail the dial rather than clamping them into a zero
+	// window that would stall writes indefinitely.
+	if caps := conn.res.GetCapabilities(); caps != nil {
+		if caps.GetInitialWindowSize() < 0 || caps.GetMaxChunkSize() < 0 {
+			return nil, fmt.Errorf("sesame/rc/netconn: protocol violation: negative capability value in conn response")
+		}
+	}
+
 	if x.Proxy != nil && len(x.Proxy.GetHops()) > 0 {
 		if conn.res.GetProxy() == nil {
 			return nil, fmt.Errorf("sesame/rc/netconn: security violation: server returned unproxied connection when proxy was requested")

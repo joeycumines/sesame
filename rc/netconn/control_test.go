@@ -2010,3 +2010,200 @@ func TestClientControl_NegativeWindowUpdate_Poisons(t *testing.T) {
 		t.Fatal("expected write on poisoned connection to fail")
 	}
 }
+
+// TestClientServer_WindowUpdate_NegativeCredit_FlowControlOff verifies the
+// negative credit rule is unconditional: it applies even when flow control
+// was not negotiated, so a malformed peer cannot slip a violation past a
+// nil controller. This defends the cross-stack parity with the TS
+// endpoint, which rejects regardless of FC state.
+func TestClientServer_WindowUpdate_NegativeCredit_FlowControlOff(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, _ := net.Pipe()
+	defer clientPipe.Close()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	if err != nil {
+		t.Fatalf("failed opening NetConn stream: %v", err)
+	}
+
+	// Capabilities present (consent to control) but flow control NOT
+	// advertised: the server's outbound controller is nil on this path.
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Dial_{
+			Dial: &rc.NetConnRequest_Dial{
+				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &rc.NetConnRequest_Capabilities{
+					SupportsOpportunisticTls: true,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending dial: %v", err)
+	}
+
+	if res, err := stream.Recv(); err != nil || res.GetConn() == nil {
+		t.Fatalf("expected conn response, got (%v, %T)", err, res.GetData())
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Control_{
+			Control: &rc.NetConnRequest_Control{
+				Action: &rc.NetConnRequest_Control_WindowUpdate_{
+					WindowUpdate: &rc.NetConnRequest_Control_WindowUpdate{
+						CreditBytes: -1,
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending negative window update: %v", err)
+	}
+
+	for {
+		_, err = stream.Recv()
+		if err != nil {
+			break
+		}
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument stream termination, got %v", err)
+	}
+}
+
+// TestClientControl_NegativeWindowUpdate_FlowControlOff_Poisons verifies
+// the client half of the unconditional rule: a server sending negative
+// credit when flow control was never negotiated must still tear the
+// connection down, not silently continue.
+func TestClientControl_NegativeWindowUpdate_FlowControlOff_Poisons(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stream := &maliciousServerStream{
+		responses: []*rc.NetConnResponse{
+			{Data: &rc.NetConnResponse_Conn_{
+				Conn: &rc.NetConnResponse_Conn{
+					Local:  &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+					Remote: &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:2"},
+					Capabilities: &rc.NetConnResponse_Capabilities{
+						SupportsFlowControl: false,
+					},
+				},
+			}},
+			{Data: &rc.NetConnResponse_Control_{
+				Control: &rc.NetConnResponse_Control{
+					Event: &rc.NetConnResponse_Control_WindowUpdate_{
+						WindowUpdate: &rc.NetConnResponse_Control_WindowUpdate{
+							CreditBytes: -1,
+						},
+					},
+				},
+			}},
+		},
+	}
+
+	client := netconn.Client{
+		API: &maliciousServerAPI{stream: stream},
+		// No supports_flow_control: the outbound controller is nil, so
+		// only the unconditional check can catch the violation.
+		Capabilities: &rc.NetConnRequest_Capabilities{
+			SupportsOpportunisticTls: true,
+		},
+	}
+
+	conn, err := client.DialContext(ctx, "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	defer conn.Close()
+
+	readErr := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 16)
+		_, err := conn.Read(buf)
+		readErr <- err
+	}()
+
+	select {
+	case err := <-readErr:
+		if err == nil {
+			t.Fatal("expected poisoned read to fail")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for poisoned read to fail")
+	}
+
+	if _, err := conn.Write([]byte("x")); err == nil {
+		t.Fatal("expected write on poisoned connection to fail")
+	}
+}
+
+// TestClientControl_NegativeServerCapabilities_FailDial verifies the client
+// rejects a server advertising negative window/chunk capabilities at the
+// dial boundary, rather than clamping them into a zero window that would
+// stall writes indefinitely.
+func TestClientControl_NegativeServerCapabilities_FailDial(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		caps *rc.NetConnResponse_Capabilities
+	}{
+		{
+			name: "negative initial window",
+			caps: &rc.NetConnResponse_Capabilities{InitialWindowSize: -65535},
+		},
+		{
+			name: "negative max chunk",
+			caps: &rc.NetConnResponse_Capabilities{MaxChunkSize: -1024},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			stream := &maliciousServerStream{
+				responses: []*rc.NetConnResponse{
+					{Data: &rc.NetConnResponse_Conn_{
+						Conn: &rc.NetConnResponse_Conn{
+							Local:        &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+							Remote:       &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:2"},
+							Capabilities: tc.caps,
+						},
+					}},
+				},
+			}
+
+			client := netconn.Client{
+				API: &maliciousServerAPI{stream: stream},
+				Capabilities: &rc.NetConnRequest_Capabilities{
+					SupportsFlowControl: true,
+				},
+			}
+
+			conn, err := client.DialContext(ctx, "tcp", "example.com:80")
+			if err == nil {
+				conn.Close()
+				t.Fatal("expected dial to fail on negative server capabilities")
+			}
+			if !strings.Contains(err.Error(), "negative capability value") {
+				t.Fatalf("expected negative capability error, got %v", err)
+			}
+		})
+	}
+}

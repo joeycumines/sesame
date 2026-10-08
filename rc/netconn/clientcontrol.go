@@ -280,14 +280,15 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 				_ = c.demuxLocalW.Close()
 
 			case *rc.NetConnResponse_Control_WindowUpdate_:
+				// Negative credit is a protocol violation, not an unknown
+				// message: fail closed regardless of whether flow control
+				// is active, per the schema's unconditional rule and
+				// matching the server-side handling.
+				if event.WindowUpdate.GetCreditBytes() < 0 {
+					c.poison(grpcstatus.Error(codes.InvalidArgument, "sesame/rc/netconn: negative window_update credit_bytes"))
+					return
+				}
 				if c.outboundFC != nil {
-					// Negative credit is a protocol violation, not an
-					// unknown message: fail closed rather than letting a
-					// malformed server silently shrink the window.
-					if event.WindowUpdate.GetCreditBytes() < 0 {
-						c.poison(grpcstatus.Error(codes.InvalidArgument, "sesame/rc/netconn: negative window_update credit_bytes"))
-						return
-					}
 					c.outboundFC.AddCredit(event.WindowUpdate.GetCreditBytes())
 				}
 			}

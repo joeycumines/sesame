@@ -1489,6 +1489,77 @@ describe('sesame-endpoint E2E Suite', () => {
     }
   });
 
+  it('rejects a negative window_update even when flow control is off', async () => {
+    // The negative-credit rule is unconditional: it must hold even when
+    // flow control was never negotiated, so a malformed peer cannot slip
+    // a violation past an inactive controller.
+    const echoServer = net.createServer(rawSocket => {
+      rawSocket.pipe(rawSocket);
+    });
+    await new Promise<void>(r => echoServer.listen(0, '127.0.0.1', () => r()));
+    const echoPort = (echoServer.address() as net.AddressInfo).port;
+
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${echoPort}`,
+            }),
+            capabilities: create(NetConnRequest_CapabilitiesSchema, {
+              supportsOpportunisticTls: true,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    try {
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'control',
+            value: create(NetConnRequest_ControlSchema, {
+              action: {
+                case: 'windowUpdate',
+                value: create(NetConnRequest_Control_WindowUpdateSchema, {
+                  creditBytes: -1,
+                }),
+              },
+            }),
+          },
+        }),
+      );
+
+      let termErr: unknown;
+      try {
+        while (true) {
+          const resp = await iterator.next();
+          if (resp.done) break;
+        }
+      } catch (err: unknown) {
+        termErr = err;
+      }
+      expect(termErr).toBeInstanceOf(ConnectError);
+      expect((termErr as ConnectError).code).toBe(Code.InvalidArgument);
+      expect((termErr as ConnectError).message).toContain(
+        'negative window_update credit_bytes',
+      );
+    } finally {
+      reqStream.close();
+      await new Promise<void>(r => echoServer.close(() => r()));
+    }
+  });
+
   it('rejects negative capability values at dial with InvalidArgument', async () => {
     for (const caps of [
       {supportsFlowControl: true, initialWindowSize: -1, maxChunkSize: 0},
