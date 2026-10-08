@@ -77,6 +77,25 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 
 	dialReq := msg.GetDial()
 
+	// Validate advertised capabilities at the API boundary: negative
+	// window/chunk values are malformed input, and rejecting them before
+	// any dialing or stream output keeps the failure cheap and precise.
+	if caps := dialReq.GetCapabilities(); caps != nil {
+		if caps.GetInitialWindowSize() < 0 || caps.GetMaxChunkSize() < 0 {
+			return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: negative capability value in dial request")
+		}
+	}
+
+	// Validate the TLS version range at the API boundary, before any
+	// dialing: a floor above its ceiling can never negotiate, and input
+	// validation must precede side effects. ExecuteTLSHandshake re-checks
+	// (covering the in-stream upgrade path and direct callers).
+	if tlsOpts := dialReq.GetTls(); tlsOpts != nil {
+		if minV, maxV := tlsOpts.GetMinVersion(), tlsOpts.GetMaxVersion(); minV != 0 && maxV != 0 && minV > maxV {
+			return status.Error(codes.InvalidArgument, "sesame/rc/netconn: min_version exceeds max_version")
+		}
+	}
+
 	// dialer factory handles timeout etc
 	dialer, err := x.dial(dialReq)
 	if err != nil {

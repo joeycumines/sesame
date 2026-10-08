@@ -121,14 +121,21 @@ func BuildTLSConfig(opts *sesametls.TLSOptions, defaultServerName string) (*cryp
 	if len(opts.GetCipherSuites()) > 0 {
 		cfg.CipherSuites = make([]uint16, len(opts.GetCipherSuites()))
 		for i, cs := range opts.GetCipherSuites() {
-			// cipher_suites is repeated uint32 on the wire; a value
-			// that does not fit uint16 must be rejected, not silently
+			// cipher_suites carries IANA identifiers: a negative value or
+			// one that does not fit uint16 must be rejected, not silently
 			// truncated to an unintended suite.
-			if cs > math.MaxUint16 {
+			if cs < 0 || cs > math.MaxUint16 {
 				return nil, status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: invalid cipher suite: %d", cs)
 			}
 			cfg.CipherSuites[i] = uint16(cs)
 		}
+	}
+
+	// A version floor above its ceiling can never negotiate; reject it at
+	// request validation time rather than surfacing an opaque handshake
+	// failure. Unspecified (0) means "runtime default" and never conflicts.
+	if minV, maxV := opts.GetMinVersion(), opts.GetMaxVersion(); minV != 0 && maxV != 0 && minV > maxV {
+		return nil, status.Error(codes.InvalidArgument, "sesame/rc/netconn: min_version exceeds max_version")
 	}
 
 	if len(opts.GetCaCertificates()) > 0 {
@@ -154,7 +161,7 @@ func BuildTLSConfig(opts *sesametls.TLSOptions, defaultServerName string) (*cryp
 func ExtractTLSHandshakeResult(state cryptotls.ConnectionState, appliedPreset sesametls.FingerprintPreset) *sesametls.TLSHandshakeResult {
 	res := &sesametls.TLSHandshakeResult{
 		NegotiatedProtocol: state.NegotiatedProtocol,
-		CipherSuite:        uint32(state.CipherSuite),
+		CipherSuite:        int32(state.CipherSuite),
 		TlsVersion:         TLSVersionToProto(state.Version),
 		ServerName:         state.ServerName,
 		AppliedPreset:      appliedPreset,
@@ -174,6 +181,12 @@ func ExtractTLSHandshakeResult(state cryptotls.ConnectionState, appliedPreset se
 func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.TLSOptions, defaultServerName string, provider TLSProvider) (net.Conn, *sesametls.TLSHandshakeResult, error) {
 	if opts == nil {
 		return rawConn, nil, nil
+	}
+
+	// Version-range validation applies to every provider, not just the
+	// standard runtime: a floor above its ceiling can never negotiate.
+	if minV, maxV := opts.GetMinVersion(), opts.GetMaxVersion(); minV != 0 && maxV != 0 && minV > maxV {
+		return nil, nil, status.Error(codes.InvalidArgument, "sesame/rc/netconn: min_version exceeds max_version")
 	}
 
 	preset := opts.GetFingerprintPreset()
@@ -206,11 +219,20 @@ func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.
 	return tlsConn, result, nil
 }
 
+// MaxProxyHops is the reference upper bound on proxy chain length. Each hop
+// is a sequential server-side dial and handshake, so the count is a server
+// resource commitment; requests exceeding the bound are rejected.
+const MaxProxyHops = 8
+
 // ExecuteProxyHops chains egress proxies across one or more hops to establish a tunnel to targetAddress.
 func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesameproxy.ProxyOptions, targetNetwork, targetAddress string) (net.Conn, *sesameproxy.ProxyResult, error) {
 	if proxyOpts == nil || len(proxyOpts.GetHops()) == 0 {
 		conn, err := baseDialer.DialContext(ctx, targetNetwork, targetAddress)
 		return conn, nil, err
+	}
+
+	if len(proxyOpts.GetHops()) > MaxProxyHops {
+		return nil, nil, status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: too many proxy hops: %d (max %d)", len(proxyOpts.GetHops()), MaxProxyHops)
 	}
 
 	hops := proxyOpts.GetHops()

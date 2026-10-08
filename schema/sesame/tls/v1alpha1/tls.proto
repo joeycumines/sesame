@@ -4,47 +4,117 @@ package sesame.tls.v1alpha1;
 
 option go_package = "github.com/joeycumines/sesame/rc/tls";
 
-// TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint emulation.
+// TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint
+// emulation. It is used both at Dial time (Dial.tls) and for in-stream
+// opportunistic upgrades (Control.upgrade_tls).
 message TLSOptions {
-  // Server Name Indication (SNI) override. If omitted, the dial address hostname MUST be used.
+  // Server Name Indication (SNI) override. If omitted, the dial address
+  // hostname MUST be used.
   string server_name = 1;
 
-  // Prioritized list of Application-Layer Protocol Negotiation (ALPN) protocol names.
-  // Example: ["h2", "http/1.1"]
+  // Prioritized list of Application-Layer Protocol Negotiation (ALPN)
+  // protocol names, e.g. ["h2", "http/1.1"].
   // If empty, the implementation MUST NOT send an ALPN extension.
   repeated string alpn_protocols = 2;
 
-  // Minimum TLS protocol version acceptable.
+  // Minimum TLS protocol version acceptable. TLS_VERSION_UNSPECIFIED (0)
+  // means the implementation's default minimum applies, not TLS 1.0.
+  // If both min_version and max_version are set, min_version MUST NOT
+  // exceed max_version; violations MUST be rejected with INVALID_ARGUMENT.
   TLSVersion min_version = 3;
 
-  // Maximum TLS protocol version acceptable.
+  // Maximum TLS protocol version acceptable. TLS_VERSION_UNSPECIFIED (0)
+  // means the implementation's default maximum applies.
   TLSVersion max_version = 4;
 
   // Impersonation profile preset for client cryptographic emulation.
-  // If set to anything other than RUNTIME_DEFAULT, the Server MUST fail closed if it cannot satisfy it.
+  // If set to anything other than RUNTIME_DEFAULT, the Server MUST fail
+  // closed (FAILED_PRECONDITION) if it cannot satisfy it.
   FingerprintPreset fingerprint_preset = 5;
 
-  // Explicit cipher suite identifiers (RFC numbers). If non-empty, overrides preset defaults.
-  repeated uint32 cipher_suites = 6;
+  // Explicit cipher suite identifiers (IANA values, e.g. 0x1301). If
+  // non-empty, overrides preset defaults.
+  //
+  // Support is OPTIONAL: a server that cannot apply an explicit suite list
+  // exactly MUST fail closed with FAILED_PRECONDITION rather than silently
+  // negotiating with its own defaults. Values outside the IANA range
+  // [0, 65535] MUST be rejected with INVALID_ARGUMENT.
+  repeated int32 cipher_suites = 6;
 
-  // InsecureSkipVerify disables remote certificate verification.
-  // MUST NOT be set in production environments unless explicitly requested by user configuration.
+  // Disables remote certificate verification.
+  //
+  // Sensitive security control: clients SHOULD require explicit user
+  // opt-in before setting this, and servers SHOULD treat a request
+  // carrying it as a policy decision the caller owns.
   bool insecure_skip_verify = 7;
 
   // Custom Root Certificate Authority certificates in PEM format.
+  // Sensitive: implementations MUST NOT include this material in logs,
+  // errors, or diagnostics.
   bytes ca_certificates = 8;
 
   // Client certificate chain in PEM format (for mutual TLS / mTLS).
+  // Sensitive: implementations MUST NOT include this material in logs,
+  // errors, or diagnostics.
   bytes client_certificate = 9;
 
   // Client private key in PEM format (for mutual TLS / mTLS).
+  // Sensitive: implementations MUST NOT include this material in logs,
+  // errors, or diagnostics.
   bytes client_private_key = 10;
 
-  // TLS 1.3 session resumption ticket or pre-shared key.
+  // TLS 1.3 session resumption ticket or pre-shared key, as previously
+  // issued by the peer (see TLSHandshakeResult.session_ticket).
+  //
+  // Support is OPTIONAL: a server that does not support session resumption
+  // MUST ignore this field and perform a full handshake.
+  // Sensitive: implementations MUST NOT include this material in logs,
+  // errors, or diagnostics.
   bytes session_ticket = 11;
 }
 
+// TLSHandshakeResult communicates negotiated TLS session state back to the
+// Client. The Client MUST inspect it before generating Layer 7 payloads.
+message TLSHandshakeResult {
+  // The ALPN protocol string selected by the upstream server (e.g., "h2" or
+  // "http/1.1"). Empty if no protocol was negotiated.
+  string negotiated_protocol = 1;
+
+  // Negotiated cipher suite identifier (IANA value, e.g. 0x1301 for
+  // TLS_AES_128_GCM_SHA256). 0 if the runtime could not identify the suite.
+  int32 cipher_suite = 2;
+
+  // Negotiated TLS version. TLS_VERSION_UNSPECIFIED if unknown.
+  TLSVersion tls_version = 3;
+
+  // Server Name Indication acknowledged by the upstream server.
+  string server_name = 4;
+
+  // Peer certificate chain presented by upstream, formatted as raw DER
+  // bytes, leaf first.
+  repeated bytes peer_certificates = 5;
+
+  // New session ticket issued by upstream, if applicable; may be replayed
+  // via TLSOptions.session_ticket to resume a later session.
+  // Sensitive: implementations MUST NOT include this material in logs,
+  // errors, or diagnostics.
+  bytes session_ticket = 6;
+
+  // The actual fingerprint preset enforced by the server.
+  // The Client MUST verify that applied_preset matches the requested
+  // preset, and MUST abort on a mismatch or on a value it does not
+  // recognize.
+  FingerprintPreset applied_preset = 7;
+}
+
+// TLSVersion identifies a TLS protocol version.
+//
+// Open enum: implementations MUST tolerate values they do not recognize.
+// Servers MAY reject requests for legacy versions (TLS 1.0, TLS 1.1) by
+// policy; modeling them here describes the protocol universe, not an
+// endorsement.
 enum TLSVersion {
+  // Default value. Means "implementation default", never TLS 1.0.
   TLS_VERSION_UNSPECIFIED = 0;
   TLS_1_0 = 1;
   TLS_1_1 = 2;
@@ -53,7 +123,12 @@ enum TLSVersion {
 }
 
 // FingerprintPreset specifies well-known client cryptographic signatures.
+//
+// Open enum: new values will be added over time; implementations MUST
+// tolerate values they do not recognize (fail closed where a specific
+// preset was requested, per TLSOptions.fingerprint_preset).
 enum FingerprintPreset {
+  // Default value. Means "no impersonation requested".
   FINGERPRINT_PRESET_UNSPECIFIED = 0;
 
   // Chromium-based presets
@@ -78,30 +153,4 @@ enum FingerprintPreset {
 
   // Standard runtime default (Go crypto/tls or Bun BoringSSL)
   RUNTIME_DEFAULT = 40;
-}
-
-// TLSHandshakeResult communicates negotiated TLS session state back to the Client.
-message TLSHandshakeResult {
-  // The ALPN protocol string selected by the upstream server (e.g., "h2" or "http/1.1").
-  // The Client MUST inspect this field before generating Layer 7 payloads.
-  string negotiated_protocol = 1;
-
-  // Negotiated cipher suite identifier (e.g. 0x1301 for TLS_AES_128_GCM_SHA256).
-  uint32 cipher_suite = 2;
-
-  // Negotiated TLS version.
-  TLSVersion tls_version = 3;
-
-  // Server Name Indication acknowledged by the upstream server.
-  string server_name = 4;
-
-  // Peer certificate chain presented by upstream, formatted as raw DER bytes.
-  repeated bytes peer_certificates = 5;
-
-  // New session ticket issued by upstream (if applicable).
-  bytes resumption_ticket = 6;
-
-  // The actual fingerprint preset enforced by the server.
-  // The Client MUST verify that applied_preset matches the requested preset.
-  FingerprintPreset applied_preset = 7;
 }

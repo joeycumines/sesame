@@ -20,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sesame/v1alpha1/remotecontrol.proto.
  */
 export const file_sesame_v1alpha1_remotecontrol: GenFile = /*@__PURE__*/
-  fileDesc("CiNzZXNhbWUvdjFhbHBoYTEvcmVtb3RlY29udHJvbC5wcm90bxIPc2VzYW1lLnYxYWxwaGExIp0JCg5OZXRDb25uUmVxdWVzdBI0CgRkaWFsGAEgASgLMiQuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkRpYWxIABIPCgVieXRlcxgCIAEoDEgAEjoKB2NvbnRyb2wYAyABKAsyJy5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbEgAGqYCCgREaWFsEiUKB2FkZHJlc3MYASABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEioKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24SLAoDdGxzGAMgASgLMh8uc2VzYW1lLnRscy52MWFscGhhMS5UTFNPcHRpb25zEjIKBXByb3h5GAQgASgLMiMuc2VzYW1lLnByb3h5LnYxYWxwaGExLlByb3h5T3B0aW9ucxJCCgxjYXBhYmlsaXRpZXMYBSABKAsyLC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ2FwYWJpbGl0aWVzEiUKB29wdGlvbnMYDyADKAsyFC5nb29nbGUucHJvdG9idWYuQW55GuYECgdDb250cm9sEkkKC3VwZ3JhZGVfdGxzGAEgASgLMjIuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuVXBncmFkZVRMU0gAEk0KDXdpbmRvd191cGRhdGUYAiABKAsyNC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbC5XaW5kb3dVcGRhdGVIABJHCgpoYWxmX2Nsb3NlGAMgASgLMjEuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuSGFsZkNsb3NlSAASPAoEcGluZxgEIAEoCzIsLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlBpbmdIABI+CgVyZXNldBgFIAEoCzItLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlJlc2V0SAASJgoGY3VzdG9tGA8gASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueUgAGj4KClVwZ3JhZGVUTFMSMAoHb3B0aW9ucxgBIAEoCzIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTT3B0aW9ucxokCgxXaW5kb3dVcGRhdGUSFAoMY3JlZGl0X2J5dGVzGAEgASgNGgsKCUhhbGZDbG9zZRooCgRQaW5nEgoKAmlkGAEgASgEEhQKDHRpbWVzdGFtcF9ucxgCIAEoAxorCgVSZXNldBIiCgZyZWFzb24YASABKAsyEi5nb29nbGUucnBjLlN0YXR1c0IICgZhY3Rpb24abgoMQ2FwYWJpbGl0aWVzEh0KFXN1cHBvcnRzX2Zsb3dfY29udHJvbBgBIAEoCBIiChpzdXBwb3J0c19vcHBvcnR1bmlzdGljX3RscxgCIAEoCBIbChNpbml0aWFsX3dpbmRvd19zaXplGAMgASgNQgYKBGRhdGEi4gsKD05ldENvbm5SZXNwb25zZRI1CgRjb25uGAEgASgLMiUuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db25uSAASDwoFYnl0ZXMYAiABKAxIABI7Cgdjb250cm9sGAMgASgLMiguc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sSAAasAIKBENvbm4SIwoFbG9jYWwYASABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEiQKBnJlbW90ZRgCIAEoCzIULnNlc2FtZS50eXBlLk5ldEFkZHISNAoDdGxzGAMgASgLMicuc2VzYW1lLnRscy52MWFscGhhMS5UTFNIYW5kc2hha2VSZXN1bHQSMQoFcHJveHkYBCABKAsyIi5zZXNhbWUucHJveHkudjFhbHBoYTEuUHJveHlSZXN1bHQSQwoMY2FwYWJpbGl0aWVzGAUgASgLMi0uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5DYXBhYmlsaXRpZXMSLwoRY3VzdG9tX2F0dHJpYnV0ZXMYDyADKAsyFC5nb29nbGUucHJvdG9idWYuQW55GqIGCgdDb250cm9sEkwKDHRsc191cGdyYWRlZBgBIAEoCzI0LnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5UTFNVcGdyYWRlZEgAElcKEnRsc191cGdyYWRlX2ZhaWxlZBgCIAEoCzI5LnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5UTFNVcGdyYWRlRmFpbGVkSAASTgoNd2luZG93X3VwZGF0ZRgDIAEoCzI1LnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5XaW5kb3dVcGRhdGVIABJICgpoYWxmX2Nsb3NlGAQgASgLMjIuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLkhhbGZDbG9zZUgAEj0KBHBvbmcYBSABKAsyLS5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuUG9uZ0gAEkMKB21ldHJpY3MYBiABKAsyMC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuTWV0cmljc0gAEiYKBmN1c3RvbRgPIAEoCzIULmdvb2dsZS5wcm90b2J1Zi5BbnlIABpGCgtUTFNVcGdyYWRlZBI3CgZyZXN1bHQYASABKAsyJy5zZXNhbWUudGxzLnYxYWxwaGExLlRMU0hhbmRzaGFrZVJlc3VsdBo1ChBUTFNVcGdyYWRlRmFpbGVkEiEKBWVycm9yGAEgASgLMhIuZ29vZ2xlLnJwYy5TdGF0dXMaJAoMV2luZG93VXBkYXRlEhQKDGNyZWRpdF9ieXRlcxgBIAEoDRoLCglIYWxmQ2xvc2UaKAoEUG9uZxIKCgJpZBgBIAEoBBIUCgx0aW1lc3RhbXBfbnMYAiABKAMaRQoHTWV0cmljcxISCgpieXRlc19zZW50GAEgASgEEhYKDmJ5dGVzX3JlY2VpdmVkGAIgASgEEg4KBnJ0dF9tcxgDIAEoDUIHCgVldmVudBrpAQoMQ2FwYWJpbGl0aWVzEh0KFXN1cHBvcnRzX2Zsb3dfY29udHJvbBgBIAEoCBIiChpzdXBwb3J0c19vcHBvcnR1bmlzdGljX3RscxgCIAEoCBIeChZzdXBwb3J0c19pbXBlcnNvbmF0aW9uGAMgASgIEhYKDm1heF9jaHVua19zaXplGAQgASgNEhsKE2luaXRpYWxfd2luZG93X3NpemUYBSABKA0SQQoRc3VwcG9ydGVkX3ByZXNldHMYBiADKA4yJi5zZXNhbWUudGxzLnYxYWxwaGExLkZpbmdlcnByaW50UHJlc2V0QgYKBGRhdGEyYwoNUmVtb3RlQ29udHJvbBJSCgdOZXRDb25uEh8uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0GiAuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZSIAKAEwAUIiWiBnaXRodWIuY29tL2pvZXljdW1pbmVzL3Nlc2FtZS9yY2IGcHJvdG8z", [file_google_protobuf_any, file_google_protobuf_duration, file_google_rpc_status, file_sesame_proxy_v1alpha1_proxy, file_sesame_tls_v1alpha1_tls, file_sesame_type_netaddr]);
+  fileDesc("CiNzZXNhbWUvdjFhbHBoYTEvcmVtb3RlY29udHJvbC5wcm90bxIPc2VzYW1lLnYxYWxwaGExIrkJCg5OZXRDb25uUmVxdWVzdBI0CgRkaWFsGAEgASgLMiQuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkRpYWxIABIPCgVieXRlcxgCIAEoDEgAEjoKB2NvbnRyb2wYAyABKAsyJy5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbEgAGqYCCgREaWFsEiUKB2FkZHJlc3MYASABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEioKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24SLAoDdGxzGAMgASgLMh8uc2VzYW1lLnRscy52MWFscGhhMS5UTFNPcHRpb25zEjIKBXByb3h5GAQgASgLMiMuc2VzYW1lLnByb3h5LnYxYWxwaGExLlByb3h5T3B0aW9ucxJCCgxjYXBhYmlsaXRpZXMYBSABKAsyLC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ2FwYWJpbGl0aWVzEiUKB29wdGlvbnMYDyADKAsyFC5nb29nbGUucHJvdG9idWYuQW55GukECgdDb250cm9sEkkKC3VwZ3JhZGVfdGxzGAEgASgLMjIuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuVXBncmFkZVRMU0gAEk0KDXdpbmRvd191cGRhdGUYAiABKAsyNC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbC5XaW5kb3dVcGRhdGVIABJHCgpoYWxmX2Nsb3NlGAMgASgLMjEuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuSGFsZkNsb3NlSAASPAoEcGluZxgEIAEoCzIsLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlBpbmdIABI+CgVyZXNldBgFIAEoCzItLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlJlc2V0SAASJgoGY3VzdG9tGA8gASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueUgAGj4KClVwZ3JhZGVUTFMSMAoHb3B0aW9ucxgBIAEoCzIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTT3B0aW9ucxokCgxXaW5kb3dVcGRhdGUSFAoMY3JlZGl0X2J5dGVzGAEgASgFGgsKCUhhbGZDbG9zZRorCgRQaW5nEgoKAmlkGAEgASgDEhcKD3RpbWVzdGFtcF9uYW5vcxgCIAEoAxorCgVSZXNldBIiCgZyZWFzb24YASABKAsyEi5nb29nbGUucnBjLlN0YXR1c0IICgZhY3Rpb24ahgEKDENhcGFiaWxpdGllcxIdChVzdXBwb3J0c19mbG93X2NvbnRyb2wYASABKAgSIgoac3VwcG9ydHNfb3Bwb3J0dW5pc3RpY190bHMYAiABKAgSGwoTaW5pdGlhbF93aW5kb3dfc2l6ZRgDIAEoBRIWCg5tYXhfY2h1bmtfc2l6ZRgEIAEoBUIGCgRkYXRhIucLCg9OZXRDb25uUmVzcG9uc2USNQoEY29ubhgBIAEoCzIlLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29ubkgAEg8KBWJ5dGVzGAIgASgMSAASOwoHY29udHJvbBgDIAEoCzIoLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbEgAGrACCgRDb25uEiMKBWxvY2FsGAEgASgLMhQuc2VzYW1lLnR5cGUuTmV0QWRkchIkCgZyZW1vdGUYAiABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEjQKA3RscxgDIAEoCzInLnNlc2FtZS50bHMudjFhbHBoYTEuVExTSGFuZHNoYWtlUmVzdWx0EjEKBXByb3h5GAQgASgLMiIuc2VzYW1lLnByb3h5LnYxYWxwaGExLlByb3h5UmVzdWx0EkMKDGNhcGFiaWxpdGllcxgFIAEoCzItLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ2FwYWJpbGl0aWVzEi8KEWN1c3RvbV9hdHRyaWJ1dGVzGA8gAygLMhQuZ29vZ2xlLnByb3RvYnVmLkFueRqpBgoHQ29udHJvbBJMCgx0bHNfdXBncmFkZWQYASABKAsyNC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuVExTVXBncmFkZWRIABJXChJ0bHNfdXBncmFkZV9mYWlsZWQYAiABKAsyOS5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuVExTVXBncmFkZUZhaWxlZEgAEk4KDXdpbmRvd191cGRhdGUYAyABKAsyNS5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuV2luZG93VXBkYXRlSAASSAoKaGFsZl9jbG9zZRgEIAEoCzIyLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5IYWxmQ2xvc2VIABI9CgRwb25nGAUgASgLMi0uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLlBvbmdIABJDCgdtZXRyaWNzGAYgASgLMjAuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLk1ldHJpY3NIABImCgZjdXN0b20YDyABKAsyFC5nb29nbGUucHJvdG9idWYuQW55SAAaRgoLVExTVXBncmFkZWQSNwoGcmVzdWx0GAEgASgLMicuc2VzYW1lLnRscy52MWFscGhhMS5UTFNIYW5kc2hha2VSZXN1bHQaNQoQVExTVXBncmFkZUZhaWxlZBIhCgVlcnJvchgBIAEoCzISLmdvb2dsZS5ycGMuU3RhdHVzGiQKDFdpbmRvd1VwZGF0ZRIUCgxjcmVkaXRfYnl0ZXMYASABKAUaCwoJSGFsZkNsb3NlGisKBFBvbmcSCgoCaWQYASABKAMSFwoPdGltZXN0YW1wX25hbm9zGAIgASgDGkkKB01ldHJpY3MSEgoKYnl0ZXNfc2VudBgBIAEoAxIWCg5ieXRlc19yZWNlaXZlZBgCIAEoAxISCgpydHRfbWlsbGlzGAMgASgFQgcKBWV2ZW50GucBCgxDYXBhYmlsaXRpZXMSHQoVc3VwcG9ydHNfZmxvd19jb250cm9sGAEgASgIEiIKGnN1cHBvcnRzX29wcG9ydHVuaXN0aWNfdGxzGAIgASgIEhYKDm1heF9jaHVua19zaXplGAQgASgFEhsKE2luaXRpYWxfd2luZG93X3NpemUYBSABKAUSQQoRc3VwcG9ydGVkX3ByZXNldHMYBiADKA4yJi5zZXNhbWUudGxzLnYxYWxwaGExLkZpbmdlcnByaW50UHJlc2V0SgQIAxAEUhZzdXBwb3J0c19pbXBlcnNvbmF0aW9uQgYKBGRhdGEyYwoNUmVtb3RlQ29udHJvbBJSCgdOZXRDb25uEh8uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0GiAuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZSIAKAEwAUIiWiBnaXRodWIuY29tL2pvZXljdW1pbmVzL3Nlc2FtZS9yY2IGcHJvdG8z", [file_google_protobuf_any, file_google_protobuf_duration, file_google_rpc_status, file_sesame_proxy_v1alpha1_proxy, file_sesame_tls_v1alpha1_tls, file_sesame_type_netaddr]);
 
 /**
  * NetConnRequest models a message sent from a RemoteControl.NetConn client to the server.
@@ -42,7 +42,8 @@ export type NetConnRequest = Message<"sesame.v1alpha1.NetConnRequest"> & {
     case: "dial";
   } | {
     /**
-     * 2. Opaque payload data chunk.
+     * 2. Opaque payload data chunk, flowing client -> server. Each chunk
+     * MUST NOT exceed the server-advertised max_chunk_size.
      *
      * @generated from field: bytes bytes = 2;
      */
@@ -80,7 +81,8 @@ export type NetConnRequest_Dial = Message<"sesame.v1alpha1.NetConnRequest.Dial">
   address?: NetAddr | undefined;
 
   /**
-   * Dial connection timeout (OPTIONAL).
+   * Dial connection timeout (OPTIONAL). If unset, the server's dial
+   * timeout policy applies, which MAY be unlimited.
    *
    * @generated from field: google.protobuf.Duration timeout = 2;
    */
@@ -88,7 +90,9 @@ export type NetConnRequest_Dial = Message<"sesame.v1alpha1.NetConnRequest.Dial">
 
   /**
    * Remote TLS termination and impersonation configuration (OPTIONAL).
-   * If present, Server MUST terminate TLS at the endpoint.
+   * If present, Server MUST terminate TLS at the endpoint, and MUST
+   * confirm it in NetConnResponse.Conn.tls; the client MUST abort on a
+   * missing confirmation (fail closed).
    *
    * @generated from field: sesame.tls.v1alpha1.TLSOptions tls = 3;
    */
@@ -96,13 +100,18 @@ export type NetConnRequest_Dial = Message<"sesame.v1alpha1.NetConnRequest.Dial">
 
   /**
    * Egress proxy chaining configuration (OPTIONAL).
+   * If present, Server MUST traverse the requested hops, and MUST
+   * confirm it in NetConnResponse.Conn.proxy; the client MUST abort on a
+   * missing or mismatched confirmation (fail closed).
    *
    * @generated from field: sesame.proxy.v1alpha1.ProxyOptions proxy = 4;
    */
   proxy?: ProxyOptions | undefined;
 
   /**
-   * Client-advertised capabilities.
+   * Client-advertised capabilities (OPTIONAL). Presence of this message
+   * is the client's consent to in-stream control; omitting it selects
+   * legacy byte-only mode.
    *
    * @generated from field: sesame.v1alpha1.NetConnRequest.Capabilities capabilities = 5;
    */
@@ -110,6 +119,9 @@ export type NetConnRequest_Dial = Message<"sesame.v1alpha1.NetConnRequest.Dial">
 
   /**
    * Extensible options for proprietary or third-party middleware plugins.
+   * Implementations MUST ignore payloads whose type_url they do not
+   * recognize; plugin types SHOULD be namespaced under a vendor prefix
+   * to avoid collisions.
    *
    * @generated from field: repeated google.protobuf.Any options = 15;
    */
@@ -134,7 +146,9 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
    */
   action: {
     /**
-     * Command to perform an opportunistic in-stream TLS upgrade.
+     * Command to perform an opportunistic in-stream TLS upgrade. MUST
+     * carry options; the server rejects an options-less upgrade with
+     * INVALID_ARGUMENT.
      *
      * @generated from field: sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS upgrade_tls = 1;
      */
@@ -142,7 +156,8 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
     case: "upgradeTls";
   } | {
     /**
-     * Credit-based stream flow control window update.
+     * Credit-based stream flow control window update: replenishes the
+     * server's window for client -> server bytes.
      *
      * @generated from field: sesame.v1alpha1.NetConnRequest.Control.WindowUpdate window_update = 2;
      */
@@ -150,7 +165,9 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
     case: "windowUpdate";
   } | {
     /**
-     * Unilateral write-side connection close (TCP FIN / TLS close_notify).
+     * Unilateral write-side connection close (TCP FIN / TLS
+     * close_notify). The stream continues; the server keeps relaying
+     * until the target terminates.
      *
      * @generated from field: sesame.v1alpha1.NetConnRequest.Control.HalfClose half_close = 3;
      */
@@ -158,7 +175,8 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
     case: "halfClose";
   } | {
     /**
-     * Liveness probe ping.
+     * Liveness probe. The server MUST echo id and timestamp_nanos
+     * verbatim in Control.pong.
      *
      * @generated from field: sesame.v1alpha1.NetConnRequest.Control.Ping ping = 4;
      */
@@ -166,7 +184,8 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
     case: "ping";
   } | {
     /**
-     * Abrupt stream reset / cancellation.
+     * Abrupt stream reset / cancellation. The server terminates the
+     * stream per termination flow iv.
      *
      * @generated from field: sesame.v1alpha1.NetConnRequest.Control.Reset reset = 5;
      */
@@ -174,7 +193,8 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
     case: "reset";
   } | {
     /**
-     * Arbitrary plugin extension command.
+     * Arbitrary plugin extension command. Implementations MUST ignore
+     * payloads whose type_url they do not recognize.
      *
      * @generated from field: google.protobuf.Any custom = 15;
      */
@@ -195,6 +215,8 @@ export const NetConnRequest_ControlSchema: GenMessage<NetConnRequest_Control> = 
  */
 export type NetConnRequest_Control_UpgradeTLS = Message<"sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS"> & {
   /**
+   * TLS configuration for the upgrade (REQUIRED).
+   *
    * @generated from field: sesame.tls.v1alpha1.TLSOptions options = 1;
    */
   options?: TLSOptions | undefined;
@@ -212,7 +234,12 @@ export const NetConnRequest_Control_UpgradeTLSSchema: GenMessage<NetConnRequest_
  */
 export type NetConnRequest_Control_WindowUpdate = Message<"sesame.v1alpha1.NetConnRequest.Control.WindowUpdate"> & {
   /**
-   * @generated from field: uint32 credit_bytes = 1;
+   * Additional bytes the peer may send. Additive to its remaining
+   * window; cumulative credit MAY exceed the initial window. 0 is a
+   * no-op. Negative values are a protocol violation: the receiver
+   * MUST terminate the stream with INVALID_ARGUMENT.
+   *
+   * @generated from field: int32 credit_bytes = 1;
    */
   creditBytes: number;
 };
@@ -242,14 +269,20 @@ export const NetConnRequest_Control_HalfCloseSchema: GenMessage<NetConnRequest_C
  */
 export type NetConnRequest_Control_Ping = Message<"sesame.v1alpha1.NetConnRequest.Control.Ping"> & {
   /**
-   * @generated from field: uint64 id = 1;
+   * Opaque identifier, echoed verbatim.
+   *
+   * @generated from field: int64 id = 1;
    */
   id: bigint;
 
   /**
-   * @generated from field: int64 timestamp_ns = 2;
+   * Client-originated Unix epoch nanoseconds, echoed verbatim. The
+   * server MUST NOT substitute its own clock; RTT SHOULD be computed
+   * from local send/receive times, not from the echoed value.
+   *
+   * @generated from field: int64 timestamp_nanos = 2;
    */
-  timestampNs: bigint;
+  timestampNanos: bigint;
 };
 
 /**
@@ -264,6 +297,10 @@ export const NetConnRequest_Control_PingSchema: GenMessage<NetConnRequest_Contro
  */
 export type NetConnRequest_Control_Reset = Message<"sesame.v1alpha1.NetConnRequest.Control.Reset"> & {
   /**
+   * Reason for the reset. The server propagates code as the gRPC
+   * status code (values outside [1, 16] map to CANCELLED) and message
+   * as the error detail.
+   *
    * @generated from field: google.rpc.Status reason = 1;
    */
   reason?: Status | undefined;
@@ -277,23 +314,45 @@ export const NetConnRequest_Control_ResetSchema: GenMessage<NetConnRequest_Contr
   messageDesc(file_sesame_v1alpha1_remotecontrol, 0, 1, 4);
 
 /**
+ * Capabilities models what the client supports and what it grants the
+ * server. All fields default to false/0; a capability not advertised
+ * MUST NOT be assumed.
+ *
  * @generated from message sesame.v1alpha1.NetConnRequest.Capabilities
  */
 export type NetConnRequest_Capabilities = Message<"sesame.v1alpha1.NetConnRequest.Capabilities"> & {
   /**
+   * The client consents to credit-based flow control. Activates only if
+   * the server also advertises it.
+   *
    * @generated from field: bool supports_flow_control = 1;
    */
   supportsFlowControl: boolean;
 
   /**
+   * The client may issue in-stream upgrade_tls commands.
+   *
    * @generated from field: bool supports_opportunistic_tls = 2;
    */
   supportsOpportunisticTls: boolean;
 
   /**
-   * @generated from field: uint32 initial_window_size = 3;
+   * Receive window the client grants the server for server -> client
+   * bytes, in bytes. 0 means the implementation default (65535), not a
+   * zero window. Negative values MUST be rejected with INVALID_ARGUMENT.
+   *
+   * @generated from field: int32 initial_window_size = 3;
    */
   initialWindowSize: number;
+
+  /**
+   * Maximum data chunk the client can receive, in bytes; the server
+   * MUST NOT emit larger chunks. 0 means the implementation default
+   * (32768). Negative values MUST be rejected with INVALID_ARGUMENT.
+   *
+   * @generated from field: int32 max_chunk_size = 4;
+   */
+  maxChunkSize: number;
 };
 
 /**
@@ -323,7 +382,8 @@ export type NetConnResponse = Message<"sesame.v1alpha1.NetConnResponse"> & {
     case: "conn";
   } | {
     /**
-     * 2. Opaque payload data chunk.
+     * 2. Opaque payload data chunk, flowing server -> client. Each chunk
+     * MUST NOT exceed the client-advertised max_chunk_size.
      *
      * @generated from field: bytes bytes = 2;
      */
@@ -354,17 +414,22 @@ export const NetConnResponseSchema: GenMessage<NetConnResponse> = /*@__PURE__*/
  */
 export type NetConnResponse_Conn = Message<"sesame.v1alpha1.NetConnResponse.Conn"> & {
   /**
+   * Local address of the connection from the server's perspective.
+   *
    * @generated from field: sesame.type.NetAddr local = 1;
    */
   local?: NetAddr | undefined;
 
   /**
+   * Remote address of the connection from the server's perspective.
+   *
    * @generated from field: sesame.type.NetAddr remote = 2;
    */
   remote?: NetAddr | undefined;
 
   /**
    * Handshake state if TLS termination was executed during Dial.
+   * MUST be present iff Dial.tls was present (fail closed on violation).
    *
    * @generated from field: sesame.tls.v1alpha1.TLSHandshakeResult tls = 3;
    */
@@ -372,6 +437,8 @@ export type NetConnResponse_Conn = Message<"sesame.v1alpha1.NetConnResponse.Conn
 
   /**
    * Confirmation if proxy chaining was executed during Dial.
+   * MUST be present iff Dial.proxy carried hops (fail closed on
+   * violation).
    *
    * @generated from field: sesame.proxy.v1alpha1.ProxyResult proxy = 4;
    */
@@ -385,7 +452,8 @@ export type NetConnResponse_Conn = Message<"sesame.v1alpha1.NetConnResponse.Conn
   capabilities?: NetConnResponse_Capabilities | undefined;
 
   /**
-   * Extensible connection metadata.
+   * Extensible connection metadata. Implementations MUST ignore
+   * payloads whose type_url they do not recognize.
    *
    * @generated from field: repeated google.protobuf.Any custom_attributes = 15;
    */
@@ -419,6 +487,8 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
   } | {
     /**
      * Notification that an in-stream UpgradeTLS command has failed.
+     * The server terminates the stream after emitting it; it MUST NOT
+     * continue in cleartext.
      *
      * @generated from field: sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed tls_upgrade_failed = 2;
      */
@@ -426,7 +496,8 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
     case: "tlsUpgradeFailed";
   } | {
     /**
-     * Credit-based stream flow control window update.
+     * Credit-based stream flow control window update: replenishes the
+     * client's window for server -> client bytes.
      *
      * @generated from field: sesame.v1alpha1.NetConnResponse.Control.WindowUpdate window_update = 3;
      */
@@ -434,7 +505,8 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
     case: "windowUpdate";
   } | {
     /**
-     * Upstream write-side closure (TCP FIN or TLS close_notify).
+     * Upstream write-side closure (TCP FIN or TLS close_notify). The
+     * client receives no further bytes; the stream terminates.
      *
      * @generated from field: sesame.v1alpha1.NetConnResponse.Control.HalfClose half_close = 4;
      */
@@ -442,7 +514,8 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
     case: "halfClose";
   } | {
     /**
-     * Response to a Client Ping.
+     * Response to a client Ping, echoing id and timestamp_nanos
+     * verbatim.
      *
      * @generated from field: sesame.v1alpha1.NetConnResponse.Control.Pong pong = 5;
      */
@@ -450,7 +523,9 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
     case: "pong";
   } | {
     /**
-     * Diagnostics and stream metrics.
+     * Diagnostics and stream metrics. Servers MAY emit metrics at any
+     * time; clients MUST treat them as advisory and MUST NOT depend on
+     * them for correctness.
      *
      * @generated from field: sesame.v1alpha1.NetConnResponse.Control.Metrics metrics = 6;
      */
@@ -458,7 +533,8 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
     case: "metrics";
   } | {
     /**
-     * Arbitrary plugin extension event.
+     * Arbitrary plugin extension event. Implementations MUST ignore
+     * payloads whose type_url they do not recognize.
      *
      * @generated from field: google.protobuf.Any custom = 15;
      */
@@ -479,6 +555,8 @@ export const NetConnResponse_ControlSchema: GenMessage<NetConnResponse_Control> 
  */
 export type NetConnResponse_Control_TLSUpgraded = Message<"sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded"> & {
   /**
+   * Negotiated TLS session state.
+   *
    * @generated from field: sesame.tls.v1alpha1.TLSHandshakeResult result = 1;
    */
   result?: TLSHandshakeResult | undefined;
@@ -496,6 +574,8 @@ export const NetConnResponse_Control_TLSUpgradedSchema: GenMessage<NetConnRespon
  */
 export type NetConnResponse_Control_TLSUpgradeFailed = Message<"sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed"> & {
   /**
+   * Failure detail. code is a canonical google.rpc.Code.
+   *
    * @generated from field: google.rpc.Status error = 1;
    */
   error?: Status | undefined;
@@ -513,7 +593,12 @@ export const NetConnResponse_Control_TLSUpgradeFailedSchema: GenMessage<NetConnR
  */
 export type NetConnResponse_Control_WindowUpdate = Message<"sesame.v1alpha1.NetConnResponse.Control.WindowUpdate"> & {
   /**
-   * @generated from field: uint32 credit_bytes = 1;
+   * Additional bytes the peer may send. Additive to its remaining
+   * window; cumulative credit MAY exceed the initial window. 0 is a
+   * no-op. Negative values are a protocol violation: the receiver
+   * MUST fail closed (tear the connection down).
+   *
+   * @generated from field: int32 credit_bytes = 1;
    */
   creditBytes: number;
 };
@@ -543,14 +628,19 @@ export const NetConnResponse_Control_HalfCloseSchema: GenMessage<NetConnResponse
  */
 export type NetConnResponse_Control_Pong = Message<"sesame.v1alpha1.NetConnResponse.Control.Pong"> & {
   /**
-   * @generated from field: uint64 id = 1;
+   * Opaque identifier, echoed verbatim from the Ping.
+   *
+   * @generated from field: int64 id = 1;
    */
   id: bigint;
 
   /**
-   * @generated from field: int64 timestamp_ns = 2;
+   * Client-originated Unix epoch nanoseconds, echoed verbatim from
+   * the Ping.
+   *
+   * @generated from field: int64 timestamp_nanos = 2;
    */
-  timestampNs: bigint;
+  timestampNanos: bigint;
 };
 
 /**
@@ -565,19 +655,25 @@ export const NetConnResponse_Control_PongSchema: GenMessage<NetConnResponse_Cont
  */
 export type NetConnResponse_Control_Metrics = Message<"sesame.v1alpha1.NetConnResponse.Control.Metrics"> & {
   /**
-   * @generated from field: uint64 bytes_sent = 1;
+   * Total payload bytes sent to the client, advisory.
+   *
+   * @generated from field: int64 bytes_sent = 1;
    */
   bytesSent: bigint;
 
   /**
-   * @generated from field: uint64 bytes_received = 2;
+   * Total payload bytes received from the client, advisory.
+   *
+   * @generated from field: int64 bytes_received = 2;
    */
   bytesReceived: bigint;
 
   /**
-   * @generated from field: uint32 rtt_ms = 3;
+   * Round-trip time estimate in milliseconds, advisory.
+   *
+   * @generated from field: int32 rtt_millis = 3;
    */
-  rttMs: number;
+  rttMillis: number;
 };
 
 /**
@@ -588,35 +684,53 @@ export const NetConnResponse_Control_MetricsSchema: GenMessage<NetConnResponse_C
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1, 5);
 
 /**
+ * Capabilities models what the server supports and what it grants the
+ * client. All fields default to false/0; a capability not advertised
+ * MUST NOT be assumed.
+ *
  * @generated from message sesame.v1alpha1.NetConnResponse.Capabilities
  */
 export type NetConnResponse_Capabilities = Message<"sesame.v1alpha1.NetConnResponse.Capabilities"> & {
   /**
+   * The server consents to credit-based flow control. Activates only if
+   * the client also advertises it.
+   *
    * @generated from field: bool supports_flow_control = 1;
    */
   supportsFlowControl: boolean;
 
   /**
+   * The server accepts in-stream upgrade_tls commands.
+   *
    * @generated from field: bool supports_opportunistic_tls = 2;
    */
   supportsOpportunisticTls: boolean;
 
   /**
-   * @generated from field: bool supports_impersonation = 3;
-   */
-  supportsImpersonation: boolean;
-
-  /**
-   * @generated from field: uint32 max_chunk_size = 4;
+   * Maximum data chunk the server can receive, in bytes; the client
+   * MUST NOT emit larger chunks. 0 means the implementation default
+   * (32768). Advertised values MUST NOT exceed the stream's gRPC
+   * per-message receive limit.
+   *
+   * @generated from field: int32 max_chunk_size = 4;
    */
   maxChunkSize: number;
 
   /**
-   * @generated from field: uint32 initial_window_size = 5;
+   * Receive window the server grants the client for client -> server
+   * bytes, in bytes. 0 means the implementation default (65535), not a
+   * zero window.
+   *
+   * @generated from field: int32 initial_window_size = 5;
    */
   initialWindowSize: number;
 
   /**
+   * Fingerprint presets the server can satisfy, advisory: a pre-dial
+   * hint only. The server MUST still fail closed per-request on a
+   * preset it cannot apply, and clients MUST verify
+   * TLSHandshakeResult.applied_preset regardless.
+   *
    * @generated from field: repeated sesame.tls.v1alpha1.FingerprintPreset supported_presets = 6;
    */
   supportedPresets: FingerprintPreset[];
@@ -649,11 +763,13 @@ export const RemoteControl: GenService<{
    *     3. Any number of NetConnRequest.bytes, NetConnResponse.bytes, and NetConnRequest.control / NetConnResponse.control
    *     4. Termination
    *         i. Graceful (client initiated)
-   *             a. Initiated by grpc.ClientStream.CloseSend or NetConnRequest.control.half_close
-   *             b. After processing all received messages the server initiates (full) connection close of the
-   *                proxy target
-   *             c. All data read from the proxy target is sent to the client
-   *             d. The connection is closed by the server
+   *             a. Full close: initiated by grpc.ClientStream.CloseSend. After processing all received messages the
+   *                server initiates a (full) connection close of the proxy target
+   *             b. All data read from the proxy target is sent to the client
+   *             c. The connection is closed by the server
+   *             d. Write-side close: initiated by NetConnRequest.control.half_close. The server closes only its write
+   *                side to the proxy target (TCP FIN / TLS close_notify) and MUST continue relaying proxy-target data
+   *                to the client until the target terminates; the stream itself continues
    *         ii. Proxy target initiated
    *             a. The proxy target connection closes
    *             b. All buffered data received from the proxy target is sent to the client
@@ -662,6 +778,30 @@ export const RemoteControl: GenService<{
    *             a. The server encounters an error (e.g. due to context cancel)
    *             b. The proxy target connection is closed
    *             c. An error is propagated to the client (though there are common cases where it's already gone)
+   *         iv. Abrupt (client initiated)
+   *             a. Initiated by NetConnRequest.control.reset
+   *             b. The server MUST terminate the stream, propagating reason.code as the gRPC status code (values
+   *                outside [1, 16] map to CANCELLED) and reason.message as the error detail
+   *             c. Queued response data MAY be delivered or discarded
+   *
+   * In-stream control rules:
+   *
+   * - Consent: a client that sends no Dial.capabilities opts out of in-stream control entirely. The server MUST NOT
+   *   honor control messages from such a client and MUST treat them as the end of the request stream (as in
+   *   termination flow i).
+   * - Forward compatibility: implementations MUST ignore control messages, capabilities, and Any payloads whose type
+   *   they do not recognize. A recognized control message carrying an invalid payload (e.g. a negative
+   *   window_update.credit_bytes) is a protocol violation, not an unknown message, and MUST be rejected per its own
+   *   rule.
+   * - Upgrade lifecycle: upgrade_tls MUST carry options (otherwise INVALID_ARGUMENT). The server processes control
+   *   messages inline, so request bytes ordered after upgrade_tls are post-upgrade payload. On failure the server
+   *   MUST emit tls_upgrade_failed and terminate the stream; it MUST NOT continue in cleartext. A client that
+   *   receives tls_upgraded or tls_upgrade_failed with no upgrade pending MUST fail closed (tear the connection
+   *   down), as the TLS state can no longer be known.
+   * - Flow control: activates only when BOTH peers advertise supports_flow_control. Each peer's
+   *   capabilities.initial_window_size is the receive window it grants the peer for data flowing toward it, and a
+   *   window_update travels opposite to the data it credits. Advertised chunk and window sizes MUST NOT exceed the
+   *   stream's gRPC per-message receive limit.
    *
    * @generated from rpc sesame.v1alpha1.RemoteControl.NetConn
    */

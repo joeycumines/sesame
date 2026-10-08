@@ -38,7 +38,7 @@ func (x *TLSOptions) Proto_ShallowCopy(v interface{}) {
 		if v, ok := v.(interface{ GetFingerprintPreset() FingerprintPreset }); ok {
 			x.FingerprintPreset = v.GetFingerprintPreset()
 		}
-		if v, ok := v.(interface{ GetCipherSuites() []uint32 }); ok {
+		if v, ok := v.(interface{ GetCipherSuites() []rune }); ok {
 			x.CipherSuites = v.GetCipherSuites()
 		}
 		if v, ok := v.(interface{ GetInsecureSkipVerify() bool }); ok {
@@ -91,13 +91,13 @@ func (x *TLSHandshakeResult) Proto_ShallowCopy(v interface{}) {
 		x.TlsVersion = v.GetTlsVersion()
 		x.ServerName = v.GetServerName()
 		x.PeerCertificates = v.GetPeerCertificates()
-		x.ResumptionTicket = v.GetResumptionTicket()
+		x.SessionTicket = v.GetSessionTicket()
 		x.AppliedPreset = v.GetAppliedPreset()
 	default:
 		if v, ok := v.(interface{ GetNegotiatedProtocol() string }); ok {
 			x.NegotiatedProtocol = v.GetNegotiatedProtocol()
 		}
-		if v, ok := v.(interface{ GetCipherSuite() uint32 }); ok {
+		if v, ok := v.(interface{ GetCipherSuite() rune }); ok {
 			x.CipherSuite = v.GetCipherSuite()
 		}
 		if v, ok := v.(interface{ GetTlsVersion() TLSVersion }); ok {
@@ -109,8 +109,8 @@ func (x *TLSHandshakeResult) Proto_ShallowCopy(v interface{}) {
 		if v, ok := v.(interface{ GetPeerCertificates() [][]byte }); ok {
 			x.PeerCertificates = v.GetPeerCertificates()
 		}
-		if v, ok := v.(interface{ GetResumptionTicket() []byte }); ok {
-			x.ResumptionTicket = v.GetResumptionTicket()
+		if v, ok := v.(interface{ GetSessionTicket() []byte }); ok {
+			x.SessionTicket = v.GetSessionTicket()
 		}
 		if v, ok := v.(interface{ GetAppliedPreset() FingerprintPreset }); ok {
 			x.AppliedPreset = v.GetAppliedPreset()
@@ -127,7 +127,7 @@ func (x *TLSHandshakeResult) Proto_ShallowClone() (c *TLSHandshakeResult) {
 		c.TlsVersion = x.TlsVersion
 		c.ServerName = x.ServerName
 		c.PeerCertificates = x.PeerCertificates
-		c.ResumptionTicket = x.ResumptionTicket
+		c.SessionTicket = x.SessionTicket
 		c.AppliedPreset = x.AppliedPreset
 	}
 	return

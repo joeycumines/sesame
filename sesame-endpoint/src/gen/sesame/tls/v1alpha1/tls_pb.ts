@@ -10,24 +10,27 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sesame/tls/v1alpha1/tls.proto.
  */
 export const file_sesame_tls_v1alpha1_tls: GenFile = /*@__PURE__*/
-  fileDesc("Ch1zZXNhbWUvdGxzL3YxYWxwaGExL3Rscy5wcm90bxITc2VzYW1lLnRscy52MWFscGhhMSKHAwoKVExTT3B0aW9ucxITCgtzZXJ2ZXJfbmFtZRgBIAEoCRIWCg5hbHBuX3Byb3RvY29scxgCIAMoCRI0CgttaW5fdmVyc2lvbhgDIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhI0CgttYXhfdmVyc2lvbhgEIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhJCChJmaW5nZXJwcmludF9wcmVzZXQYBSABKA4yJi5zZXNhbWUudGxzLnYxYWxwaGExLkZpbmdlcnByaW50UHJlc2V0EhUKDWNpcGhlcl9zdWl0ZXMYBiADKA0SHAoUaW5zZWN1cmVfc2tpcF92ZXJpZnkYByABKAgSFwoPY2FfY2VydGlmaWNhdGVzGAggASgMEhoKEmNsaWVudF9jZXJ0aWZpY2F0ZRgJIAEoDBIaChJjbGllbnRfcHJpdmF0ZV9rZXkYCiABKAwSFgoOc2Vzc2lvbl90aWNrZXQYCyABKAwiiAIKElRMU0hhbmRzaGFrZVJlc3VsdBIbChNuZWdvdGlhdGVkX3Byb3RvY29sGAEgASgJEhQKDGNpcGhlcl9zdWl0ZRgCIAEoDRI0Cgt0bHNfdmVyc2lvbhgDIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhITCgtzZXJ2ZXJfbmFtZRgEIAEoCRIZChFwZWVyX2NlcnRpZmljYXRlcxgFIAMoDBIZChFyZXN1bXB0aW9uX3RpY2tldBgGIAEoDBI+Cg5hcHBsaWVkX3ByZXNldBgHIAEoDjImLnNlc2FtZS50bHMudjFhbHBoYTEuRmluZ2VycHJpbnRQcmVzZXQqXQoKVExTVmVyc2lvbhIbChdUTFNfVkVSU0lPTl9VTlNQRUNJRklFRBAAEgsKB1RMU18xXzAQARILCgdUTFNfMV8xEAISCwoHVExTXzFfMhADEgsKB1RMU18xXzMQBCqNAgoRRmluZ2VycHJpbnRQcmVzZXQSIgoeRklOR0VSUFJJTlRfUFJFU0VUX1VOU1BFQ0lGSUVEEAASDwoLQ0hST01FX0FVVE8QARIOCgpDSFJPTUVfMTIwEAISDgoKQ0hST01FXzEyNBADEg4KCkNIUk9NRV8xMzEQBBIQCgxGSVJFRk9YX0FVVE8QChIPCgtGSVJFRk9YXzEyMBALEg8KC1NBRkFSSV9BVVRPEBQSDQoJU0FGQVJJXzE2EBUSDQoJU0FGQVJJXzE3EBYSDAoISU9TX0FVVE8QHhIKCgZJT1NfMTYQHxISCg5BTkRST0lEX09LSFRUUBAjEhMKD1JVTlRJTUVfREVGQVVMVBAoQiZaJGdpdGh1Yi5jb20vam9leWN1bWluZXMvc2VzYW1lL3JjL3Rsc2IGcHJvdG8z");
+  fileDesc("Ch1zZXNhbWUvdGxzL3YxYWxwaGExL3Rscy5wcm90bxITc2VzYW1lLnRscy52MWFscGhhMSKHAwoKVExTT3B0aW9ucxITCgtzZXJ2ZXJfbmFtZRgBIAEoCRIWCg5hbHBuX3Byb3RvY29scxgCIAMoCRI0CgttaW5fdmVyc2lvbhgDIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhI0CgttYXhfdmVyc2lvbhgEIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhJCChJmaW5nZXJwcmludF9wcmVzZXQYBSABKA4yJi5zZXNhbWUudGxzLnYxYWxwaGExLkZpbmdlcnByaW50UHJlc2V0EhUKDWNpcGhlcl9zdWl0ZXMYBiADKAUSHAoUaW5zZWN1cmVfc2tpcF92ZXJpZnkYByABKAgSFwoPY2FfY2VydGlmaWNhdGVzGAggASgMEhoKEmNsaWVudF9jZXJ0aWZpY2F0ZRgJIAEoDBIaChJjbGllbnRfcHJpdmF0ZV9rZXkYCiABKAwSFgoOc2Vzc2lvbl90aWNrZXQYCyABKAwihQIKElRMU0hhbmRzaGFrZVJlc3VsdBIbChNuZWdvdGlhdGVkX3Byb3RvY29sGAEgASgJEhQKDGNpcGhlcl9zdWl0ZRgCIAEoBRI0Cgt0bHNfdmVyc2lvbhgDIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhITCgtzZXJ2ZXJfbmFtZRgEIAEoCRIZChFwZWVyX2NlcnRpZmljYXRlcxgFIAMoDBIWCg5zZXNzaW9uX3RpY2tldBgGIAEoDBI+Cg5hcHBsaWVkX3ByZXNldBgHIAEoDjImLnNlc2FtZS50bHMudjFhbHBoYTEuRmluZ2VycHJpbnRQcmVzZXQqXQoKVExTVmVyc2lvbhIbChdUTFNfVkVSU0lPTl9VTlNQRUNJRklFRBAAEgsKB1RMU18xXzAQARILCgdUTFNfMV8xEAISCwoHVExTXzFfMhADEgsKB1RMU18xXzMQBCqNAgoRRmluZ2VycHJpbnRQcmVzZXQSIgoeRklOR0VSUFJJTlRfUFJFU0VUX1VOU1BFQ0lGSUVEEAASDwoLQ0hST01FX0FVVE8QARIOCgpDSFJPTUVfMTIwEAISDgoKQ0hST01FXzEyNBADEg4KCkNIUk9NRV8xMzEQBBIQCgxGSVJFRk9YX0FVVE8QChIPCgtGSVJFRk9YXzEyMBALEg8KC1NBRkFSSV9BVVRPEBQSDQoJU0FGQVJJXzE2EBUSDQoJU0FGQVJJXzE3EBYSDAoISU9TX0FVVE8QHhIKCgZJT1NfMTYQHxISCg5BTkRST0lEX09LSFRUUBAjEhMKD1JVTlRJTUVfREVGQVVMVBAoQiZaJGdpdGh1Yi5jb20vam9leWN1bWluZXMvc2VzYW1lL3JjL3Rsc2IGcHJvdG8z");
 
 /**
- * TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint emulation.
+ * TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint
+ * emulation. It is used both at Dial time (Dial.tls) and for in-stream
+ * opportunistic upgrades (Control.upgrade_tls).
  *
  * @generated from message sesame.tls.v1alpha1.TLSOptions
  */
 export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
   /**
-   * Server Name Indication (SNI) override. If omitted, the dial address hostname MUST be used.
+   * Server Name Indication (SNI) override. If omitted, the dial address
+   * hostname MUST be used.
    *
    * @generated from field: string server_name = 1;
    */
   serverName: string;
 
   /**
-   * Prioritized list of Application-Layer Protocol Negotiation (ALPN) protocol names.
-   * Example: ["h2", "http/1.1"]
+   * Prioritized list of Application-Layer Protocol Negotiation (ALPN)
+   * protocol names, e.g. ["h2", "http/1.1"].
    * If empty, the implementation MUST NOT send an ALPN extension.
    *
    * @generated from field: repeated string alpn_protocols = 2;
@@ -35,14 +38,18 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
   alpnProtocols: string[];
 
   /**
-   * Minimum TLS protocol version acceptable.
+   * Minimum TLS protocol version acceptable. TLS_VERSION_UNSPECIFIED (0)
+   * means the implementation's default minimum applies, not TLS 1.0.
+   * If both min_version and max_version are set, min_version MUST NOT
+   * exceed max_version; violations MUST be rejected with INVALID_ARGUMENT.
    *
    * @generated from field: sesame.tls.v1alpha1.TLSVersion min_version = 3;
    */
   minVersion: TLSVersion;
 
   /**
-   * Maximum TLS protocol version acceptable.
+   * Maximum TLS protocol version acceptable. TLS_VERSION_UNSPECIFIED (0)
+   * means the implementation's default maximum applies.
    *
    * @generated from field: sesame.tls.v1alpha1.TLSVersion max_version = 4;
    */
@@ -50,22 +57,32 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
 
   /**
    * Impersonation profile preset for client cryptographic emulation.
-   * If set to anything other than RUNTIME_DEFAULT, the Server MUST fail closed if it cannot satisfy it.
+   * If set to anything other than RUNTIME_DEFAULT, the Server MUST fail
+   * closed (FAILED_PRECONDITION) if it cannot satisfy it.
    *
    * @generated from field: sesame.tls.v1alpha1.FingerprintPreset fingerprint_preset = 5;
    */
   fingerprintPreset: FingerprintPreset;
 
   /**
-   * Explicit cipher suite identifiers (RFC numbers). If non-empty, overrides preset defaults.
+   * Explicit cipher suite identifiers (IANA values, e.g. 0x1301). If
+   * non-empty, overrides preset defaults.
    *
-   * @generated from field: repeated uint32 cipher_suites = 6;
+   * Support is OPTIONAL: a server that cannot apply an explicit suite list
+   * exactly MUST fail closed with FAILED_PRECONDITION rather than silently
+   * negotiating with its own defaults. Values outside the IANA range
+   * [0, 65535] MUST be rejected with INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated int32 cipher_suites = 6;
    */
   cipherSuites: number[];
 
   /**
-   * InsecureSkipVerify disables remote certificate verification.
-   * MUST NOT be set in production environments unless explicitly requested by user configuration.
+   * Disables remote certificate verification.
+   *
+   * Sensitive security control: clients SHOULD require explicit user
+   * opt-in before setting this, and servers SHOULD treat a request
+   * carrying it as a policy decision the caller owns.
    *
    * @generated from field: bool insecure_skip_verify = 7;
    */
@@ -73,6 +90,8 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
 
   /**
    * Custom Root Certificate Authority certificates in PEM format.
+   * Sensitive: implementations MUST NOT include this material in logs,
+   * errors, or diagnostics.
    *
    * @generated from field: bytes ca_certificates = 8;
    */
@@ -80,6 +99,8 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
 
   /**
    * Client certificate chain in PEM format (for mutual TLS / mTLS).
+   * Sensitive: implementations MUST NOT include this material in logs,
+   * errors, or diagnostics.
    *
    * @generated from field: bytes client_certificate = 9;
    */
@@ -87,13 +108,21 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
 
   /**
    * Client private key in PEM format (for mutual TLS / mTLS).
+   * Sensitive: implementations MUST NOT include this material in logs,
+   * errors, or diagnostics.
    *
    * @generated from field: bytes client_private_key = 10;
    */
   clientPrivateKey: Uint8Array;
 
   /**
-   * TLS 1.3 session resumption ticket or pre-shared key.
+   * TLS 1.3 session resumption ticket or pre-shared key, as previously
+   * issued by the peer (see TLSHandshakeResult.session_ticket).
+   *
+   * Support is OPTIONAL: a server that does not support session resumption
+   * MUST ignore this field and perform a full handshake.
+   * Sensitive: implementations MUST NOT include this material in logs,
+   * errors, or diagnostics.
    *
    * @generated from field: bytes session_ticket = 11;
    */
@@ -108,28 +137,30 @@ export const TLSOptionsSchema: GenMessage<TLSOptions> = /*@__PURE__*/
   messageDesc(file_sesame_tls_v1alpha1_tls, 0);
 
 /**
- * TLSHandshakeResult communicates negotiated TLS session state back to the Client.
+ * TLSHandshakeResult communicates negotiated TLS session state back to the
+ * Client. The Client MUST inspect it before generating Layer 7 payloads.
  *
  * @generated from message sesame.tls.v1alpha1.TLSHandshakeResult
  */
 export type TLSHandshakeResult = Message<"sesame.tls.v1alpha1.TLSHandshakeResult"> & {
   /**
-   * The ALPN protocol string selected by the upstream server (e.g., "h2" or "http/1.1").
-   * The Client MUST inspect this field before generating Layer 7 payloads.
+   * The ALPN protocol string selected by the upstream server (e.g., "h2" or
+   * "http/1.1"). Empty if no protocol was negotiated.
    *
    * @generated from field: string negotiated_protocol = 1;
    */
   negotiatedProtocol: string;
 
   /**
-   * Negotiated cipher suite identifier (e.g. 0x1301 for TLS_AES_128_GCM_SHA256).
+   * Negotiated cipher suite identifier (IANA value, e.g. 0x1301 for
+   * TLS_AES_128_GCM_SHA256). 0 if the runtime could not identify the suite.
    *
-   * @generated from field: uint32 cipher_suite = 2;
+   * @generated from field: int32 cipher_suite = 2;
    */
   cipherSuite: number;
 
   /**
-   * Negotiated TLS version.
+   * Negotiated TLS version. TLS_VERSION_UNSPECIFIED if unknown.
    *
    * @generated from field: sesame.tls.v1alpha1.TLSVersion tls_version = 3;
    */
@@ -143,22 +174,28 @@ export type TLSHandshakeResult = Message<"sesame.tls.v1alpha1.TLSHandshakeResult
   serverName: string;
 
   /**
-   * Peer certificate chain presented by upstream, formatted as raw DER bytes.
+   * Peer certificate chain presented by upstream, formatted as raw DER
+   * bytes, leaf first.
    *
    * @generated from field: repeated bytes peer_certificates = 5;
    */
   peerCertificates: Uint8Array[];
 
   /**
-   * New session ticket issued by upstream (if applicable).
+   * New session ticket issued by upstream, if applicable; may be replayed
+   * via TLSOptions.session_ticket to resume a later session.
+   * Sensitive: implementations MUST NOT include this material in logs,
+   * errors, or diagnostics.
    *
-   * @generated from field: bytes resumption_ticket = 6;
+   * @generated from field: bytes session_ticket = 6;
    */
-  resumptionTicket: Uint8Array;
+  sessionTicket: Uint8Array;
 
   /**
    * The actual fingerprint preset enforced by the server.
-   * The Client MUST verify that applied_preset matches the requested preset.
+   * The Client MUST verify that applied_preset matches the requested
+   * preset, and MUST abort on a mismatch or on a value it does not
+   * recognize.
    *
    * @generated from field: sesame.tls.v1alpha1.FingerprintPreset applied_preset = 7;
    */
@@ -173,10 +210,19 @@ export const TLSHandshakeResultSchema: GenMessage<TLSHandshakeResult> = /*@__PUR
   messageDesc(file_sesame_tls_v1alpha1_tls, 1);
 
 /**
+ * TLSVersion identifies a TLS protocol version.
+ *
+ * Open enum: implementations MUST tolerate values they do not recognize.
+ * Servers MAY reject requests for legacy versions (TLS 1.0, TLS 1.1) by
+ * policy; modeling them here describes the protocol universe, not an
+ * endorsement.
+ *
  * @generated from enum sesame.tls.v1alpha1.TLSVersion
  */
 export enum TLSVersion {
   /**
+   * Default value. Means "implementation default", never TLS 1.0.
+   *
    * @generated from enum value: TLS_VERSION_UNSPECIFIED = 0;
    */
   TLS_VERSION_UNSPECIFIED = 0,
@@ -211,10 +257,16 @@ export const TLSVersionSchema: GenEnum<TLSVersion> = /*@__PURE__*/
 /**
  * FingerprintPreset specifies well-known client cryptographic signatures.
  *
+ * Open enum: new values will be added over time; implementations MUST
+ * tolerate values they do not recognize (fail closed where a specific
+ * preset was requested, per TLSOptions.fingerprint_preset).
+ *
  * @generated from enum sesame.tls.v1alpha1.FingerprintPreset
  */
 export enum FingerprintPreset {
   /**
+   * Default value. Means "no impersonation requested".
+   *
    * @generated from enum value: FINGERPRINT_PRESET_UNSPECIFIED = 0;
    */
   FINGERPRINT_PRESET_UNSPECIFIED = 0,

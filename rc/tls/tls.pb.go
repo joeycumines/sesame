@@ -21,9 +21,16 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// TLSVersion identifies a TLS protocol version.
+//
+// Open enum: implementations MUST tolerate values they do not recognize.
+// Servers MAY reject requests for legacy versions (TLS 1.0, TLS 1.1) by
+// policy; modeling them here describes the protocol universe, not an
+// endorsement.
 type TLSVersion int32
 
 const (
+	// Default value. Means "implementation default", never TLS 1.0.
 	TLSVersion_TLS_VERSION_UNSPECIFIED TLSVersion = 0
 	TLSVersion_TLS_1_0                 TLSVersion = 1
 	TLSVersion_TLS_1_1                 TLSVersion = 2
@@ -77,9 +84,14 @@ func (TLSVersion) EnumDescriptor() ([]byte, []int) {
 }
 
 // FingerprintPreset specifies well-known client cryptographic signatures.
+//
+// Open enum: new values will be added over time; implementations MUST
+// tolerate values they do not recognize (fail closed where a specific
+// preset was requested, per TLSOptions.fingerprint_preset).
 type FingerprintPreset int32
 
 const (
+	// Default value. Means "no impersonation requested".
 	FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED FingerprintPreset = 0
 	// Chromium-based presets
 	FingerprintPreset_CHROME_AUTO FingerprintPreset = 1
@@ -164,34 +176,63 @@ func (FingerprintPreset) EnumDescriptor() ([]byte, []int) {
 	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{1}
 }
 
-// TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint emulation.
+// TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint
+// emulation. It is used both at Dial time (Dial.tls) and for in-stream
+// opportunistic upgrades (Control.upgrade_tls).
 type TLSOptions struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Server Name Indication (SNI) override. If omitted, the dial address hostname MUST be used.
+	// Server Name Indication (SNI) override. If omitted, the dial address
+	// hostname MUST be used.
 	ServerName string `protobuf:"bytes,1,opt,name=server_name,json=serverName,proto3" json:"server_name,omitempty"`
-	// Prioritized list of Application-Layer Protocol Negotiation (ALPN) protocol names.
-	// Example: ["h2", "http/1.1"]
+	// Prioritized list of Application-Layer Protocol Negotiation (ALPN)
+	// protocol names, e.g. ["h2", "http/1.1"].
 	// If empty, the implementation MUST NOT send an ALPN extension.
 	AlpnProtocols []string `protobuf:"bytes,2,rep,name=alpn_protocols,json=alpnProtocols,proto3" json:"alpn_protocols,omitempty"`
-	// Minimum TLS protocol version acceptable.
+	// Minimum TLS protocol version acceptable. TLS_VERSION_UNSPECIFIED (0)
+	// means the implementation's default minimum applies, not TLS 1.0.
+	// If both min_version and max_version are set, min_version MUST NOT
+	// exceed max_version; violations MUST be rejected with INVALID_ARGUMENT.
 	MinVersion TLSVersion `protobuf:"varint,3,opt,name=min_version,json=minVersion,proto3,enum=sesame.tls.v1alpha1.TLSVersion" json:"min_version,omitempty"`
-	// Maximum TLS protocol version acceptable.
+	// Maximum TLS protocol version acceptable. TLS_VERSION_UNSPECIFIED (0)
+	// means the implementation's default maximum applies.
 	MaxVersion TLSVersion `protobuf:"varint,4,opt,name=max_version,json=maxVersion,proto3,enum=sesame.tls.v1alpha1.TLSVersion" json:"max_version,omitempty"`
 	// Impersonation profile preset for client cryptographic emulation.
-	// If set to anything other than RUNTIME_DEFAULT, the Server MUST fail closed if it cannot satisfy it.
+	// If set to anything other than RUNTIME_DEFAULT, the Server MUST fail
+	// closed (FAILED_PRECONDITION) if it cannot satisfy it.
 	FingerprintPreset FingerprintPreset `protobuf:"varint,5,opt,name=fingerprint_preset,json=fingerprintPreset,proto3,enum=sesame.tls.v1alpha1.FingerprintPreset" json:"fingerprint_preset,omitempty"`
-	// Explicit cipher suite identifiers (RFC numbers). If non-empty, overrides preset defaults.
-	CipherSuites []uint32 `protobuf:"varint,6,rep,packed,name=cipher_suites,json=cipherSuites,proto3" json:"cipher_suites,omitempty"`
-	// InsecureSkipVerify disables remote certificate verification.
-	// MUST NOT be set in production environments unless explicitly requested by user configuration.
+	// Explicit cipher suite identifiers (IANA values, e.g. 0x1301). If
+	// non-empty, overrides preset defaults.
+	//
+	// Support is OPTIONAL: a server that cannot apply an explicit suite list
+	// exactly MUST fail closed with FAILED_PRECONDITION rather than silently
+	// negotiating with its own defaults. Values outside the IANA range
+	// [0, 65535] MUST be rejected with INVALID_ARGUMENT.
+	CipherSuites []int32 `protobuf:"varint,6,rep,packed,name=cipher_suites,json=cipherSuites,proto3" json:"cipher_suites,omitempty"`
+	// Disables remote certificate verification.
+	//
+	// Sensitive security control: clients SHOULD require explicit user
+	// opt-in before setting this, and servers SHOULD treat a request
+	// carrying it as a policy decision the caller owns.
 	InsecureSkipVerify bool `protobuf:"varint,7,opt,name=insecure_skip_verify,json=insecureSkipVerify,proto3" json:"insecure_skip_verify,omitempty"`
 	// Custom Root Certificate Authority certificates in PEM format.
+	// Sensitive: implementations MUST NOT include this material in logs,
+	// errors, or diagnostics.
 	CaCertificates []byte `protobuf:"bytes,8,opt,name=ca_certificates,json=caCertificates,proto3" json:"ca_certificates,omitempty"`
 	// Client certificate chain in PEM format (for mutual TLS / mTLS).
+	// Sensitive: implementations MUST NOT include this material in logs,
+	// errors, or diagnostics.
 	ClientCertificate []byte `protobuf:"bytes,9,opt,name=client_certificate,json=clientCertificate,proto3" json:"client_certificate,omitempty"`
 	// Client private key in PEM format (for mutual TLS / mTLS).
+	// Sensitive: implementations MUST NOT include this material in logs,
+	// errors, or diagnostics.
 	ClientPrivateKey []byte `protobuf:"bytes,10,opt,name=client_private_key,json=clientPrivateKey,proto3" json:"client_private_key,omitempty"`
-	// TLS 1.3 session resumption ticket or pre-shared key.
+	// TLS 1.3 session resumption ticket or pre-shared key, as previously
+	// issued by the peer (see TLSHandshakeResult.session_ticket).
+	//
+	// Support is OPTIONAL: a server that does not support session resumption
+	// MUST ignore this field and perform a full handshake.
+	// Sensitive: implementations MUST NOT include this material in logs,
+	// errors, or diagnostics.
 	SessionTicket []byte `protobuf:"bytes,11,opt,name=session_ticket,json=sessionTicket,proto3" json:"session_ticket,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -262,7 +303,7 @@ func (x *TLSOptions) GetFingerprintPreset() FingerprintPreset {
 	return FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED
 }
 
-func (x *TLSOptions) GetCipherSuites() []uint32 {
+func (x *TLSOptions) GetCipherSuites() []int32 {
 	if x != nil {
 		return x.CipherSuites
 	}
@@ -304,24 +345,32 @@ func (x *TLSOptions) GetSessionTicket() []byte {
 	return nil
 }
 
-// TLSHandshakeResult communicates negotiated TLS session state back to the Client.
+// TLSHandshakeResult communicates negotiated TLS session state back to the
+// Client. The Client MUST inspect it before generating Layer 7 payloads.
 type TLSHandshakeResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The ALPN protocol string selected by the upstream server (e.g., "h2" or "http/1.1").
-	// The Client MUST inspect this field before generating Layer 7 payloads.
+	// The ALPN protocol string selected by the upstream server (e.g., "h2" or
+	// "http/1.1"). Empty if no protocol was negotiated.
 	NegotiatedProtocol string `protobuf:"bytes,1,opt,name=negotiated_protocol,json=negotiatedProtocol,proto3" json:"negotiated_protocol,omitempty"`
-	// Negotiated cipher suite identifier (e.g. 0x1301 for TLS_AES_128_GCM_SHA256).
-	CipherSuite uint32 `protobuf:"varint,2,opt,name=cipher_suite,json=cipherSuite,proto3" json:"cipher_suite,omitempty"`
-	// Negotiated TLS version.
+	// Negotiated cipher suite identifier (IANA value, e.g. 0x1301 for
+	// TLS_AES_128_GCM_SHA256). 0 if the runtime could not identify the suite.
+	CipherSuite int32 `protobuf:"varint,2,opt,name=cipher_suite,json=cipherSuite,proto3" json:"cipher_suite,omitempty"`
+	// Negotiated TLS version. TLS_VERSION_UNSPECIFIED if unknown.
 	TlsVersion TLSVersion `protobuf:"varint,3,opt,name=tls_version,json=tlsVersion,proto3,enum=sesame.tls.v1alpha1.TLSVersion" json:"tls_version,omitempty"`
 	// Server Name Indication acknowledged by the upstream server.
 	ServerName string `protobuf:"bytes,4,opt,name=server_name,json=serverName,proto3" json:"server_name,omitempty"`
-	// Peer certificate chain presented by upstream, formatted as raw DER bytes.
+	// Peer certificate chain presented by upstream, formatted as raw DER
+	// bytes, leaf first.
 	PeerCertificates [][]byte `protobuf:"bytes,5,rep,name=peer_certificates,json=peerCertificates,proto3" json:"peer_certificates,omitempty"`
-	// New session ticket issued by upstream (if applicable).
-	ResumptionTicket []byte `protobuf:"bytes,6,opt,name=resumption_ticket,json=resumptionTicket,proto3" json:"resumption_ticket,omitempty"`
+	// New session ticket issued by upstream, if applicable; may be replayed
+	// via TLSOptions.session_ticket to resume a later session.
+	// Sensitive: implementations MUST NOT include this material in logs,
+	// errors, or diagnostics.
+	SessionTicket []byte `protobuf:"bytes,6,opt,name=session_ticket,json=sessionTicket,proto3" json:"session_ticket,omitempty"`
 	// The actual fingerprint preset enforced by the server.
-	// The Client MUST verify that applied_preset matches the requested preset.
+	// The Client MUST verify that applied_preset matches the requested
+	// preset, and MUST abort on a mismatch or on a value it does not
+	// recognize.
 	AppliedPreset FingerprintPreset `protobuf:"varint,7,opt,name=applied_preset,json=appliedPreset,proto3,enum=sesame.tls.v1alpha1.FingerprintPreset" json:"applied_preset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -364,7 +413,7 @@ func (x *TLSHandshakeResult) GetNegotiatedProtocol() string {
 	return ""
 }
 
-func (x *TLSHandshakeResult) GetCipherSuite() uint32 {
+func (x *TLSHandshakeResult) GetCipherSuite() int32 {
 	if x != nil {
 		return x.CipherSuite
 	}
@@ -392,9 +441,9 @@ func (x *TLSHandshakeResult) GetPeerCertificates() [][]byte {
 	return nil
 }
 
-func (x *TLSHandshakeResult) GetResumptionTicket() []byte {
+func (x *TLSHandshakeResult) GetSessionTicket() []byte {
 	if x != nil {
-		return x.ResumptionTicket
+		return x.SessionTicket
 	}
 	return nil
 }
@@ -421,22 +470,22 @@ const file_sesame_tls_v1alpha1_tls_proto_rawDesc = "" +
 	"\vmax_version\x18\x04 \x01(\x0e2\x1f.sesame.tls.v1alpha1.TLSVersionR\n" +
 	"maxVersion\x12U\n" +
 	"\x12fingerprint_preset\x18\x05 \x01(\x0e2&.sesame.tls.v1alpha1.FingerprintPresetR\x11fingerprintPreset\x12#\n" +
-	"\rcipher_suites\x18\x06 \x03(\rR\fcipherSuites\x120\n" +
+	"\rcipher_suites\x18\x06 \x03(\x05R\fcipherSuites\x120\n" +
 	"\x14insecure_skip_verify\x18\a \x01(\bR\x12insecureSkipVerify\x12'\n" +
 	"\x0fca_certificates\x18\b \x01(\fR\x0ecaCertificates\x12-\n" +
 	"\x12client_certificate\x18\t \x01(\fR\x11clientCertificate\x12,\n" +
 	"\x12client_private_key\x18\n" +
 	" \x01(\fR\x10clientPrivateKey\x12%\n" +
-	"\x0esession_ticket\x18\v \x01(\fR\rsessionTicket\"\xf4\x02\n" +
+	"\x0esession_ticket\x18\v \x01(\fR\rsessionTicket\"\xee\x02\n" +
 	"\x12TLSHandshakeResult\x12/\n" +
 	"\x13negotiated_protocol\x18\x01 \x01(\tR\x12negotiatedProtocol\x12!\n" +
-	"\fcipher_suite\x18\x02 \x01(\rR\vcipherSuite\x12@\n" +
+	"\fcipher_suite\x18\x02 \x01(\x05R\vcipherSuite\x12@\n" +
 	"\vtls_version\x18\x03 \x01(\x0e2\x1f.sesame.tls.v1alpha1.TLSVersionR\n" +
 	"tlsVersion\x12\x1f\n" +
 	"\vserver_name\x18\x04 \x01(\tR\n" +
 	"serverName\x12+\n" +
-	"\x11peer_certificates\x18\x05 \x03(\fR\x10peerCertificates\x12+\n" +
-	"\x11resumption_ticket\x18\x06 \x01(\fR\x10resumptionTicket\x12M\n" +
+	"\x11peer_certificates\x18\x05 \x03(\fR\x10peerCertificates\x12%\n" +
+	"\x0esession_ticket\x18\x06 \x01(\fR\rsessionTicket\x12M\n" +
 	"\x0eapplied_preset\x18\a \x01(\x0e2&.sesame.tls.v1alpha1.FingerprintPresetR\rappliedPreset*]\n" +
 	"\n" +
 	"TLSVersion\x12\x1b\n" +

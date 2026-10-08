@@ -19,6 +19,7 @@ import {
   FingerprintPreset,
   TLSHandshakeResult,
   TLSOptions,
+  TLSVersion,
 } from '../gen/sesame/tls/v1alpha1/tls_pb';
 import {ProxyResult} from '../gen/sesame/proxy/v1alpha1/proxy_pb';
 import {StatusSchema} from '../gen/google/rpc/status_pb';
@@ -164,6 +165,20 @@ export function createRemoteControlService(config: ServerConfig) {
         );
       }
 
+      // Validate advertised capabilities at the API boundary, matching the
+      // Go reference: negative window/chunk values are malformed input,
+      // rejected before any dialing or stream output.
+      if (
+        dialReq.capabilities &&
+        (dialReq.capabilities.initialWindowSize < 0 ||
+          dialReq.capabilities.maxChunkSize < 0)
+      ) {
+        throw new ConnectError(
+          'sesame/rc/netconn: negative capability value in dial request',
+          Code.InvalidArgument,
+        );
+      }
+
       const targetAddr = dialReq.address.address;
       const targetNetwork = dialReq.address.network || 'tcp';
 
@@ -191,6 +206,19 @@ export function createRemoteControlService(config: ServerConfig) {
           throw new ConnectError(
             'sesame/rc/netconn: cipher_suites restriction is not supported by standard runtime; custom TLSProvider required',
             Code.FailedPrecondition,
+          );
+        }
+        // Version-range validation at the API boundary, before any dialing:
+        // a floor above its ceiling can never negotiate. TLSVersion values
+        // are monotonic, so the enum compares directly.
+        if (
+          dialReq.tls.minVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED &&
+          dialReq.tls.maxVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED &&
+          dialReq.tls.minVersion > dialReq.tls.maxVersion
+        ) {
+          throw new ConnectError(
+            'sesame/rc/netconn: min_version exceeds max_version',
+            Code.InvalidArgument,
           );
         }
       }
@@ -338,6 +366,14 @@ export function createRemoteControlService(config: ServerConfig) {
         inboundFC = new FlowController(serverInitialWin);
       }
 
+      // Outbound chunks respect both caps: our own advertised max and the
+      // client's advertised receive max (0 = implementation default).
+      // The client's value wins when both are set and it is the smaller.
+      const effectiveMaxChunk =
+        isControlCapable && clientCaps.maxChunkSize > 0
+          ? Math.min(config.maxChunkSize, clientCaps.maxChunkSize)
+          : config.maxChunkSize;
+
       let isClosed = false;
       let pausedForUpgrade = false;
       let inFlightProcessing = 0;
@@ -374,7 +410,7 @@ export function createRemoteControlService(config: ServerConfig) {
           let offset = 0;
           while (offset < chunk.length && !isClosed) {
             const rem = chunk.length - offset;
-            const toTake = Math.min(rem, config.maxChunkSize);
+            const toTake = Math.min(rem, effectiveMaxChunk);
             let acquired = toTake;
             if (outboundFC) {
               acquired = await outboundFC.acquirePartial(toTake, abortSignal);
@@ -614,6 +650,14 @@ export function createRemoteControlService(config: ServerConfig) {
                 }
               }
             } else if (req.data.case === 'control') {
+              if (!isControlCapable) {
+                // Consent rule: a client that sent no capabilities opts out
+                // of in-stream control entirely. The message is not honored
+                // and is treated as the end of the request stream, matching
+                // the Go reference's legacy path (non-bytes messages read
+                // as EOF).
+                break;
+              }
               const ctl = req.data.value;
               if (ctl.action.case === 'upgradeTls') {
                 // NOTE (upgrade-vs-window): this await intentionally runs
@@ -636,6 +680,15 @@ export function createRemoteControlService(config: ServerConfig) {
                 }
                 await handleUpgradeTLS(ctl.action.value.options);
               } else if (ctl.action.case === 'windowUpdate') {
+                // Negative credit is a protocol violation, not an unknown
+                // message: fail closed rather than letting a malformed
+                // peer silently shrink the window.
+                if (ctl.action.value.creditBytes < 0) {
+                  throw new ConnectError(
+                    'sesame/rc/netconn: negative window_update credit_bytes',
+                    Code.InvalidArgument,
+                  );
+                }
                 outboundFC?.addCredit(ctl.action.value.creditBytes);
               } else if (ctl.action.case === 'halfClose') {
                 activeSocket.end();
@@ -649,7 +702,7 @@ export function createRemoteControlService(config: ServerConfig) {
                           case: 'pong',
                           value: create(NetConnResponse_Control_PongSchema, {
                             id: ctl.action.value.id,
-                            timestampNs: ctl.action.value.timestampNs,
+                            timestampNanos: ctl.action.value.timestampNanos,
                           }),
                         },
                       }),
@@ -657,10 +710,13 @@ export function createRemoteControlService(config: ServerConfig) {
                   }),
                 );
               } else if (ctl.action.case === 'reset') {
-                // Wire-contract parity with the Go reference: a client
-                // reset surfaces as a stream error carrying the reason,
-                // indistinguishable neither from a normal end nor from a
-                // generic failure.
+                // Termination flow iv, wire-contract parity with the Go
+                // reference: the client's reason code is propagated as the
+                // stream error code (out-of-range values map to Canceled)
+                // and its message as the error detail. Responses already
+                // buffered in responseQueue still drain (AsyncQueue.next
+                // drains queued items before honoring close); the contract
+                // permits delivery or discard of queued data.
                 const reason = ctl.action.value.reason;
                 responseQueue.close(
                   new ConnectError(

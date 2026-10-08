@@ -26,11 +26,13 @@ service RemoteControl {
   //     3. Any number of NetConnRequest.bytes, NetConnResponse.bytes, and NetConnRequest.control / NetConnResponse.control
   //     4. Termination
   //         i. Graceful (client initiated)
-  //             a. Initiated by grpc.ClientStream.CloseSend or NetConnRequest.control.half_close
-  //             b. After processing all received messages the server initiates (full) connection close of the
-  //                proxy target
-  //             c. All data read from the proxy target is sent to the client
-  //             d. The connection is closed by the server
+  //             a. Full close: initiated by grpc.ClientStream.CloseSend. After processing all received messages the
+  //                server initiates a (full) connection close of the proxy target
+  //             b. All data read from the proxy target is sent to the client
+  //             c. The connection is closed by the server
+  //             d. Write-side close: initiated by NetConnRequest.control.half_close. The server closes only its write
+  //                side to the proxy target (TCP FIN / TLS close_notify) and MUST continue relaying proxy-target data
+  //                to the client until the target terminates; the stream itself continues
   //         ii. Proxy target initiated
   //             a. The proxy target connection closes
   //             b. All buffered data received from the proxy target is sent to the client
@@ -39,6 +41,30 @@ service RemoteControl {
   //             a. The server encounters an error (e.g. due to context cancel)
   //             b. The proxy target connection is closed
   //             c. An error is propagated to the client (though there are common cases where it's already gone)
+  //         iv. Abrupt (client initiated)
+  //             a. Initiated by NetConnRequest.control.reset
+  //             b. The server MUST terminate the stream, propagating reason.code as the gRPC status code (values
+  //                outside [1, 16] map to CANCELLED) and reason.message as the error detail
+  //             c. Queued response data MAY be delivered or discarded
+  //
+  // In-stream control rules:
+  //
+  // - Consent: a client that sends no Dial.capabilities opts out of in-stream control entirely. The server MUST NOT
+  //   honor control messages from such a client and MUST treat them as the end of the request stream (as in
+  //   termination flow i).
+  // - Forward compatibility: implementations MUST ignore control messages, capabilities, and Any payloads whose type
+  //   they do not recognize. A recognized control message carrying an invalid payload (e.g. a negative
+  //   window_update.credit_bytes) is a protocol violation, not an unknown message, and MUST be rejected per its own
+  //   rule.
+  // - Upgrade lifecycle: upgrade_tls MUST carry options (otherwise INVALID_ARGUMENT). The server processes control
+  //   messages inline, so request bytes ordered after upgrade_tls are post-upgrade payload. On failure the server
+  //   MUST emit tls_upgrade_failed and terminate the stream; it MUST NOT continue in cleartext. A client that
+  //   receives tls_upgraded or tls_upgrade_failed with no upgrade pending MUST fail closed (tear the connection
+  //   down), as the TLS state can no longer be known.
+  // - Flow control: activates only when BOTH peers advertise supports_flow_control. Each peer's
+  //   capabilities.initial_window_size is the receive window it grants the peer for data flowing toward it, and a
+  //   window_update travels opposite to the data it credits. Advertised chunk and window sizes MUST NOT exceed the
+  //   stream's gRPC per-message receive limit.
   rpc NetConn (stream NetConnRequest) returns (stream NetConnResponse) {}
 }
 
@@ -49,7 +75,8 @@ message NetConnRequest {
     // 1. Initial dial configuration. MUST be the first message in the stream.
     Dial dial = 1;
 
-    // 2. Opaque payload data chunk.
+    // 2. Opaque payload data chunk, flowing client -> server. Each chunk
+    // MUST NOT exceed the server-advertised max_chunk_size.
     bytes bytes = 2;
 
     // 3. In-stream signaling and transformation commands.
@@ -61,69 +88,117 @@ message NetConnRequest {
     // Target destination address (REQUIRED).
     type.NetAddr address = 1;
 
-    // Dial connection timeout (OPTIONAL).
+    // Dial connection timeout (OPTIONAL). If unset, the server's dial
+    // timeout policy applies, which MAY be unlimited.
     google.protobuf.Duration timeout = 2;
 
     // Remote TLS termination and impersonation configuration (OPTIONAL).
-    // If present, Server MUST terminate TLS at the endpoint.
+    // If present, Server MUST terminate TLS at the endpoint, and MUST
+    // confirm it in NetConnResponse.Conn.tls; the client MUST abort on a
+    // missing confirmation (fail closed).
     .sesame.tls.v1alpha1.TLSOptions tls = 3;
 
     // Egress proxy chaining configuration (OPTIONAL).
+    // If present, Server MUST traverse the requested hops, and MUST
+    // confirm it in NetConnResponse.Conn.proxy; the client MUST abort on a
+    // missing or mismatched confirmation (fail closed).
     .sesame.proxy.v1alpha1.ProxyOptions proxy = 4;
 
-    // Client-advertised capabilities.
+    // Client-advertised capabilities (OPTIONAL). Presence of this message
+    // is the client's consent to in-stream control; omitting it selects
+    // legacy byte-only mode.
     Capabilities capabilities = 5;
 
     // Extensible options for proprietary or third-party middleware plugins.
+    // Implementations MUST ignore payloads whose type_url they do not
+    // recognize; plugin types SHOULD be namespaced under a vendor prefix
+    // to avoid collisions.
     repeated google.protobuf.Any options = 15;
   }
 
   // Control models client-to-server in-stream signaling.
   message Control {
     oneof action {
-      // Command to perform an opportunistic in-stream TLS upgrade.
+      // Command to perform an opportunistic in-stream TLS upgrade. MUST
+      // carry options; the server rejects an options-less upgrade with
+      // INVALID_ARGUMENT.
       UpgradeTLS upgrade_tls = 1;
 
-      // Credit-based stream flow control window update.
+      // Credit-based stream flow control window update: replenishes the
+      // server's window for client -> server bytes.
       WindowUpdate window_update = 2;
 
-      // Unilateral write-side connection close (TCP FIN / TLS close_notify).
+      // Unilateral write-side connection close (TCP FIN / TLS
+      // close_notify). The stream continues; the server keeps relaying
+      // until the target terminates.
       HalfClose half_close = 3;
 
-      // Liveness probe ping.
+      // Liveness probe. The server MUST echo id and timestamp_nanos
+      // verbatim in Control.pong.
       Ping ping = 4;
 
-      // Abrupt stream reset / cancellation.
+      // Abrupt stream reset / cancellation. The server terminates the
+      // stream per termination flow iv.
       Reset reset = 5;
 
-      // Arbitrary plugin extension command.
+      // Arbitrary plugin extension command. Implementations MUST ignore
+      // payloads whose type_url they do not recognize.
       google.protobuf.Any custom = 15;
     }
 
     message UpgradeTLS {
+      // TLS configuration for the upgrade (REQUIRED).
       .sesame.tls.v1alpha1.TLSOptions options = 1;
     }
 
     message WindowUpdate {
-      uint32 credit_bytes = 1;
+      // Additional bytes the peer may send. Additive to its remaining
+      // window; cumulative credit MAY exceed the initial window. 0 is a
+      // no-op. Negative values are a protocol violation: the receiver
+      // MUST terminate the stream with INVALID_ARGUMENT.
+      int32 credit_bytes = 1;
     }
 
     message HalfClose {}
 
     message Ping {
-      uint64 id = 1;
-      int64 timestamp_ns = 2;
+      // Opaque identifier, echoed verbatim.
+      int64 id = 1;
+
+      // Client-originated Unix epoch nanoseconds, echoed verbatim. The
+      // server MUST NOT substitute its own clock; RTT SHOULD be computed
+      // from local send/receive times, not from the echoed value.
+      int64 timestamp_nanos = 2;
     }
 
     message Reset {
+      // Reason for the reset. The server propagates code as the gRPC
+      // status code (values outside [1, 16] map to CANCELLED) and message
+      // as the error detail.
       google.rpc.Status reason = 1;
     }
   }
 
+  // Capabilities models what the client supports and what it grants the
+  // server. All fields default to false/0; a capability not advertised
+  // MUST NOT be assumed.
   message Capabilities {
+    // The client consents to credit-based flow control. Activates only if
+    // the server also advertises it.
     bool supports_flow_control = 1;
+
+    // The client may issue in-stream upgrade_tls commands.
     bool supports_opportunistic_tls = 2;
-    uint32 initial_window_size = 3;
+
+    // Receive window the client grants the server for server -> client
+    // bytes, in bytes. 0 means the implementation default (65535), not a
+    // zero window. Negative values MUST be rejected with INVALID_ARGUMENT.
+    int32 initial_window_size = 3;
+
+    // Maximum data chunk the client can receive, in bytes; the server
+    // MUST NOT emit larger chunks. 0 means the implementation default
+    // (32768). Negative values MUST be rejected with INVALID_ARGUMENT.
+    int32 max_chunk_size = 4;
   }
 }
 
@@ -134,7 +209,8 @@ message NetConnResponse {
     // 1. Initial connection response. MUST be the first message emitted by Server.
     Conn conn = 1;
 
-    // 2. Opaque payload data chunk.
+    // 2. Opaque payload data chunk, flowing server -> client. Each chunk
+    // MUST NOT exceed the client-advertised max_chunk_size.
     bytes bytes = 2;
 
     // 3. In-stream signaling and transformation events.
@@ -143,19 +219,26 @@ message NetConnResponse {
 
   // Conn models the initial response.
   message Conn {
+    // Local address of the connection from the server's perspective.
     type.NetAddr local = 1;
+
+    // Remote address of the connection from the server's perspective.
     type.NetAddr remote = 2;
 
     // Handshake state if TLS termination was executed during Dial.
+    // MUST be present iff Dial.tls was present (fail closed on violation).
     .sesame.tls.v1alpha1.TLSHandshakeResult tls = 3;
 
     // Confirmation if proxy chaining was executed during Dial.
+    // MUST be present iff Dial.proxy carried hops (fail closed on
+    // violation).
     .sesame.proxy.v1alpha1.ProxyResult proxy = 4;
 
     // Server-advertised capabilities.
     Capabilities capabilities = 5;
 
-    // Extensible connection metadata.
+    // Extensible connection metadata. Implementations MUST ignore
+    // payloads whose type_url they do not recognize.
     repeated google.protobuf.Any custom_attributes = 15;
   }
 
@@ -166,56 +249,102 @@ message NetConnResponse {
       TLSUpgraded tls_upgraded = 1;
 
       // Notification that an in-stream UpgradeTLS command has failed.
+      // The server terminates the stream after emitting it; it MUST NOT
+      // continue in cleartext.
       TLSUpgradeFailed tls_upgrade_failed = 2;
 
-      // Credit-based stream flow control window update.
+      // Credit-based stream flow control window update: replenishes the
+      // client's window for server -> client bytes.
       WindowUpdate window_update = 3;
 
-      // Upstream write-side closure (TCP FIN or TLS close_notify).
+      // Upstream write-side closure (TCP FIN or TLS close_notify). The
+      // client receives no further bytes; the stream terminates.
       HalfClose half_close = 4;
 
-      // Response to a Client Ping.
+      // Response to a client Ping, echoing id and timestamp_nanos
+      // verbatim.
       Pong pong = 5;
 
-      // Diagnostics and stream metrics.
+      // Diagnostics and stream metrics. Servers MAY emit metrics at any
+      // time; clients MUST treat them as advisory and MUST NOT depend on
+      // them for correctness.
       Metrics metrics = 6;
 
-      // Arbitrary plugin extension event.
+      // Arbitrary plugin extension event. Implementations MUST ignore
+      // payloads whose type_url they do not recognize.
       google.protobuf.Any custom = 15;
     }
 
     message TLSUpgraded {
+      // Negotiated TLS session state.
       .sesame.tls.v1alpha1.TLSHandshakeResult result = 1;
     }
 
     message TLSUpgradeFailed {
+      // Failure detail. code is a canonical google.rpc.Code.
       google.rpc.Status error = 1;
     }
 
     message WindowUpdate {
-      uint32 credit_bytes = 1;
+      // Additional bytes the peer may send. Additive to its remaining
+      // window; cumulative credit MAY exceed the initial window. 0 is a
+      // no-op. Negative values are a protocol violation: the receiver
+      // MUST fail closed (tear the connection down).
+      int32 credit_bytes = 1;
     }
 
     message HalfClose {}
 
     message Pong {
-      uint64 id = 1;
-      int64 timestamp_ns = 2;
+      // Opaque identifier, echoed verbatim from the Ping.
+      int64 id = 1;
+
+      // Client-originated Unix epoch nanoseconds, echoed verbatim from
+      // the Ping.
+      int64 timestamp_nanos = 2;
     }
 
     message Metrics {
-      uint64 bytes_sent = 1;
-      uint64 bytes_received = 2;
-      uint32 rtt_ms = 3;
+      // Total payload bytes sent to the client, advisory.
+      int64 bytes_sent = 1;
+
+      // Total payload bytes received from the client, advisory.
+      int64 bytes_received = 2;
+
+      // Round-trip time estimate in milliseconds, advisory.
+      int32 rtt_millis = 3;
     }
   }
 
+  // Capabilities models what the server supports and what it grants the
+  // client. All fields default to false/0; a capability not advertised
+  // MUST NOT be assumed.
   message Capabilities {
+    // The server consents to credit-based flow control. Activates only if
+    // the client also advertises it.
     bool supports_flow_control = 1;
+
+    // The server accepts in-stream upgrade_tls commands.
     bool supports_opportunistic_tls = 2;
-    bool supports_impersonation = 3;
-    uint32 max_chunk_size = 4;
-    uint32 initial_window_size = 5;
+
+    reserved 3;
+    reserved "supports_impersonation";
+
+    // Maximum data chunk the server can receive, in bytes; the client
+    // MUST NOT emit larger chunks. 0 means the implementation default
+    // (32768). Advertised values MUST NOT exceed the stream's gRPC
+    // per-message receive limit.
+    int32 max_chunk_size = 4;
+
+    // Receive window the server grants the client for client -> server
+    // bytes, in bytes. 0 means the implementation default (65535), not a
+    // zero window.
+    int32 initial_window_size = 5;
+
+    // Fingerprint presets the server can satisfy, advisory: a pre-dial
+    // hint only. The server MUST still fail closed per-request on a
+    // preset it cannot apply, and clients MUST verify
+    // TLSHandshakeResult.applied_preset regardless.
     repeated .sesame.tls.v1alpha1.FingerprintPreset supported_presets = 6;
   }
 }

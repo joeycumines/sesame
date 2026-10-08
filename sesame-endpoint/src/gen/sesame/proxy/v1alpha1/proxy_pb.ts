@@ -23,6 +23,11 @@ export type ProxyOptions = Message<"sesame.proxy.v1alpha1.ProxyOptions"> & {
   /**
    * Ordered sequence of proxy hops (Hop 1 -> Hop 2 -> ... -> Target).
    *
+   * Each hop is a sequential server-side dial and handshake, so the count
+   * is a server resource commitment: implementations SHOULD enforce a
+   * maximum (the reference bound is 8) and MUST reject requests exceeding
+   * their bound with INVALID_ARGUMENT.
+   *
    * @generated from field: repeated sesame.proxy.v1alpha1.ProxyHop hops = 1;
    */
   hops: ProxyHop[];
@@ -36,35 +41,51 @@ export const ProxyOptionsSchema: GenMessage<ProxyOptions> = /*@__PURE__*/
   messageDesc(file_sesame_proxy_v1alpha1_proxy, 0);
 
 /**
+ * ProxyHop describes one intermediate proxy traversal.
+ *
  * @generated from message sesame.proxy.v1alpha1.ProxyHop
  */
 export type ProxyHop = Message<"sesame.proxy.v1alpha1.ProxyHop"> & {
   /**
+   * Traversal mechanism (REQUIRED).
+   *
    * @generated from field: sesame.proxy.v1alpha1.ProxyHop.Type type = 1;
    */
   type: ProxyHop_Type;
 
   /**
-   * Address of the intermediate proxy server.
+   * Address of the intermediate proxy server (REQUIRED).
    *
    * @generated from field: sesame.type.NetAddr address = 2;
    */
   address?: NetAddr | undefined;
 
   /**
-   * Optional authentication credentials.
+   * Optional authentication username (e.g. SOCKS5 username, or the user
+   * portion of HTTP CONNECT basic authentication).
+   * Sensitive: implementations MUST NOT include this value in logs, errors,
+   * or diagnostics.
    *
    * @generated from field: string username = 3;
    */
   username: string;
 
   /**
+   * Optional authentication password (e.g. SOCKS5 password, or the password
+   * portion of HTTP CONNECT basic authentication).
+   * Sensitive: implementations MUST NOT include this value in logs, errors,
+   * or diagnostics.
+   *
    * @generated from field: string password = 4;
    */
   password: string;
 
   /**
-   * Optional custom authorization header (e.g. "Basic ...", "Bearer ...").
+   * Optional custom authorization header value sent verbatim as the
+   * Proxy-Authorization header (e.g. "Basic ...", "Bearer ..."). Takes
+   * precedence over username/password when set.
+   * Sensitive: implementations MUST NOT include this value in logs, errors,
+   * or diagnostics.
    *
    * @generated from field: string auth_header = 5;
    */
@@ -79,10 +100,18 @@ export const ProxyHopSchema: GenMessage<ProxyHop> = /*@__PURE__*/
   messageDesc(file_sesame_proxy_v1alpha1_proxy, 1);
 
 /**
+ * Traversal mechanism for this hop.
+ *
+ * Open enum: implementations MUST tolerate values they do not recognize
+ * and MUST reject an unrecognized or TYPE_UNSPECIFIED hop with
+ * INVALID_ARGUMENT.
+ *
  * @generated from enum sesame.proxy.v1alpha1.ProxyHop.Type
  */
 export enum ProxyHop_Type {
   /**
+   * Default value. Invalid in a well-formed hop.
+   *
    * @generated from enum value: TYPE_UNSPECIFIED = 0;
    */
   TYPE_UNSPECIFIED = 0,
@@ -111,14 +140,21 @@ export const ProxyHop_TypeSchema: GenEnum<ProxyHop_Type> = /*@__PURE__*/
  */
 export type ProxyResult = Message<"sesame.proxy.v1alpha1.ProxyResult"> & {
   /**
-   * The sequence of successfully traversed proxy hops.
+   * The sequence of successfully traversed proxy hops, as requested.
+   * The Client MUST verify the hop count matches its request and abort on
+   * a mismatch (fail closed).
    *
    * @generated from field: repeated sesame.type.NetAddr traversed_hops = 1;
    */
   traversedHops: NetAddr[];
 
   /**
-   * The external egress IP/port observed after the final proxy hop.
+   * Best-effort observation of the tunnel's egress point from the server's
+   * perspective: the transport peer address of the connection to the first
+   * hop (resolved, not as requested). This is NOT the externally observed
+   * egress address as seen by the target; determining that requires
+   * out-of-band cooperation. Clients MUST NOT rely on this field for
+   * security decisions.
    *
    * @generated from field: sesame.type.NetAddr egress_address = 2;
    */

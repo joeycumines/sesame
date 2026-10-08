@@ -22,9 +22,15 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Traversal mechanism for this hop.
+//
+// Open enum: implementations MUST tolerate values they do not recognize
+// and MUST reject an unrecognized or TYPE_UNSPECIFIED hop with
+// INVALID_ARGUMENT.
 type ProxyHop_Type int32
 
 const (
+	// Default value. Invalid in a well-formed hop.
 	ProxyHop_TYPE_UNSPECIFIED ProxyHop_Type = 0
 	ProxyHop_HTTP_CONNECT     ProxyHop_Type = 1
 	ProxyHop_SOCKS5           ProxyHop_Type = 2
@@ -75,6 +81,11 @@ func (ProxyHop_Type) EnumDescriptor() ([]byte, []int) {
 type ProxyOptions struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Ordered sequence of proxy hops (Hop 1 -> Hop 2 -> ... -> Target).
+	//
+	// Each hop is a sequential server-side dial and handshake, so the count
+	// is a server resource commitment: implementations SHOULD enforce a
+	// maximum (the reference bound is 8) and MUST reject requests exceeding
+	// their bound with INVALID_ARGUMENT.
 	Hops          []*ProxyHop `protobuf:"bytes,1,rep,name=hops,proto3" json:"hops,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -117,15 +128,28 @@ func (x *ProxyOptions) GetHops() []*ProxyHop {
 	return nil
 }
 
+// ProxyHop describes one intermediate proxy traversal.
 type ProxyHop struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Type  ProxyHop_Type          `protobuf:"varint,1,opt,name=type,proto3,enum=sesame.proxy.v1alpha1.ProxyHop_Type" json:"type,omitempty"`
-	// Address of the intermediate proxy server.
+	// Traversal mechanism (REQUIRED).
+	Type ProxyHop_Type `protobuf:"varint,1,opt,name=type,proto3,enum=sesame.proxy.v1alpha1.ProxyHop_Type" json:"type,omitempty"`
+	// Address of the intermediate proxy server (REQUIRED).
 	Address *netaddr.NetAddr `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	// Optional authentication credentials.
+	// Optional authentication username (e.g. SOCKS5 username, or the user
+	// portion of HTTP CONNECT basic authentication).
+	// Sensitive: implementations MUST NOT include this value in logs, errors,
+	// or diagnostics.
 	Username string `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
+	// Optional authentication password (e.g. SOCKS5 password, or the password
+	// portion of HTTP CONNECT basic authentication).
+	// Sensitive: implementations MUST NOT include this value in logs, errors,
+	// or diagnostics.
 	Password string `protobuf:"bytes,4,opt,name=password,proto3" json:"password,omitempty"`
-	// Optional custom authorization header (e.g. "Basic ...", "Bearer ...").
+	// Optional custom authorization header value sent verbatim as the
+	// Proxy-Authorization header (e.g. "Basic ...", "Bearer ..."). Takes
+	// precedence over username/password when set.
+	// Sensitive: implementations MUST NOT include this value in logs, errors,
+	// or diagnostics.
 	AuthHeader    string `protobuf:"bytes,5,opt,name=auth_header,json=authHeader,proto3" json:"auth_header,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -199,9 +223,16 @@ func (x *ProxyHop) GetAuthHeader() string {
 // ProxyResult confirms successful proxy negotiation.
 type ProxyResult struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The sequence of successfully traversed proxy hops.
+	// The sequence of successfully traversed proxy hops, as requested.
+	// The Client MUST verify the hop count matches its request and abort on
+	// a mismatch (fail closed).
 	TraversedHops []*netaddr.NetAddr `protobuf:"bytes,1,rep,name=traversed_hops,json=traversedHops,proto3" json:"traversed_hops,omitempty"`
-	// The external egress IP/port observed after the final proxy hop.
+	// Best-effort observation of the tunnel's egress point from the server's
+	// perspective: the transport peer address of the connection to the first
+	// hop (resolved, not as requested). This is NOT the externally observed
+	// egress address as seen by the target; determining that requires
+	// out-of-band cooperation. Clients MUST NOT rely on this field for
+	// security decisions.
 	EgressAddress *netaddr.NetAddr `protobuf:"bytes,2,opt,name=egress_address,json=egressAddress,proto3" json:"egress_address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

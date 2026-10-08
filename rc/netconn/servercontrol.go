@@ -19,7 +19,7 @@ import (
 
 const (
 	// DefaultInitialWindowSize is the default flow control window (65,535 bytes).
-	DefaultInitialWindowSize uint32 = 65535
+	DefaultInitialWindowSize int32 = 65535
 
 	// DefaultChunkSize is the maximum chunk size for streaming payload bytes.
 	DefaultChunkSize = 32 * 1024
@@ -65,7 +65,12 @@ type (
 )
 
 // NewFlowController creates a new flow controller with the given initial window credit.
-func NewFlowController(initialCredit uint32) *FlowController {
+// A negative initial credit is clamped to zero: callers validate wire input
+// at the boundary, and the clamp keeps the accumulator robust regardless.
+func NewFlowController(initialCredit int32) *FlowController {
+	if initialCredit < 0 {
+		initialCredit = 0
+	}
 	fc := &FlowController{
 		credit: int64(initialCredit),
 	}
@@ -163,8 +168,11 @@ func (fc *FlowController) AcquirePartial(ctx context.Context, max int) (int, err
 }
 
 // AddCredit increments available window credit and wakes waiters.
-func (fc *FlowController) AddCredit(n uint32) {
-	if fc == nil || n == 0 {
+// Non-positive credit is a no-op: wire input is validated at the boundary
+// (negative credit is a protocol violation), and internal refunds are
+// always positive, so this guard is defense in depth for the accumulator.
+func (fc *FlowController) AddCredit(n int32) {
+	if fc == nil || n <= 0 {
 		return
 	}
 	fc.mu.Lock()
@@ -223,11 +231,16 @@ func RunServerDemux(
 		s.inboundFC = NewFlowController(serverInitWin)
 	}
 
-	// Never emit chunks larger than our own advertised cap; an absent
-	// advertisement falls back to DefaultChunkSize.
+	// Never emit chunks larger than our own advertised cap, nor larger
+	// than the client's advertised receive cap; absent advertisements
+	// fall back to DefaultChunkSize. The client's value wins when both
+	// are set and it is the smaller.
 	readChunkSize := DefaultChunkSize
 	if advertised := int(serverCaps.GetMaxChunkSize()); advertised > 0 {
 		readChunkSize = advertised
+	}
+	if clientMax := int(clientCaps.GetMaxChunkSize()); clientMax > 0 && clientMax < readChunkSize {
+		readChunkSize = clientMax
 	}
 
 	defer func() {
@@ -411,7 +424,7 @@ func RunServerDemux(
 							writeLen = nw
 						}
 						if s.inboundFC != nil {
-							s.inboundFC.AddCredit(uint32(writeLen))
+							s.inboundFC.AddCredit(int32(writeLen))
 						}
 						rem = rem[writeLen:]
 					}
@@ -423,7 +436,7 @@ func RunServerDemux(
 								Control: &rc.NetConnResponse_Control{
 									Event: &rc.NetConnResponse_Control_WindowUpdate_{
 										WindowUpdate: &rc.NetConnResponse_Control_WindowUpdate{
-											CreditBytes: uint32(len(data.Bytes)),
+											CreditBytes: int32(len(data.Bytes)),
 										},
 									},
 								},
@@ -477,6 +490,13 @@ func RunServerDemux(
 
 				case *rc.NetConnRequest_Control_WindowUpdate_:
 					if s.outboundFC != nil {
+						// Negative credit is a protocol violation, not an
+						// unknown message: fail closed rather than letting a
+						// malformed peer silently shrink the window.
+						if action.WindowUpdate.GetCreditBytes() < 0 {
+							errCh <- grpcstatus.Error(codes.InvalidArgument, "sesame/rc/netconn: negative window_update credit_bytes")
+							return
+						}
 						s.outboundFC.AddCredit(action.WindowUpdate.GetCreditBytes())
 					}
 
@@ -495,8 +515,8 @@ func RunServerDemux(
 							Control: &rc.NetConnResponse_Control{
 								Event: &rc.NetConnResponse_Control_Pong_{
 									Pong: &rc.NetConnResponse_Control_Pong{
-										Id:          action.Ping.GetId(),
-										TimestampNs: action.Ping.GetTimestampNs(),
+										Id:             action.Ping.GetId(),
+										TimestampNanos: action.Ping.GetTimestampNanos(),
 									},
 								},
 							},
@@ -505,7 +525,14 @@ func RunServerDemux(
 					s.sendMu.Unlock()
 
 				case *rc.NetConnRequest_Control_Reset_:
-					errCh <- fmt.Errorf("sesame/rc/netconn: connection reset by client: %s", action.Reset_.GetReason().GetMessage())
+					// Termination flow iv: propagate the client's reason
+					// code as the gRPC status code (out-of-range values
+					// map to CANCELLED, matching the TS endpoint's
+					// codeFromRpcStatus) and its message as the detail.
+					errCh <- grpcstatus.Error(
+						rpcStatusCode(action.Reset_.GetReason().GetCode()),
+						fmt.Sprintf("sesame/rc/netconn: connection reset by client: %s", action.Reset_.GetReason().GetMessage()),
+					)
 					return
 				}
 			}
@@ -519,6 +546,17 @@ func RunServerDemux(
 	case err := <-errCh:
 		return err
 	}
+}
+
+// rpcStatusCode maps a google.rpc.Status code (canonical gRPC numbering)
+// to a gRPC status code. Values outside [1, 16] map to CANCELLED, matching
+// the TS endpoint's codeFromRpcStatus: a reset is a client-side
+// cancellation, and code 0 (OK) carries no reset semantics.
+func rpcStatusCode(code int32) codes.Code {
+	if code >= 1 && code <= 16 {
+		return codes.Code(code)
+	}
+	return codes.Canceled
 }
 
 func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesametls.TLSOptions) error {

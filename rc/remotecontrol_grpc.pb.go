@@ -41,11 +41,13 @@ type RemoteControlClient interface {
 	//     3. Any number of NetConnRequest.bytes, NetConnResponse.bytes, and NetConnRequest.control / NetConnResponse.control
 	//     4. Termination
 	//         i. Graceful (client initiated)
-	//             a. Initiated by grpc.ClientStream.CloseSend or NetConnRequest.control.half_close
-	//             b. After processing all received messages the server initiates (full) connection close of the
-	//                proxy target
-	//             c. All data read from the proxy target is sent to the client
-	//             d. The connection is closed by the server
+	//             a. Full close: initiated by grpc.ClientStream.CloseSend. After processing all received messages the
+	//                server initiates a (full) connection close of the proxy target
+	//             b. All data read from the proxy target is sent to the client
+	//             c. The connection is closed by the server
+	//             d. Write-side close: initiated by NetConnRequest.control.half_close. The server closes only its write
+	//                side to the proxy target (TCP FIN / TLS close_notify) and MUST continue relaying proxy-target data
+	//                to the client until the target terminates; the stream itself continues
 	//         ii. Proxy target initiated
 	//             a. The proxy target connection closes
 	//             b. All buffered data received from the proxy target is sent to the client
@@ -54,6 +56,30 @@ type RemoteControlClient interface {
 	//             a. The server encounters an error (e.g. due to context cancel)
 	//             b. The proxy target connection is closed
 	//             c. An error is propagated to the client (though there are common cases where it's already gone)
+	//         iv. Abrupt (client initiated)
+	//             a. Initiated by NetConnRequest.control.reset
+	//             b. The server MUST terminate the stream, propagating reason.code as the gRPC status code (values
+	//                outside [1, 16] map to CANCELLED) and reason.message as the error detail
+	//             c. Queued response data MAY be delivered or discarded
+	//
+	// In-stream control rules:
+	//
+	// - Consent: a client that sends no Dial.capabilities opts out of in-stream control entirely. The server MUST NOT
+	//   honor control messages from such a client and MUST treat them as the end of the request stream (as in
+	//   termination flow i).
+	// - Forward compatibility: implementations MUST ignore control messages, capabilities, and Any payloads whose type
+	//   they do not recognize. A recognized control message carrying an invalid payload (e.g. a negative
+	//   window_update.credit_bytes) is a protocol violation, not an unknown message, and MUST be rejected per its own
+	//   rule.
+	// - Upgrade lifecycle: upgrade_tls MUST carry options (otherwise INVALID_ARGUMENT). The server processes control
+	//   messages inline, so request bytes ordered after upgrade_tls are post-upgrade payload. On failure the server
+	//   MUST emit tls_upgrade_failed and terminate the stream; it MUST NOT continue in cleartext. A client that
+	//   receives tls_upgraded or tls_upgrade_failed with no upgrade pending MUST fail closed (tear the connection
+	//   down), as the TLS state can no longer be known.
+	// - Flow control: activates only when BOTH peers advertise supports_flow_control. Each peer's
+	//   capabilities.initial_window_size is the receive window it grants the peer for data flowing toward it, and a
+	//   window_update travels opposite to the data it credits. Advertised chunk and window sizes MUST NOT exceed the
+	//   stream's gRPC per-message receive limit.
 	NetConn(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[NetConnRequest, NetConnResponse], error)
 }
 
@@ -97,11 +123,13 @@ type RemoteControlServer interface {
 	//     3. Any number of NetConnRequest.bytes, NetConnResponse.bytes, and NetConnRequest.control / NetConnResponse.control
 	//     4. Termination
 	//         i. Graceful (client initiated)
-	//             a. Initiated by grpc.ClientStream.CloseSend or NetConnRequest.control.half_close
-	//             b. After processing all received messages the server initiates (full) connection close of the
-	//                proxy target
-	//             c. All data read from the proxy target is sent to the client
-	//             d. The connection is closed by the server
+	//             a. Full close: initiated by grpc.ClientStream.CloseSend. After processing all received messages the
+	//                server initiates a (full) connection close of the proxy target
+	//             b. All data read from the proxy target is sent to the client
+	//             c. The connection is closed by the server
+	//             d. Write-side close: initiated by NetConnRequest.control.half_close. The server closes only its write
+	//                side to the proxy target (TCP FIN / TLS close_notify) and MUST continue relaying proxy-target data
+	//                to the client until the target terminates; the stream itself continues
 	//         ii. Proxy target initiated
 	//             a. The proxy target connection closes
 	//             b. All buffered data received from the proxy target is sent to the client
@@ -110,6 +138,30 @@ type RemoteControlServer interface {
 	//             a. The server encounters an error (e.g. due to context cancel)
 	//             b. The proxy target connection is closed
 	//             c. An error is propagated to the client (though there are common cases where it's already gone)
+	//         iv. Abrupt (client initiated)
+	//             a. Initiated by NetConnRequest.control.reset
+	//             b. The server MUST terminate the stream, propagating reason.code as the gRPC status code (values
+	//                outside [1, 16] map to CANCELLED) and reason.message as the error detail
+	//             c. Queued response data MAY be delivered or discarded
+	//
+	// In-stream control rules:
+	//
+	// - Consent: a client that sends no Dial.capabilities opts out of in-stream control entirely. The server MUST NOT
+	//   honor control messages from such a client and MUST treat them as the end of the request stream (as in
+	//   termination flow i).
+	// - Forward compatibility: implementations MUST ignore control messages, capabilities, and Any payloads whose type
+	//   they do not recognize. A recognized control message carrying an invalid payload (e.g. a negative
+	//   window_update.credit_bytes) is a protocol violation, not an unknown message, and MUST be rejected per its own
+	//   rule.
+	// - Upgrade lifecycle: upgrade_tls MUST carry options (otherwise INVALID_ARGUMENT). The server processes control
+	//   messages inline, so request bytes ordered after upgrade_tls are post-upgrade payload. On failure the server
+	//   MUST emit tls_upgrade_failed and terminate the stream; it MUST NOT continue in cleartext. A client that
+	//   receives tls_upgraded or tls_upgrade_failed with no upgrade pending MUST fail closed (tear the connection
+	//   down), as the TLS state can no longer be known.
+	// - Flow control: activates only when BOTH peers advertise supports_flow_control. Each peer's
+	//   capabilities.initial_window_size is the receive window it grants the peer for data flowing toward it, and a
+	//   window_update travels opposite to the data it credits. Advertised chunk and window sizes MUST NOT exceed the
+	//   stream's gRPC per-message receive limit.
 	NetConn(grpc.BidiStreamingServer[NetConnRequest, NetConnResponse]) error
 	mustEmbedUnimplementedRemoteControlServer()
 }

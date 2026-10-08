@@ -229,7 +229,7 @@ func (x *NetConnRequest_Control_WindowUpdate) Proto_ShallowCopy(v interface{}) {
 	case *NetConnRequest_Control_WindowUpdate:
 		x.CreditBytes = v.GetCreditBytes()
 	default:
-		if v, ok := v.(interface{ GetCreditBytes() uint32 }); ok {
+		if v, ok := v.(interface{ GetCreditBytes() rune }); ok {
 			x.CreditBytes = v.GetCreditBytes()
 		}
 	}
@@ -269,13 +269,13 @@ func (x *NetConnRequest_Control_Ping) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *NetConnRequest_Control_Ping:
 		x.Id = v.GetId()
-		x.TimestampNs = v.GetTimestampNs()
+		x.TimestampNanos = v.GetTimestampNanos()
 	default:
-		if v, ok := v.(interface{ GetId() uint64 }); ok {
+		if v, ok := v.(interface{ GetId() int64 }); ok {
 			x.Id = v.GetId()
 		}
-		if v, ok := v.(interface{ GetTimestampNs() int64 }); ok {
-			x.TimestampNs = v.GetTimestampNs()
+		if v, ok := v.(interface{ GetTimestampNanos() int64 }); ok {
+			x.TimestampNanos = v.GetTimestampNanos()
 		}
 	}
 }
@@ -285,7 +285,7 @@ func (x *NetConnRequest_Control_Ping) Proto_ShallowClone() (c *NetConnRequest_Co
 	if x != nil {
 		c = new(NetConnRequest_Control_Ping)
 		c.Id = x.Id
-		c.TimestampNs = x.TimestampNs
+		c.TimestampNanos = x.TimestampNanos
 	}
 	return
 }
@@ -326,6 +326,7 @@ func (x *NetConnRequest_Capabilities) Proto_ShallowCopy(v interface{}) {
 		x.SupportsFlowControl = v.GetSupportsFlowControl()
 		x.SupportsOpportunisticTls = v.GetSupportsOpportunisticTls()
 		x.InitialWindowSize = v.GetInitialWindowSize()
+		x.MaxChunkSize = v.GetMaxChunkSize()
 	default:
 		if v, ok := v.(interface{ GetSupportsFlowControl() bool }); ok {
 			x.SupportsFlowControl = v.GetSupportsFlowControl()
@@ -333,8 +334,11 @@ func (x *NetConnRequest_Capabilities) Proto_ShallowCopy(v interface{}) {
 		if v, ok := v.(interface{ GetSupportsOpportunisticTls() bool }); ok {
 			x.SupportsOpportunisticTls = v.GetSupportsOpportunisticTls()
 		}
-		if v, ok := v.(interface{ GetInitialWindowSize() uint32 }); ok {
+		if v, ok := v.(interface{ GetInitialWindowSize() rune }); ok {
 			x.InitialWindowSize = v.GetInitialWindowSize()
+		}
+		if v, ok := v.(interface{ GetMaxChunkSize() rune }); ok {
+			x.MaxChunkSize = v.GetMaxChunkSize()
 		}
 	}
 }
@@ -346,6 +350,7 @@ func (x *NetConnRequest_Capabilities) Proto_ShallowClone() (c *NetConnRequest_Ca
 		c.SupportsFlowControl = x.SupportsFlowControl
 		c.SupportsOpportunisticTls = x.SupportsOpportunisticTls
 		c.InitialWindowSize = x.InitialWindowSize
+		c.MaxChunkSize = x.MaxChunkSize
 	}
 	return
 }
@@ -607,7 +612,7 @@ func (x *NetConnResponse_Control_WindowUpdate) Proto_ShallowCopy(v interface{}) 
 	case *NetConnResponse_Control_WindowUpdate:
 		x.CreditBytes = v.GetCreditBytes()
 	default:
-		if v, ok := v.(interface{ GetCreditBytes() uint32 }); ok {
+		if v, ok := v.(interface{ GetCreditBytes() rune }); ok {
 			x.CreditBytes = v.GetCreditBytes()
 		}
 	}
@@ -647,13 +652,13 @@ func (x *NetConnResponse_Control_Pong) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *NetConnResponse_Control_Pong:
 		x.Id = v.GetId()
-		x.TimestampNs = v.GetTimestampNs()
+		x.TimestampNanos = v.GetTimestampNanos()
 	default:
-		if v, ok := v.(interface{ GetId() uint64 }); ok {
+		if v, ok := v.(interface{ GetId() int64 }); ok {
 			x.Id = v.GetId()
 		}
-		if v, ok := v.(interface{ GetTimestampNs() int64 }); ok {
-			x.TimestampNs = v.GetTimestampNs()
+		if v, ok := v.(interface{ GetTimestampNanos() int64 }); ok {
+			x.TimestampNanos = v.GetTimestampNanos()
 		}
 	}
 }
@@ -663,7 +668,7 @@ func (x *NetConnResponse_Control_Pong) Proto_ShallowClone() (c *NetConnResponse_
 	if x != nil {
 		c = new(NetConnResponse_Control_Pong)
 		c.Id = x.Id
-		c.TimestampNs = x.TimestampNs
+		c.TimestampNanos = x.TimestampNanos
 	}
 	return
 }
@@ -678,16 +683,16 @@ func (x *NetConnResponse_Control_Metrics) Proto_ShallowCopy(v interface{}) {
 	case *NetConnResponse_Control_Metrics:
 		x.BytesSent = v.GetBytesSent()
 		x.BytesReceived = v.GetBytesReceived()
-		x.RttMs = v.GetRttMs()
+		x.RttMillis = v.GetRttMillis()
 	default:
-		if v, ok := v.(interface{ GetBytesSent() uint64 }); ok {
+		if v, ok := v.(interface{ GetBytesSent() int64 }); ok {
 			x.BytesSent = v.GetBytesSent()
 		}
-		if v, ok := v.(interface{ GetBytesReceived() uint64 }); ok {
+		if v, ok := v.(interface{ GetBytesReceived() int64 }); ok {
 			x.BytesReceived = v.GetBytesReceived()
 		}
-		if v, ok := v.(interface{ GetRttMs() uint32 }); ok {
-			x.RttMs = v.GetRttMs()
+		if v, ok := v.(interface{ GetRttMillis() rune }); ok {
+			x.RttMillis = v.GetRttMillis()
 		}
 	}
 }
@@ -698,7 +703,7 @@ func (x *NetConnResponse_Control_Metrics) Proto_ShallowClone() (c *NetConnRespon
 		c = new(NetConnResponse_Control_Metrics)
 		c.BytesSent = x.BytesSent
 		c.BytesReceived = x.BytesReceived
-		c.RttMs = x.RttMs
+		c.RttMillis = x.RttMillis
 	}
 	return
 }
@@ -713,7 +718,6 @@ func (x *NetConnResponse_Capabilities) Proto_ShallowCopy(v interface{}) {
 	case *NetConnResponse_Capabilities:
 		x.SupportsFlowControl = v.GetSupportsFlowControl()
 		x.SupportsOpportunisticTls = v.GetSupportsOpportunisticTls()
-		x.SupportsImpersonation = v.GetSupportsImpersonation()
 		x.MaxChunkSize = v.GetMaxChunkSize()
 		x.InitialWindowSize = v.GetInitialWindowSize()
 		x.SupportedPresets = v.GetSupportedPresets()
@@ -724,13 +728,10 @@ func (x *NetConnResponse_Capabilities) Proto_ShallowCopy(v interface{}) {
 		if v, ok := v.(interface{ GetSupportsOpportunisticTls() bool }); ok {
 			x.SupportsOpportunisticTls = v.GetSupportsOpportunisticTls()
 		}
-		if v, ok := v.(interface{ GetSupportsImpersonation() bool }); ok {
-			x.SupportsImpersonation = v.GetSupportsImpersonation()
-		}
-		if v, ok := v.(interface{ GetMaxChunkSize() uint32 }); ok {
+		if v, ok := v.(interface{ GetMaxChunkSize() rune }); ok {
 			x.MaxChunkSize = v.GetMaxChunkSize()
 		}
-		if v, ok := v.(interface{ GetInitialWindowSize() uint32 }); ok {
+		if v, ok := v.(interface{ GetInitialWindowSize() rune }); ok {
 			x.InitialWindowSize = v.GetInitialWindowSize()
 		}
 		if v, ok := v.(interface {
@@ -747,7 +748,6 @@ func (x *NetConnResponse_Capabilities) Proto_ShallowClone() (c *NetConnResponse_
 		c = new(NetConnResponse_Capabilities)
 		c.SupportsFlowControl = x.SupportsFlowControl
 		c.SupportsOpportunisticTls = x.SupportsOpportunisticTls
-		c.SupportsImpersonation = x.SupportsImpersonation
 		c.MaxChunkSize = x.MaxChunkSize
 		c.InitialWindowSize = x.InitialWindowSize
 		c.SupportedPresets = x.SupportedPresets

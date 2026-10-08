@@ -1,6 +1,7 @@
 package netconn_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -11,6 +12,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"io"
+	"math"
 	"math/big"
 	"net"
 	"os"
@@ -26,6 +28,7 @@ import (
 	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
 	sesametls "github.com/joeycumines/sesame/rc/tls"
 	"github.com/joeycumines/sesame/type/netaddr"
+	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -1511,4 +1514,499 @@ func TestClientServer_TLSResult_ConcurrentAccessDuringUpgrade(t *testing.T) {
 		t.Fatalf("UpgradeTLS failed: %v", err)
 	}
 	wg.Wait()
+}
+
+// TestFlowController_NegativeAndLargeCredit exercises the int32 credit
+// domain after the AIP-141 unsigned-to-signed migration: negative credit is
+// a no-op at the accumulator (wire input is rejected at the boundary), and
+// cumulative credit at the int32 maximum must not overflow the internal
+// int64 accumulator.
+func TestFlowController_NegativeAndLargeCredit(t *testing.T) {
+	fc := netconn.NewFlowController(100)
+
+	// Negative credit must not shrink the window.
+	fc.AddCredit(-50)
+	if err := fc.Acquire(context.Background(), 100); err != nil {
+		t.Fatalf("negative AddCredit must be a no-op; acquire failed: %v", err)
+	}
+
+	// Zero credit is likewise a no-op.
+	fc.AddCredit(0)
+
+	// Two maximum-value credits accumulate without overflow: the window
+	// must hold 2*(2^31-1) bytes, beyond any single int32 grant.
+	fc.AddCredit(math.MaxInt32)
+	fc.AddCredit(math.MaxInt32)
+	if err := fc.Acquire(context.Background(), math.MaxInt32); err != nil {
+		t.Fatalf("acquire of one max grant failed: %v", err)
+	}
+	if err := fc.Acquire(context.Background(), math.MaxInt32); err != nil {
+		t.Fatalf("acquire of second max grant failed: %v", err)
+	}
+
+	// A negative initial window is clamped to zero, never a negative
+	// accumulator.
+	neg := netconn.NewFlowController(-1)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if err := neg.Acquire(ctx, 1); err == nil {
+		t.Fatal("expected timeout acquiring from zero window")
+	}
+}
+
+// TestClientServer_WindowUpdate_NegativeCredit_ServerRejects verifies the
+// negative credit_bytes protocol-violation rule: the server must terminate
+// the stream with INVALID_ARGUMENT rather than honoring or silently
+// ignoring the malformed update.
+func TestClientServer_WindowUpdate_NegativeCredit_ServerRejects(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, _ := net.Pipe()
+	defer clientPipe.Close()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	if err != nil {
+		t.Fatalf("failed opening NetConn stream: %v", err)
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Dial_{
+			Dial: &rc.NetConnRequest_Dial{
+				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &rc.NetConnRequest_Capabilities{
+					SupportsFlowControl: true,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending dial: %v", err)
+	}
+
+	if res, err := stream.Recv(); err != nil || res.GetConn() == nil {
+		t.Fatalf("expected conn response, got (%v, %T)", err, res.GetData())
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Control_{
+			Control: &rc.NetConnRequest_Control{
+				Action: &rc.NetConnRequest_Control_WindowUpdate_{
+					WindowUpdate: &rc.NetConnRequest_Control_WindowUpdate{
+						CreditBytes: -1024,
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending negative window update: %v", err)
+	}
+
+	for {
+		_, err = stream.Recv()
+		if err != nil {
+			break
+		}
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument stream termination, got %v", err)
+	}
+}
+
+// TestClientServer_Reset_PropagatesReasonCode verifies termination flow iv:
+// the server propagates the client's reason.code as the gRPC status code
+// and reason.message as the error detail, matching the TS endpoint.
+func TestClientServer_Reset_PropagatesReasonCode(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, _ := net.Pipe()
+	defer clientPipe.Close()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	if err != nil {
+		t.Fatalf("failed opening NetConn stream: %v", err)
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Dial_{
+			Dial: &rc.NetConnRequest_Dial{
+				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &rc.NetConnRequest_Capabilities{
+					SupportsFlowControl: true,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending dial: %v", err)
+	}
+
+	if res, err := stream.Recv(); err != nil || res.GetConn() == nil {
+		t.Fatalf("expected conn response, got (%v, %T)", err, res.GetData())
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Control_{
+			Control: &rc.NetConnRequest_Control{
+				Action: &rc.NetConnRequest_Control_Reset_{
+					Reset_: &rc.NetConnRequest_Control_Reset{
+						Reason: &rpcstatus.Status{
+							Code:    int32(codes.FailedPrecondition),
+							Message: "client requested abort",
+						},
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending reset: %v", err)
+	}
+
+	for {
+		_, err = stream.Recv()
+		if err != nil {
+			break
+		}
+	}
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("expected FailedPrecondition stream termination, got %v", err)
+	}
+	if !strings.Contains(status.Convert(err).Message(), "client requested abort") {
+		t.Fatalf("expected reset reason message in error detail, got %v", err)
+	}
+}
+
+// TestClientServer_NegativeCapabilities_RejectedAtDial verifies the dial-time
+// capability validation: negative window/chunk advertisements are rejected
+// with INVALID_ARGUMENT before any connection is dialed or announced.
+func TestClientServer_NegativeCapabilities_RejectedAtDial(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	for _, tc := range []struct {
+		name string
+		caps *rc.NetConnRequest_Capabilities
+	}{
+		{
+			name: "negative initial window",
+			caps: &rc.NetConnRequest_Capabilities{InitialWindowSize: -1},
+		},
+		{
+			name: "negative max chunk",
+			caps: &rc.NetConnRequest_Capabilities{MaxChunkSize: -512},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clientPipe, _ := net.Pipe()
+			defer clientPipe.Close()
+
+			server := netconn.Server{
+				Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+					return &mockPipeDialer{conn: clientPipe}, nil
+				},
+			}
+
+			gc := ccFactory(func(h testutil.GRPCServer) {
+				rc.RegisterRemoteControlServer(h, &server)
+			})
+			defer gc.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+			if err != nil {
+				t.Fatalf("failed opening NetConn stream: %v", err)
+			}
+
+			if err := stream.Send(&rc.NetConnRequest{
+				Data: &rc.NetConnRequest_Dial_{
+					Dial: &rc.NetConnRequest_Dial{
+						Address:      &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
+						Capabilities: tc.caps,
+					},
+				},
+			}); err != nil {
+				t.Fatalf("failed sending dial: %v", err)
+			}
+
+			for {
+				_, err = stream.Recv()
+				if err != nil {
+					break
+				}
+			}
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("expected InvalidArgument, got %v", err)
+			}
+		})
+	}
+}
+
+// TestServer_ClampsOutboundChunksToClientMaxChunkSize verifies the request
+// capabilities.max_chunk_size contract: the server must not emit a data
+// chunk larger than the client's advertised receive maximum.
+func TestServer_ClampsOutboundChunksToClientMaxChunkSize(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, serverPipe := net.Pipe()
+	defer clientPipe.Close()
+	defer serverPipe.Close()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	if err != nil {
+		t.Fatalf("failed opening NetConn stream: %v", err)
+	}
+
+	const clientMaxChunk = 1024
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Dial_{
+			Dial: &rc.NetConnRequest_Dial{
+				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &rc.NetConnRequest_Capabilities{
+					SupportsFlowControl: true,
+					MaxChunkSize:        clientMaxChunk,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending dial: %v", err)
+	}
+
+	if res, err := stream.Recv(); err != nil || res.GetConn() == nil {
+		t.Fatalf("expected conn response, got (%v, %T)", err, res.GetData())
+	}
+
+	// Push 5x the client's advertised maximum through the target pipe;
+	// every server->client data chunk must arrive clamped to it.
+	payload := bytes.Repeat([]byte{'x'}, clientMaxChunk*5)
+	go func() {
+		_, _ = serverPipe.Write(payload)
+	}()
+
+	var received int
+	for received < len(payload) {
+		res, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("receive failed after %d bytes: %v", received, err)
+		}
+		if b, ok := res.GetData().(*rc.NetConnResponse_Bytes); ok {
+			if len(b.Bytes) > clientMaxChunk {
+				t.Fatalf("server emitted a %d byte chunk, exceeding the client's advertised max_chunk_size %d", len(b.Bytes), clientMaxChunk)
+			}
+			received += len(b.Bytes)
+		}
+	}
+}
+
+// TestClientServer_DialTLSMinVersionAboveMax_RejectedAtDial verifies the
+// dial-time TLS version-range validation through the full server path:
+// the request is rejected with INVALID_ARGUMENT before any dialing.
+func TestClientServer_DialTLSMinVersionAboveMax_RejectedAtDial(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, _ := net.Pipe()
+	defer clientPipe.Close()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	if err != nil {
+		t.Fatalf("failed opening NetConn stream: %v", err)
+	}
+
+	if err := stream.Send(&rc.NetConnRequest{
+		Data: &rc.NetConnRequest_Dial_{
+			Dial: &rc.NetConnRequest_Dial{
+				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Tls: &sesametls.TLSOptions{
+					ServerName: "example.com",
+					MinVersion: sesametls.TLSVersion_TLS_1_3,
+					MaxVersion: sesametls.TLSVersion_TLS_1_2,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed sending dial: %v", err)
+	}
+
+	for {
+		_, err = stream.Recv()
+		if err != nil {
+			break
+		}
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", err)
+	}
+}
+
+// maliciousServerStream is a scripted RemoteControl_NetConnClient that
+// plays a server emitting a conn response followed by a protocol-violating
+// negative window_update, to exercise the client's fail-closed path.
+type maliciousServerStream struct {
+	rc.RemoteControl_NetConnClient
+	responses []*rc.NetConnResponse
+	recvIdx   int
+	ctx       context.Context
+}
+
+func (m *maliciousServerStream) Recv() (*rc.NetConnResponse, error) {
+	if m.recvIdx < len(m.responses) {
+		res := m.responses[m.recvIdx]
+		m.recvIdx++
+		return res, nil
+	}
+	<-m.ctx.Done()
+	return nil, m.ctx.Err()
+}
+
+func (m *maliciousServerStream) Send(*rc.NetConnRequest) error { return nil }
+
+func (m *maliciousServerStream) Context() context.Context { return m.ctx }
+
+type maliciousServerAPI struct {
+	stream *maliciousServerStream
+}
+
+func (f *maliciousServerAPI) NetConn(ctx context.Context, _ ...grpc.CallOption) (rc.RemoteControl_NetConnClient, error) {
+	f.stream.ctx = ctx
+	return f.stream, nil
+}
+
+// TestClientControl_NegativeWindowUpdate_Poisons verifies the client half of
+// the negative credit rule: a server sending a negative window_update is a
+// protocol violation, and the client must fail closed (tear the connection
+// down) rather than honor or silently ignore it.
+func TestClientControl_NegativeWindowUpdate_Poisons(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stream := &maliciousServerStream{
+		responses: []*rc.NetConnResponse{
+			{Data: &rc.NetConnResponse_Conn_{
+				Conn: &rc.NetConnResponse_Conn{
+					Local:  &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+					Remote: &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:2"},
+					Capabilities: &rc.NetConnResponse_Capabilities{
+						SupportsFlowControl: true,
+					},
+				},
+			}},
+			{Data: &rc.NetConnResponse_Control_{
+				Control: &rc.NetConnResponse_Control{
+					Event: &rc.NetConnResponse_Control_WindowUpdate_{
+						WindowUpdate: &rc.NetConnResponse_Control_WindowUpdate{
+							CreditBytes: -4096,
+						},
+					},
+				},
+			}},
+		},
+	}
+
+	client := netconn.Client{
+		API: &maliciousServerAPI{stream: stream},
+		Capabilities: &rc.NetConnRequest_Capabilities{
+			SupportsFlowControl: true,
+		},
+	}
+
+	conn, err := client.DialContext(ctx, "tcp", "example.com:80")
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	defer conn.Close()
+
+	// The poisoned connection must fail reads, not silently continue with
+	// a shrunken window. The specific violation surfaces to pending
+	// operations (abortPending) and the pipe's write side; the app's Read
+	// observes the teardown as a close error, per the established poison
+	// semantics shared with unsolicited-upgrade handling.
+	readErr := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 16)
+		_, err := conn.Read(buf)
+		readErr <- err
+	}()
+
+	select {
+	case err := <-readErr:
+		if err == nil {
+			t.Fatal("expected poisoned read to fail")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for poisoned read to fail")
+	}
+
+	// Subsequent writes must fail too: the connection is torn down.
+	if _, err := conn.Write([]byte("x")); err == nil {
+		t.Fatal("expected write on poisoned connection to fail")
+	}
 }

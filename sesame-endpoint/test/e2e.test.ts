@@ -24,6 +24,7 @@ import {StatusSchema} from '../src/gen/google/rpc/status_pb';
 import {
   FingerprintPreset,
   TLSOptionsSchema,
+  TLSVersion,
 } from '../src/gen/sesame/tls/v1alpha1/tls_pb';
 import {
   ProxyHop_Type,
@@ -1221,7 +1222,7 @@ describe('sesame-endpoint E2E Suite', () => {
               case: 'ping',
               value: create(NetConnRequest_Control_PingSchema, {
                 id: pingId,
-                timestampNs: pingTs,
+                timestampNanos: pingTs,
               }),
             },
           }),
@@ -1235,7 +1236,7 @@ describe('sesame-endpoint E2E Suite', () => {
     const ctl = pongResp.value.data.value;
     expect(ctl.event.case).toBe('pong');
     expect(ctl.event.value.id).toBe(pingId);
-    expect(ctl.event.value.timestampNs).toBe(pingTs);
+    expect(ctl.event.value.timestampNanos).toBe(pingTs);
 
     reqStream.close();
   });
@@ -1417,6 +1418,329 @@ describe('sesame-endpoint E2E Suite', () => {
     } finally {
       for (const sock of sinkSockets) sock.destroy();
       await new Promise<void>(r => sink.close(() => r()));
+    }
+  });
+
+  it('rejects a negative window_update credit as a protocol violation', async () => {
+    const echoServer = net.createServer(rawSocket => {
+      rawSocket.pipe(rawSocket);
+    });
+    await new Promise<void>(r => echoServer.listen(0, '127.0.0.1', () => r()));
+    const echoPort = (echoServer.address() as net.AddressInfo).port;
+
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${echoPort}`,
+            }),
+            capabilities: create(NetConnRequest_CapabilitiesSchema, {
+              supportsFlowControl: true,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    try {
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'control',
+            value: create(NetConnRequest_ControlSchema, {
+              action: {
+                case: 'windowUpdate',
+                value: create(NetConnRequest_Control_WindowUpdateSchema, {
+                  creditBytes: -1024,
+                }),
+              },
+            }),
+          },
+        }),
+      );
+
+      let termErr: unknown;
+      try {
+        while (true) {
+          const resp = await iterator.next();
+          if (resp.done) break;
+        }
+      } catch (err: unknown) {
+        termErr = err;
+      }
+      expect(termErr).toBeInstanceOf(ConnectError);
+      expect((termErr as ConnectError).code).toBe(Code.InvalidArgument);
+      expect((termErr as ConnectError).message).toContain(
+        'negative window_update credit_bytes',
+      );
+    } finally {
+      reqStream.close();
+      await new Promise<void>(r => echoServer.close(() => r()));
+    }
+  });
+
+  it('rejects negative capability values at dial with InvalidArgument', async () => {
+    for (const caps of [
+      {supportsFlowControl: true, initialWindowSize: -1, maxChunkSize: 0},
+      {supportsFlowControl: true, initialWindowSize: 0, maxChunkSize: -512},
+    ]) {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: '127.0.0.1:1',
+              }),
+              capabilities: create(NetConnRequest_CapabilitiesSchema, caps),
+            }),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      let dialErr: unknown;
+      try {
+        while (true) {
+          const resp = await iterator.next();
+          if (resp.done) break;
+        }
+      } catch (err: unknown) {
+        dialErr = err;
+      }
+      expect(dialErr).toBeInstanceOf(ConnectError);
+      expect((dialErr as ConnectError).code).toBe(Code.InvalidArgument);
+      expect((dialErr as ConnectError).message).toContain(
+        'negative capability value',
+      );
+      reqStream.close();
+    }
+  });
+
+  it('rejects min_version above max_version with InvalidArgument', async () => {
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: '127.0.0.1:1',
+            }),
+            tls: create(TLSOptionsSchema, {
+              serverName: 'example.com',
+              minVersion: TLSVersion.TLS_1_3,
+              maxVersion: TLSVersion.TLS_1_2,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    let tlsErr: unknown;
+    try {
+      while (true) {
+        const resp = await iterator.next();
+        if (resp.done) break;
+      }
+    } catch (err: unknown) {
+      tlsErr = err;
+    }
+    expect(tlsErr).toBeInstanceOf(ConnectError);
+    expect((tlsErr as ConnectError).code).toBe(Code.InvalidArgument);
+    expect((tlsErr as ConnectError).message).toContain(
+      'min_version exceeds max_version',
+    );
+    reqStream.close();
+  });
+
+  it('rejects proxy chains exceeding the hop bound with InvalidArgument', async () => {
+    const hops = Array.from({length: 9}, () =>
+      create(ProxyHopSchema, {
+        type: ProxyHop_Type.HTTP_CONNECT,
+        address: create(NetAddrSchema, {
+          network: 'tcp',
+          address: '127.0.0.1:1',
+        }),
+      }),
+    );
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: '127.0.0.1:1',
+            }),
+            proxy: create(ProxyOptionsSchema, {hops}),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    let hopErr: unknown;
+    try {
+      while (true) {
+        const resp = await iterator.next();
+        if (resp.done) break;
+      }
+    } catch (err: unknown) {
+      hopErr = err;
+    }
+    expect(hopErr).toBeInstanceOf(ConnectError);
+    expect((hopErr as ConnectError).code).toBe(Code.InvalidArgument);
+    expect((hopErr as ConnectError).message).toContain(
+      'too many proxy hops: 9 (max 8)',
+    );
+    reqStream.close();
+  });
+
+  it('clamps outbound chunks to the client-advertised max_chunk_size', async () => {
+    const echoServer = net.createServer(rawSocket => {
+      rawSocket.pipe(rawSocket);
+    });
+    await new Promise<void>(r => echoServer.listen(0, '127.0.0.1', () => r()));
+    const echoPort = (echoServer.address() as net.AddressInfo).port;
+
+    const clientMaxChunk = 1024;
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${echoPort}`,
+            }),
+            capabilities: create(NetConnRequest_CapabilitiesSchema, {
+              supportsFlowControl: true,
+              maxChunkSize: clientMaxChunk,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    try {
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      // Push 5x the advertised maximum through the echo target; every
+      // server->client data chunk must arrive clamped to it.
+      const payload = Buffer.alloc(clientMaxChunk * 5, 0x78);
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {case: 'bytes', value: new Uint8Array(payload)},
+        }),
+      );
+
+      let received = 0;
+      while (received < payload.length) {
+        const resp = await iterator.next();
+        if (resp.done) {
+          throw new Error(`stream ended after ${received} bytes`);
+        }
+        if (resp.value.data.case === 'bytes') {
+          const chunk = resp.value.data.value;
+          expect(chunk.length).toBeLessThanOrEqual(clientMaxChunk);
+          received += chunk.length;
+        }
+      }
+      expect(received).toBe(payload.length);
+    } finally {
+      reqStream.close();
+      await new Promise<void>(r => echoServer.close(() => r()));
+    }
+  });
+
+  it('treats control from a no-capabilities client as request-stream end', async () => {
+    // Consent rule: a client that sent no capabilities opts out of in-stream
+    // control; a control message is not honored and is treated as the end
+    // of the request stream (full close), matching the Go legacy path.
+    let upstreamFullyClosed = false;
+    const upstream = net.createServer(rawSocket => {
+      rawSocket.on('close', () => {
+        upstreamFullyClosed = true;
+      });
+    });
+    await new Promise<void>(r => upstream.listen(0, '127.0.0.1', () => r()));
+    const upstreamPort = (upstream.address() as net.AddressInfo).port;
+
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${upstreamPort}`,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    try {
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'control',
+            value: create(NetConnRequest_ControlSchema, {
+              action: {
+                case: 'ping',
+                value: create(NetConnRequest_Control_PingSchema, {
+                  id: 1n,
+                  timestampNanos: 1n,
+                }),
+              },
+            }),
+          },
+        }),
+      );
+
+      // The stream must terminate cleanly (request-stream end semantics),
+      // and the upstream must be fully closed.
+      const final = await iterator.next();
+      expect(final.done).toBe(true);
+      await new Promise<void>(r => setTimeout(r, 50));
+      expect(upstreamFullyClosed).toBe(true);
+    } finally {
+      reqStream.close();
+      await new Promise<void>(r => upstream.close(() => r()));
     }
   });
 });

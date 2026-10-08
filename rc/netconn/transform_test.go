@@ -284,7 +284,7 @@ func TestSocks5Handshake_ArmsFallbackDeadline(t *testing.T) {
 func TestBuildTLSConfig_RejectsOutOfRangeCipherSuite(t *testing.T) {
 	_, err := BuildTLSConfig(&sesametls.TLSOptions{
 		ServerName:   "example.com",
-		CipherSuites: []uint32{0x1301, 1 << 20},
+		CipherSuites: []int32{0x1301, 1 << 20},
 	}, "")
 	if err == nil {
 		t.Fatal("expected InvalidArgument for out-of-range cipher suite")
@@ -293,10 +293,22 @@ func TestBuildTLSConfig_RejectsOutOfRangeCipherSuite(t *testing.T) {
 		t.Fatalf("expected InvalidArgument, got %v", err)
 	}
 
+	// Negative values are equally invalid post the int32 migration.
+	_, err = BuildTLSConfig(&sesametls.TLSOptions{
+		ServerName:   "example.com",
+		CipherSuites: []int32{-1},
+	}, "")
+	if err == nil {
+		t.Fatal("expected InvalidArgument for negative cipher suite")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", err)
+	}
+
 	// In-range values must still build.
 	cfg, err := BuildTLSConfig(&sesametls.TLSOptions{
 		ServerName:   "example.com",
-		CipherSuites: []uint32{0x1301},
+		CipherSuites: []int32{0x1301},
 	}, "")
 	if err != nil {
 		t.Fatalf("BuildTLSConfig failed for valid suite: %v", err)
@@ -304,4 +316,75 @@ func TestBuildTLSConfig_RejectsOutOfRangeCipherSuite(t *testing.T) {
 	if len(cfg.CipherSuites) != 1 || cfg.CipherSuites[0] != 0x1301 {
 		t.Fatalf("unexpected cipher suites: %v", cfg.CipherSuites)
 	}
+}
+
+func TestBuildTLSConfig_RejectsMinVersionAboveMax(t *testing.T) {
+	_, err := BuildTLSConfig(&sesametls.TLSOptions{
+		ServerName: "example.com",
+		MinVersion: sesametls.TLSVersion_TLS_1_3,
+		MaxVersion: sesametls.TLSVersion_TLS_1_2,
+	}, "")
+	if err == nil {
+		t.Fatal("expected InvalidArgument for min_version above max_version")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", err)
+	}
+
+	// A valid range, and one-sided bounds, must still build.
+	for _, opts := range []*sesametls.TLSOptions{
+		{ServerName: "example.com", MinVersion: sesametls.TLSVersion_TLS_1_2, MaxVersion: sesametls.TLSVersion_TLS_1_3},
+		{ServerName: "example.com", MinVersion: sesametls.TLSVersion_TLS_1_2},
+		{ServerName: "example.com", MaxVersion: sesametls.TLSVersion_TLS_1_3},
+	} {
+		if _, err := BuildTLSConfig(opts, ""); err != nil {
+			t.Fatalf("BuildTLSConfig failed for valid bounds %+v: %v", opts, err)
+		}
+	}
+}
+
+func TestExecuteTLSHandshake_RejectsMinVersionAboveMax(t *testing.T) {
+	// The version-range rule applies to every provider path, not just the
+	// standard runtime: validation must precede any provider dispatch.
+	_, _, err := ExecuteTLSHandshake(context.Background(), nil, &sesametls.TLSOptions{
+		ServerName: "example.com",
+		MinVersion: sesametls.TLSVersion_TLS_1_3,
+		MaxVersion: sesametls.TLSVersion_TLS_1_0,
+	}, "", nil)
+	if err == nil {
+		t.Fatal("expected InvalidArgument for min_version above max_version")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestExecuteProxyHops_TooManyHops(t *testing.T) {
+	hops := make([]*sesameproxy.ProxyHop, MaxProxyHops+1)
+	for i := range hops {
+		hops[i] = &sesameproxy.ProxyHop{
+			Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
+			Address: &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+		}
+	}
+
+	// The bound must be enforced before any dialing: the dialer failing the
+	// test proves validation precedes resource commitment.
+	_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		t.Fatal("dialer must not be called for an over-bound hop chain")
+		return nil, nil
+	}), &sesameproxy.ProxyOptions{Hops: hops}, "tcp", "example.com:80")
+	if err == nil {
+		t.Fatal("expected InvalidArgument for too many hops")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", err)
+	}
+}
+
+// dialerFunc adapts a function to the Dialer interface.
+type dialerFunc func(ctx context.Context, network, address string) (net.Conn, error)
+
+func (f dialerFunc) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return f(ctx, network, address)
 }

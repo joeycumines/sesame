@@ -115,7 +115,8 @@ type NetConnRequest_Dial_ struct {
 }
 
 type NetConnRequest_Bytes struct {
-	// 2. Opaque payload data chunk.
+	// 2. Opaque payload data chunk, flowing client -> server. Each chunk
+	// MUST NOT exceed the server-advertised max_chunk_size.
 	Bytes []byte `protobuf:"bytes,2,opt,name=bytes,proto3,oneof"`
 }
 
@@ -218,7 +219,8 @@ type NetConnResponse_Conn_ struct {
 }
 
 type NetConnResponse_Bytes struct {
-	// 2. Opaque payload data chunk.
+	// 2. Opaque payload data chunk, flowing server -> client. Each chunk
+	// MUST NOT exceed the client-advertised max_chunk_size.
 	Bytes []byte `protobuf:"bytes,2,opt,name=bytes,proto3,oneof"`
 }
 
@@ -238,16 +240,27 @@ type NetConnRequest_Dial struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Target destination address (REQUIRED).
 	Address *netaddr.NetAddr `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
-	// Dial connection timeout (OPTIONAL).
+	// Dial connection timeout (OPTIONAL). If unset, the server's dial
+	// timeout policy applies, which MAY be unlimited.
 	Timeout *durationpb.Duration `protobuf:"bytes,2,opt,name=timeout,proto3" json:"timeout,omitempty"`
 	// Remote TLS termination and impersonation configuration (OPTIONAL).
-	// If present, Server MUST terminate TLS at the endpoint.
+	// If present, Server MUST terminate TLS at the endpoint, and MUST
+	// confirm it in NetConnResponse.Conn.tls; the client MUST abort on a
+	// missing confirmation (fail closed).
 	Tls *tls.TLSOptions `protobuf:"bytes,3,opt,name=tls,proto3" json:"tls,omitempty"`
 	// Egress proxy chaining configuration (OPTIONAL).
+	// If present, Server MUST traverse the requested hops, and MUST
+	// confirm it in NetConnResponse.Conn.proxy; the client MUST abort on a
+	// missing or mismatched confirmation (fail closed).
 	Proxy *proxy.ProxyOptions `protobuf:"bytes,4,opt,name=proxy,proto3" json:"proxy,omitempty"`
-	// Client-advertised capabilities.
+	// Client-advertised capabilities (OPTIONAL). Presence of this message
+	// is the client's consent to in-stream control; omitting it selects
+	// legacy byte-only mode.
 	Capabilities *NetConnRequest_Capabilities `protobuf:"bytes,5,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
 	// Extensible options for proprietary or third-party middleware plugins.
+	// Implementations MUST ignore payloads whose type_url they do not
+	// recognize; plugin types SHOULD be namespaced under a vendor prefix
+	// to avoid collisions.
 	Options       []*anypb.Any `protobuf:"bytes,15,rep,name=options,proto3" json:"options,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -437,32 +450,40 @@ type isNetConnRequest_Control_Action interface {
 }
 
 type NetConnRequest_Control_UpgradeTls struct {
-	// Command to perform an opportunistic in-stream TLS upgrade.
+	// Command to perform an opportunistic in-stream TLS upgrade. MUST
+	// carry options; the server rejects an options-less upgrade with
+	// INVALID_ARGUMENT.
 	UpgradeTls *NetConnRequest_Control_UpgradeTLS `protobuf:"bytes,1,opt,name=upgrade_tls,json=upgradeTls,proto3,oneof"`
 }
 
 type NetConnRequest_Control_WindowUpdate_ struct {
-	// Credit-based stream flow control window update.
+	// Credit-based stream flow control window update: replenishes the
+	// server's window for client -> server bytes.
 	WindowUpdate *NetConnRequest_Control_WindowUpdate `protobuf:"bytes,2,opt,name=window_update,json=windowUpdate,proto3,oneof"`
 }
 
 type NetConnRequest_Control_HalfClose_ struct {
-	// Unilateral write-side connection close (TCP FIN / TLS close_notify).
+	// Unilateral write-side connection close (TCP FIN / TLS
+	// close_notify). The stream continues; the server keeps relaying
+	// until the target terminates.
 	HalfClose *NetConnRequest_Control_HalfClose `protobuf:"bytes,3,opt,name=half_close,json=halfClose,proto3,oneof"`
 }
 
 type NetConnRequest_Control_Ping_ struct {
-	// Liveness probe ping.
+	// Liveness probe. The server MUST echo id and timestamp_nanos
+	// verbatim in Control.pong.
 	Ping *NetConnRequest_Control_Ping `protobuf:"bytes,4,opt,name=ping,proto3,oneof"`
 }
 
 type NetConnRequest_Control_Reset_ struct {
-	// Abrupt stream reset / cancellation.
+	// Abrupt stream reset / cancellation. The server terminates the
+	// stream per termination flow iv.
 	Reset_ *NetConnRequest_Control_Reset `protobuf:"bytes,5,opt,name=reset,proto3,oneof"`
 }
 
 type NetConnRequest_Control_Custom struct {
-	// Arbitrary plugin extension command.
+	// Arbitrary plugin extension command. Implementations MUST ignore
+	// payloads whose type_url they do not recognize.
 	Custom *anypb.Any `protobuf:"bytes,15,opt,name=custom,proto3,oneof"`
 }
 
@@ -478,13 +499,26 @@ func (*NetConnRequest_Control_Reset_) isNetConnRequest_Control_Action() {}
 
 func (*NetConnRequest_Control_Custom) isNetConnRequest_Control_Action() {}
 
+// Capabilities models what the client supports and what it grants the
+// server. All fields default to false/0; a capability not advertised
+// MUST NOT be assumed.
 type NetConnRequest_Capabilities struct {
-	state                    protoimpl.MessageState `protogen:"open.v1"`
-	SupportsFlowControl      bool                   `protobuf:"varint,1,opt,name=supports_flow_control,json=supportsFlowControl,proto3" json:"supports_flow_control,omitempty"`
-	SupportsOpportunisticTls bool                   `protobuf:"varint,2,opt,name=supports_opportunistic_tls,json=supportsOpportunisticTls,proto3" json:"supports_opportunistic_tls,omitempty"`
-	InitialWindowSize        uint32                 `protobuf:"varint,3,opt,name=initial_window_size,json=initialWindowSize,proto3" json:"initial_window_size,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The client consents to credit-based flow control. Activates only if
+	// the server also advertises it.
+	SupportsFlowControl bool `protobuf:"varint,1,opt,name=supports_flow_control,json=supportsFlowControl,proto3" json:"supports_flow_control,omitempty"`
+	// The client may issue in-stream upgrade_tls commands.
+	SupportsOpportunisticTls bool `protobuf:"varint,2,opt,name=supports_opportunistic_tls,json=supportsOpportunisticTls,proto3" json:"supports_opportunistic_tls,omitempty"`
+	// Receive window the client grants the server for server -> client
+	// bytes, in bytes. 0 means the implementation default (65535), not a
+	// zero window. Negative values MUST be rejected with INVALID_ARGUMENT.
+	InitialWindowSize int32 `protobuf:"varint,3,opt,name=initial_window_size,json=initialWindowSize,proto3" json:"initial_window_size,omitempty"`
+	// Maximum data chunk the client can receive, in bytes; the server
+	// MUST NOT emit larger chunks. 0 means the implementation default
+	// (32768). Negative values MUST be rejected with INVALID_ARGUMENT.
+	MaxChunkSize  int32 `protobuf:"varint,4,opt,name=max_chunk_size,json=maxChunkSize,proto3" json:"max_chunk_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NetConnRequest_Capabilities) Reset() {
@@ -531,16 +565,24 @@ func (x *NetConnRequest_Capabilities) GetSupportsOpportunisticTls() bool {
 	return false
 }
 
-func (x *NetConnRequest_Capabilities) GetInitialWindowSize() uint32 {
+func (x *NetConnRequest_Capabilities) GetInitialWindowSize() int32 {
 	if x != nil {
 		return x.InitialWindowSize
 	}
 	return 0
 }
 
+func (x *NetConnRequest_Capabilities) GetMaxChunkSize() int32 {
+	if x != nil {
+		return x.MaxChunkSize
+	}
+	return 0
+}
+
 type NetConnRequest_Control_UpgradeTLS struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Options       *tls.TLSOptions        `protobuf:"bytes,1,opt,name=options,proto3" json:"options,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// TLS configuration for the upgrade (REQUIRED).
+	Options       *tls.TLSOptions `protobuf:"bytes,1,opt,name=options,proto3" json:"options,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -583,8 +625,12 @@ func (x *NetConnRequest_Control_UpgradeTLS) GetOptions() *tls.TLSOptions {
 }
 
 type NetConnRequest_Control_WindowUpdate struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	CreditBytes   uint32                 `protobuf:"varint,1,opt,name=credit_bytes,json=creditBytes,proto3" json:"credit_bytes,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Additional bytes the peer may send. Additive to its remaining
+	// window; cumulative credit MAY exceed the initial window. 0 is a
+	// no-op. Negative values are a protocol violation: the receiver
+	// MUST terminate the stream with INVALID_ARGUMENT.
+	CreditBytes   int32 `protobuf:"varint,1,opt,name=credit_bytes,json=creditBytes,proto3" json:"credit_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -619,7 +665,7 @@ func (*NetConnRequest_Control_WindowUpdate) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_remotecontrol_proto_rawDescGZIP(), []int{0, 1, 1}
 }
 
-func (x *NetConnRequest_Control_WindowUpdate) GetCreditBytes() uint32 {
+func (x *NetConnRequest_Control_WindowUpdate) GetCreditBytes() int32 {
 	if x != nil {
 		return x.CreditBytes
 	}
@@ -663,11 +709,15 @@ func (*NetConnRequest_Control_HalfClose) Descriptor() ([]byte, []int) {
 }
 
 type NetConnRequest_Control_Ping struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	TimestampNs   int64                  `protobuf:"varint,2,opt,name=timestamp_ns,json=timestampNs,proto3" json:"timestamp_ns,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Opaque identifier, echoed verbatim.
+	Id int64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Client-originated Unix epoch nanoseconds, echoed verbatim. The
+	// server MUST NOT substitute its own clock; RTT SHOULD be computed
+	// from local send/receive times, not from the echoed value.
+	TimestampNanos int64 `protobuf:"varint,2,opt,name=timestamp_nanos,json=timestampNanos,proto3" json:"timestamp_nanos,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *NetConnRequest_Control_Ping) Reset() {
@@ -700,23 +750,26 @@ func (*NetConnRequest_Control_Ping) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_remotecontrol_proto_rawDescGZIP(), []int{0, 1, 3}
 }
 
-func (x *NetConnRequest_Control_Ping) GetId() uint64 {
+func (x *NetConnRequest_Control_Ping) GetId() int64 {
 	if x != nil {
 		return x.Id
 	}
 	return 0
 }
 
-func (x *NetConnRequest_Control_Ping) GetTimestampNs() int64 {
+func (x *NetConnRequest_Control_Ping) GetTimestampNanos() int64 {
 	if x != nil {
-		return x.TimestampNs
+		return x.TimestampNanos
 	}
 	return 0
 }
 
 type NetConnRequest_Control_Reset struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Reason        *status.Status         `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Reason for the reset. The server propagates code as the gRPC
+	// status code (values outside [1, 16] map to CANCELLED) and message
+	// as the error detail.
+	Reason        *status.Status `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -760,16 +813,22 @@ func (x *NetConnRequest_Control_Reset) GetReason() *status.Status {
 
 // Conn models the initial response.
 type NetConnResponse_Conn struct {
-	state  protoimpl.MessageState `protogen:"open.v1"`
-	Local  *netaddr.NetAddr       `protobuf:"bytes,1,opt,name=local,proto3" json:"local,omitempty"`
-	Remote *netaddr.NetAddr       `protobuf:"bytes,2,opt,name=remote,proto3" json:"remote,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Local address of the connection from the server's perspective.
+	Local *netaddr.NetAddr `protobuf:"bytes,1,opt,name=local,proto3" json:"local,omitempty"`
+	// Remote address of the connection from the server's perspective.
+	Remote *netaddr.NetAddr `protobuf:"bytes,2,opt,name=remote,proto3" json:"remote,omitempty"`
 	// Handshake state if TLS termination was executed during Dial.
+	// MUST be present iff Dial.tls was present (fail closed on violation).
 	Tls *tls.TLSHandshakeResult `protobuf:"bytes,3,opt,name=tls,proto3" json:"tls,omitempty"`
 	// Confirmation if proxy chaining was executed during Dial.
+	// MUST be present iff Dial.proxy carried hops (fail closed on
+	// violation).
 	Proxy *proxy.ProxyResult `protobuf:"bytes,4,opt,name=proxy,proto3" json:"proxy,omitempty"`
 	// Server-advertised capabilities.
 	Capabilities *NetConnResponse_Capabilities `protobuf:"bytes,5,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
-	// Extensible connection metadata.
+	// Extensible connection metadata. Implementations MUST ignore
+	// payloads whose type_url they do not recognize.
 	CustomAttributes []*anypb.Any `protobuf:"bytes,15,rep,name=custom_attributes,json=customAttributes,proto3" json:"custom_attributes,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -975,31 +1034,39 @@ type NetConnResponse_Control_TlsUpgraded struct {
 
 type NetConnResponse_Control_TlsUpgradeFailed struct {
 	// Notification that an in-stream UpgradeTLS command has failed.
+	// The server terminates the stream after emitting it; it MUST NOT
+	// continue in cleartext.
 	TlsUpgradeFailed *NetConnResponse_Control_TLSUpgradeFailed `protobuf:"bytes,2,opt,name=tls_upgrade_failed,json=tlsUpgradeFailed,proto3,oneof"`
 }
 
 type NetConnResponse_Control_WindowUpdate_ struct {
-	// Credit-based stream flow control window update.
+	// Credit-based stream flow control window update: replenishes the
+	// client's window for server -> client bytes.
 	WindowUpdate *NetConnResponse_Control_WindowUpdate `protobuf:"bytes,3,opt,name=window_update,json=windowUpdate,proto3,oneof"`
 }
 
 type NetConnResponse_Control_HalfClose_ struct {
-	// Upstream write-side closure (TCP FIN or TLS close_notify).
+	// Upstream write-side closure (TCP FIN or TLS close_notify). The
+	// client receives no further bytes; the stream terminates.
 	HalfClose *NetConnResponse_Control_HalfClose `protobuf:"bytes,4,opt,name=half_close,json=halfClose,proto3,oneof"`
 }
 
 type NetConnResponse_Control_Pong_ struct {
-	// Response to a Client Ping.
+	// Response to a client Ping, echoing id and timestamp_nanos
+	// verbatim.
 	Pong *NetConnResponse_Control_Pong `protobuf:"bytes,5,opt,name=pong,proto3,oneof"`
 }
 
 type NetConnResponse_Control_Metrics_ struct {
-	// Diagnostics and stream metrics.
+	// Diagnostics and stream metrics. Servers MAY emit metrics at any
+	// time; clients MUST treat them as advisory and MUST NOT depend on
+	// them for correctness.
 	Metrics *NetConnResponse_Control_Metrics `protobuf:"bytes,6,opt,name=metrics,proto3,oneof"`
 }
 
 type NetConnResponse_Control_Custom struct {
-	// Arbitrary plugin extension event.
+	// Arbitrary plugin extension event. Implementations MUST ignore
+	// payloads whose type_url they do not recognize.
 	Custom *anypb.Any `protobuf:"bytes,15,opt,name=custom,proto3,oneof"`
 }
 
@@ -1017,16 +1084,32 @@ func (*NetConnResponse_Control_Metrics_) isNetConnResponse_Control_Event() {}
 
 func (*NetConnResponse_Control_Custom) isNetConnResponse_Control_Event() {}
 
+// Capabilities models what the server supports and what it grants the
+// client. All fields default to false/0; a capability not advertised
+// MUST NOT be assumed.
 type NetConnResponse_Capabilities struct {
-	state                    protoimpl.MessageState  `protogen:"open.v1"`
-	SupportsFlowControl      bool                    `protobuf:"varint,1,opt,name=supports_flow_control,json=supportsFlowControl,proto3" json:"supports_flow_control,omitempty"`
-	SupportsOpportunisticTls bool                    `protobuf:"varint,2,opt,name=supports_opportunistic_tls,json=supportsOpportunisticTls,proto3" json:"supports_opportunistic_tls,omitempty"`
-	SupportsImpersonation    bool                    `protobuf:"varint,3,opt,name=supports_impersonation,json=supportsImpersonation,proto3" json:"supports_impersonation,omitempty"`
-	MaxChunkSize             uint32                  `protobuf:"varint,4,opt,name=max_chunk_size,json=maxChunkSize,proto3" json:"max_chunk_size,omitempty"`
-	InitialWindowSize        uint32                  `protobuf:"varint,5,opt,name=initial_window_size,json=initialWindowSize,proto3" json:"initial_window_size,omitempty"`
-	SupportedPresets         []tls.FingerprintPreset `protobuf:"varint,6,rep,packed,name=supported_presets,json=supportedPresets,proto3,enum=sesame.tls.v1alpha1.FingerprintPreset" json:"supported_presets,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The server consents to credit-based flow control. Activates only if
+	// the client also advertises it.
+	SupportsFlowControl bool `protobuf:"varint,1,opt,name=supports_flow_control,json=supportsFlowControl,proto3" json:"supports_flow_control,omitempty"`
+	// The server accepts in-stream upgrade_tls commands.
+	SupportsOpportunisticTls bool `protobuf:"varint,2,opt,name=supports_opportunistic_tls,json=supportsOpportunisticTls,proto3" json:"supports_opportunistic_tls,omitempty"`
+	// Maximum data chunk the server can receive, in bytes; the client
+	// MUST NOT emit larger chunks. 0 means the implementation default
+	// (32768). Advertised values MUST NOT exceed the stream's gRPC
+	// per-message receive limit.
+	MaxChunkSize int32 `protobuf:"varint,4,opt,name=max_chunk_size,json=maxChunkSize,proto3" json:"max_chunk_size,omitempty"`
+	// Receive window the server grants the client for client -> server
+	// bytes, in bytes. 0 means the implementation default (65535), not a
+	// zero window.
+	InitialWindowSize int32 `protobuf:"varint,5,opt,name=initial_window_size,json=initialWindowSize,proto3" json:"initial_window_size,omitempty"`
+	// Fingerprint presets the server can satisfy, advisory: a pre-dial
+	// hint only. The server MUST still fail closed per-request on a
+	// preset it cannot apply, and clients MUST verify
+	// TLSHandshakeResult.applied_preset regardless.
+	SupportedPresets []tls.FingerprintPreset `protobuf:"varint,6,rep,packed,name=supported_presets,json=supportedPresets,proto3,enum=sesame.tls.v1alpha1.FingerprintPreset" json:"supported_presets,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *NetConnResponse_Capabilities) Reset() {
@@ -1073,21 +1156,14 @@ func (x *NetConnResponse_Capabilities) GetSupportsOpportunisticTls() bool {
 	return false
 }
 
-func (x *NetConnResponse_Capabilities) GetSupportsImpersonation() bool {
-	if x != nil {
-		return x.SupportsImpersonation
-	}
-	return false
-}
-
-func (x *NetConnResponse_Capabilities) GetMaxChunkSize() uint32 {
+func (x *NetConnResponse_Capabilities) GetMaxChunkSize() int32 {
 	if x != nil {
 		return x.MaxChunkSize
 	}
 	return 0
 }
 
-func (x *NetConnResponse_Capabilities) GetInitialWindowSize() uint32 {
+func (x *NetConnResponse_Capabilities) GetInitialWindowSize() int32 {
 	if x != nil {
 		return x.InitialWindowSize
 	}
@@ -1102,7 +1178,8 @@ func (x *NetConnResponse_Capabilities) GetSupportedPresets() []tls.FingerprintPr
 }
 
 type NetConnResponse_Control_TLSUpgraded struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Negotiated TLS session state.
 	Result        *tls.TLSHandshakeResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1146,8 +1223,9 @@ func (x *NetConnResponse_Control_TLSUpgraded) GetResult() *tls.TLSHandshakeResul
 }
 
 type NetConnResponse_Control_TLSUpgradeFailed struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Error         *status.Status         `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Failure detail. code is a canonical google.rpc.Code.
+	Error         *status.Status `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1190,8 +1268,12 @@ func (x *NetConnResponse_Control_TLSUpgradeFailed) GetError() *status.Status {
 }
 
 type NetConnResponse_Control_WindowUpdate struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	CreditBytes   uint32                 `protobuf:"varint,1,opt,name=credit_bytes,json=creditBytes,proto3" json:"credit_bytes,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Additional bytes the peer may send. Additive to its remaining
+	// window; cumulative credit MAY exceed the initial window. 0 is a
+	// no-op. Negative values are a protocol violation: the receiver
+	// MUST fail closed (tear the connection down).
+	CreditBytes   int32 `protobuf:"varint,1,opt,name=credit_bytes,json=creditBytes,proto3" json:"credit_bytes,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1226,7 +1308,7 @@ func (*NetConnResponse_Control_WindowUpdate) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_remotecontrol_proto_rawDescGZIP(), []int{1, 1, 2}
 }
 
-func (x *NetConnResponse_Control_WindowUpdate) GetCreditBytes() uint32 {
+func (x *NetConnResponse_Control_WindowUpdate) GetCreditBytes() int32 {
 	if x != nil {
 		return x.CreditBytes
 	}
@@ -1270,11 +1352,14 @@ func (*NetConnResponse_Control_HalfClose) Descriptor() ([]byte, []int) {
 }
 
 type NetConnResponse_Control_Pong struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	TimestampNs   int64                  `protobuf:"varint,2,opt,name=timestamp_ns,json=timestampNs,proto3" json:"timestamp_ns,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Opaque identifier, echoed verbatim from the Ping.
+	Id int64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Client-originated Unix epoch nanoseconds, echoed verbatim from
+	// the Ping.
+	TimestampNanos int64 `protobuf:"varint,2,opt,name=timestamp_nanos,json=timestampNanos,proto3" json:"timestamp_nanos,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *NetConnResponse_Control_Pong) Reset() {
@@ -1307,25 +1392,28 @@ func (*NetConnResponse_Control_Pong) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_remotecontrol_proto_rawDescGZIP(), []int{1, 1, 4}
 }
 
-func (x *NetConnResponse_Control_Pong) GetId() uint64 {
+func (x *NetConnResponse_Control_Pong) GetId() int64 {
 	if x != nil {
 		return x.Id
 	}
 	return 0
 }
 
-func (x *NetConnResponse_Control_Pong) GetTimestampNs() int64 {
+func (x *NetConnResponse_Control_Pong) GetTimestampNanos() int64 {
 	if x != nil {
-		return x.TimestampNs
+		return x.TimestampNanos
 	}
 	return 0
 }
 
 type NetConnResponse_Control_Metrics struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BytesSent     uint64                 `protobuf:"varint,1,opt,name=bytes_sent,json=bytesSent,proto3" json:"bytes_sent,omitempty"`
-	BytesReceived uint64                 `protobuf:"varint,2,opt,name=bytes_received,json=bytesReceived,proto3" json:"bytes_received,omitempty"`
-	RttMs         uint32                 `protobuf:"varint,3,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Total payload bytes sent to the client, advisory.
+	BytesSent int64 `protobuf:"varint,1,opt,name=bytes_sent,json=bytesSent,proto3" json:"bytes_sent,omitempty"`
+	// Total payload bytes received from the client, advisory.
+	BytesReceived int64 `protobuf:"varint,2,opt,name=bytes_received,json=bytesReceived,proto3" json:"bytes_received,omitempty"`
+	// Round-trip time estimate in milliseconds, advisory.
+	RttMillis     int32 `protobuf:"varint,3,opt,name=rtt_millis,json=rttMillis,proto3" json:"rtt_millis,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1360,23 +1448,23 @@ func (*NetConnResponse_Control_Metrics) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_remotecontrol_proto_rawDescGZIP(), []int{1, 1, 5}
 }
 
-func (x *NetConnResponse_Control_Metrics) GetBytesSent() uint64 {
+func (x *NetConnResponse_Control_Metrics) GetBytesSent() int64 {
 	if x != nil {
 		return x.BytesSent
 	}
 	return 0
 }
 
-func (x *NetConnResponse_Control_Metrics) GetBytesReceived() uint64 {
+func (x *NetConnResponse_Control_Metrics) GetBytesReceived() int64 {
 	if x != nil {
 		return x.BytesReceived
 	}
 	return 0
 }
 
-func (x *NetConnResponse_Control_Metrics) GetRttMs() uint32 {
+func (x *NetConnResponse_Control_Metrics) GetRttMillis() int32 {
 	if x != nil {
-		return x.RttMs
+		return x.RttMillis
 	}
 	return 0
 }
@@ -1385,7 +1473,7 @@ var File_sesame_v1alpha1_remotecontrol_proto protoreflect.FileDescriptor
 
 const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\n" +
-	"#sesame/v1alpha1/remotecontrol.proto\x12\x0fsesame.v1alpha1\x1a\x19google/protobuf/any.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x17google/rpc/status.proto\x1a!sesame/proxy/v1alpha1/proxy.proto\x1a\x1dsesame/tls/v1alpha1/tls.proto\x1a\x19sesame/type/netaddr.proto\"\x94\v\n" +
+	"#sesame/v1alpha1/remotecontrol.proto\x12\x0fsesame.v1alpha1\x1a\x19google/protobuf/any.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x17google/rpc/status.proto\x1a!sesame/proxy/v1alpha1/proxy.proto\x1a\x1dsesame/tls/v1alpha1/tls.proto\x1a\x19sesame/type/netaddr.proto\"\xc0\v\n" +
 	"\x0eNetConnRequest\x12:\n" +
 	"\x04dial\x18\x01 \x01(\v2$.sesame.v1alpha1.NetConnRequest.DialH\x00R\x04dial\x12\x16\n" +
 	"\x05bytes\x18\x02 \x01(\fH\x00R\x05bytes\x12C\n" +
@@ -1396,7 +1484,7 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x03tls\x18\x03 \x01(\v2\x1f.sesame.tls.v1alpha1.TLSOptionsR\x03tls\x129\n" +
 	"\x05proxy\x18\x04 \x01(\v2#.sesame.proxy.v1alpha1.ProxyOptionsR\x05proxy\x12P\n" +
 	"\fcapabilities\x18\x05 \x01(\v2,.sesame.v1alpha1.NetConnRequest.CapabilitiesR\fcapabilities\x12.\n" +
-	"\aoptions\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\aoptions\x1a\xcf\x05\n" +
+	"\aoptions\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\aoptions\x1a\xd5\x05\n" +
 	"\aControl\x12U\n" +
 	"\vupgrade_tls\x18\x01 \x01(\v22.sesame.v1alpha1.NetConnRequest.Control.UpgradeTLSH\x00R\n" +
 	"upgradeTls\x12[\n" +
@@ -1410,19 +1498,20 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"UpgradeTLS\x129\n" +
 	"\aoptions\x18\x01 \x01(\v2\x1f.sesame.tls.v1alpha1.TLSOptionsR\aoptions\x1a1\n" +
 	"\fWindowUpdate\x12!\n" +
-	"\fcredit_bytes\x18\x01 \x01(\rR\vcreditBytes\x1a\v\n" +
-	"\tHalfClose\x1a9\n" +
+	"\fcredit_bytes\x18\x01 \x01(\x05R\vcreditBytes\x1a\v\n" +
+	"\tHalfClose\x1a?\n" +
 	"\x04Ping\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
-	"\ftimestamp_ns\x18\x02 \x01(\x03R\vtimestampNs\x1a3\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
+	"\x0ftimestamp_nanos\x18\x02 \x01(\x03R\x0etimestampNanos\x1a3\n" +
 	"\x05Reset\x12*\n" +
 	"\x06reason\x18\x01 \x01(\v2\x12.google.rpc.StatusR\x06reasonB\b\n" +
-	"\x06action\x1a\xb0\x01\n" +
+	"\x06action\x1a\xd6\x01\n" +
 	"\fCapabilities\x122\n" +
 	"\x15supports_flow_control\x18\x01 \x01(\bR\x13supportsFlowControl\x12<\n" +
 	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x12.\n" +
-	"\x13initial_window_size\x18\x03 \x01(\rR\x11initialWindowSizeB\x06\n" +
-	"\x04data\"\xc9\x0e\n" +
+	"\x13initial_window_size\x18\x03 \x01(\x05R\x11initialWindowSize\x12$\n" +
+	"\x0emax_chunk_size\x18\x04 \x01(\x05R\fmaxChunkSizeB\x06\n" +
+	"\x04data\"\xbe\x0e\n" +
 	"\x0fNetConnResponse\x12;\n" +
 	"\x04conn\x18\x01 \x01(\v2%.sesame.v1alpha1.NetConnResponse.ConnH\x00R\x04conn\x12\x16\n" +
 	"\x05bytes\x18\x02 \x01(\fH\x00R\x05bytes\x12D\n" +
@@ -1433,7 +1522,7 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x03tls\x18\x03 \x01(\v2'.sesame.tls.v1alpha1.TLSHandshakeResultR\x03tls\x128\n" +
 	"\x05proxy\x18\x04 \x01(\v2\".sesame.proxy.v1alpha1.ProxyResultR\x05proxy\x12Q\n" +
 	"\fcapabilities\x18\x05 \x01(\v2-.sesame.v1alpha1.NetConnResponse.CapabilitiesR\fcapabilities\x12A\n" +
-	"\x11custom_attributes\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\x10customAttributes\x1a\xbf\a\n" +
+	"\x11custom_attributes\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\x10customAttributes\x1a\xcd\a\n" +
 	"\aControl\x12Y\n" +
 	"\ftls_upgraded\x18\x01 \x01(\v24.sesame.v1alpha1.NetConnResponse.Control.TLSUpgradedH\x00R\vtlsUpgraded\x12i\n" +
 	"\x12tls_upgrade_failed\x18\x02 \x01(\v29.sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailedH\x00R\x10tlsUpgradeFailed\x12\\\n" +
@@ -1448,24 +1537,24 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x10TLSUpgradeFailed\x12(\n" +
 	"\x05error\x18\x01 \x01(\v2\x12.google.rpc.StatusR\x05error\x1a1\n" +
 	"\fWindowUpdate\x12!\n" +
-	"\fcredit_bytes\x18\x01 \x01(\rR\vcreditBytes\x1a\v\n" +
-	"\tHalfClose\x1a9\n" +
+	"\fcredit_bytes\x18\x01 \x01(\x05R\vcreditBytes\x1a\v\n" +
+	"\tHalfClose\x1a?\n" +
 	"\x04Pong\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
-	"\ftimestamp_ns\x18\x02 \x01(\x03R\vtimestampNs\x1af\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
+	"\x0ftimestamp_nanos\x18\x02 \x01(\x03R\x0etimestampNanos\x1an\n" +
 	"\aMetrics\x12\x1d\n" +
 	"\n" +
-	"bytes_sent\x18\x01 \x01(\x04R\tbytesSent\x12%\n" +
-	"\x0ebytes_received\x18\x02 \x01(\x04R\rbytesReceived\x12\x15\n" +
-	"\x06rtt_ms\x18\x03 \x01(\rR\x05rttMsB\a\n" +
-	"\x05event\x1a\xe2\x02\n" +
+	"bytes_sent\x18\x01 \x01(\x03R\tbytesSent\x12%\n" +
+	"\x0ebytes_received\x18\x02 \x01(\x03R\rbytesReceived\x12\x1d\n" +
+	"\n" +
+	"rtt_millis\x18\x03 \x01(\x05R\trttMillisB\a\n" +
+	"\x05event\x1a\xc9\x02\n" +
 	"\fCapabilities\x122\n" +
 	"\x15supports_flow_control\x18\x01 \x01(\bR\x13supportsFlowControl\x12<\n" +
-	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x125\n" +
-	"\x16supports_impersonation\x18\x03 \x01(\bR\x15supportsImpersonation\x12$\n" +
-	"\x0emax_chunk_size\x18\x04 \x01(\rR\fmaxChunkSize\x12.\n" +
-	"\x13initial_window_size\x18\x05 \x01(\rR\x11initialWindowSize\x12S\n" +
-	"\x11supported_presets\x18\x06 \x03(\x0e2&.sesame.tls.v1alpha1.FingerprintPresetR\x10supportedPresetsB\x06\n" +
+	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x12$\n" +
+	"\x0emax_chunk_size\x18\x04 \x01(\x05R\fmaxChunkSize\x12.\n" +
+	"\x13initial_window_size\x18\x05 \x01(\x05R\x11initialWindowSize\x12S\n" +
+	"\x11supported_presets\x18\x06 \x03(\x0e2&.sesame.tls.v1alpha1.FingerprintPresetR\x10supportedPresetsJ\x04\b\x03\x10\x04R\x16supports_impersonationB\x06\n" +
 	"\x04data2c\n" +
 	"\rRemoteControl\x12R\n" +
 	"\aNetConn\x12\x1f.sesame.v1alpha1.NetConnRequest\x1a .sesame.v1alpha1.NetConnResponse\"\x00(\x010\x01B\"Z github.com/joeycumines/sesame/rcb\x06proto3"

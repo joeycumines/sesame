@@ -136,12 +136,28 @@ function ianaCipherSuite(tlsSocket: tls.TLSSocket): number {
   );
 }
 
+export const MAX_PROXY_HOPS = 8;
+
 export async function executeTLSHandshake(
   socket: net.Socket,
   opts: TLSOptions,
   defaultServerName: string,
   fallbackSecrets?: ServerSecrets,
 ): Promise<TLSExecutionResult> {
+  // Version-range validation at the API boundary, matching the Go
+  // reference: a floor above its ceiling can never negotiate.
+  // TLSVersion values are monotonic, so the enum compares directly.
+  if (
+    opts.minVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED &&
+    opts.maxVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED &&
+    opts.minVersion > opts.maxVersion
+  ) {
+    throw new ConnectError(
+      'sesame/rc/netconn: min_version exceeds max_version',
+      Code.InvalidArgument,
+    );
+  }
+
   const preset = opts.fingerprintPreset;
   if (
     preset !== FingerprintPreset.FINGERPRINT_PRESET_UNSPECIFIED &&
@@ -289,6 +305,15 @@ export async function executeProxyHops(
       egressAddress: createNetAddrFromSocket(socket, 'remote'),
     });
     return {socket, result};
+  }
+
+  // Each hop is a sequential dial plus handshake, so the count is a server
+  // resource commitment; reject chains beyond the reference bound.
+  if (hops.length > MAX_PROXY_HOPS) {
+    throw new ConnectError(
+      `sesame/rc/netconn: too many proxy hops: ${hops.length} (max ${MAX_PROXY_HOPS})`,
+      Code.InvalidArgument,
+    );
   }
 
   const traversedHops: NetAddr[] = [];

@@ -66,9 +66,9 @@ type (
 		writeDeadlineMu sync.Mutex
 		writeDeadline   time.Time
 
-		pingCounter  atomic.Uint64
+		pingCounter  atomic.Int64
 		pingsMu      sync.Mutex
-		pendingPings map[uint64]chan int64
+		pendingPings map[int64]chan int64
 
 		upgradeMu      sync.Mutex
 		pendingUpgrade chan upgradeResult
@@ -114,7 +114,7 @@ func NewClientControlConn(
 		remoteAddr:   connRes.GetRemote().AsGoNetAddr(),
 		demuxLocalW:  localWriter,
 		demuxRemote:  remote,
-		pendingPings: make(map[uint64]chan int64),
+		pendingPings: make(map[int64]chan int64),
 	}
 
 	if clientCaps.GetSupportsFlowControl() && connRes.GetCapabilities().GetSupportsFlowControl() {
@@ -193,7 +193,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 								Control: &rc.NetConnRequest_Control{
 									Action: &rc.NetConnRequest_Control_WindowUpdate_{
 										WindowUpdate: &rc.NetConnRequest_Control_WindowUpdate{
-											CreditBytes: uint32(n),
+											CreditBytes: int32(n),
 										},
 									},
 								},
@@ -271,7 +271,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 				delete(c.pendingPings, event.Pong.GetId())
 				c.pingsMu.Unlock()
 				if ch != nil {
-					ch <- event.Pong.GetTimestampNs()
+					ch <- event.Pong.GetTimestampNanos()
 				}
 
 			case *rc.NetConnResponse_Control_HalfClose_:
@@ -281,6 +281,13 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 
 			case *rc.NetConnResponse_Control_WindowUpdate_:
 				if c.outboundFC != nil {
+					// Negative credit is a protocol violation, not an
+					// unknown message: fail closed rather than letting a
+					// malformed server silently shrink the window.
+					if event.WindowUpdate.GetCreditBytes() < 0 {
+						c.poison(grpcstatus.Error(codes.InvalidArgument, "sesame/rc/netconn: negative window_update credit_bytes"))
+						return
+					}
 					c.outboundFC.AddCredit(event.WindowUpdate.GetCreditBytes())
 				}
 			}
@@ -329,7 +336,7 @@ func (c *clientControlConn) poison(err error) {
 func (c *clientControlConn) Read(b []byte) (int, error) {
 	n, err := c.demuxRemote.Read(b)
 	if n > 0 && c.inboundFC != nil {
-		c.inboundFC.AddCredit(uint32(n))
+		c.inboundFC.AddCredit(int32(n))
 	}
 	return n, err
 }
@@ -526,8 +533,8 @@ func (c *clientControlConn) Ping(ctx context.Context) (time.Duration, error) {
 			Control: &rc.NetConnRequest_Control{
 				Action: &rc.NetConnRequest_Control_Ping_{
 					Ping: &rc.NetConnRequest_Control_Ping{
-						Id:          id,
-						TimestampNs: timestampNs,
+						Id:             id,
+						TimestampNanos: timestampNs,
 					},
 				},
 			},

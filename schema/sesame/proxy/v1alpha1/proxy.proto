@@ -9,33 +9,66 @@ option go_package = "github.com/joeycumines/sesame/rc/proxy";
 // ProxyOptions specifies an ordered sequence of intermediate egress proxies.
 message ProxyOptions {
   // Ordered sequence of proxy hops (Hop 1 -> Hop 2 -> ... -> Target).
+  //
+  // Each hop is a sequential server-side dial and handshake, so the count
+  // is a server resource commitment: implementations SHOULD enforce a
+  // maximum (the reference bound is 8) and MUST reject requests exceeding
+  // their bound with INVALID_ARGUMENT.
   repeated ProxyHop hops = 1;
 }
 
+// ProxyHop describes one intermediate proxy traversal.
 message ProxyHop {
+  // Traversal mechanism for this hop.
+  //
+  // Open enum: implementations MUST tolerate values they do not recognize
+  // and MUST reject an unrecognized or TYPE_UNSPECIFIED hop with
+  // INVALID_ARGUMENT.
   enum Type {
+    // Default value. Invalid in a well-formed hop.
     TYPE_UNSPECIFIED = 0;
     HTTP_CONNECT = 1;
     SOCKS5 = 2;
   }
+
+  // Traversal mechanism (REQUIRED).
   Type type = 1;
 
-  // Address of the intermediate proxy server.
+  // Address of the intermediate proxy server (REQUIRED).
   type.NetAddr address = 2;
 
-  // Optional authentication credentials.
+  // Optional authentication username (e.g. SOCKS5 username, or the user
+  // portion of HTTP CONNECT basic authentication).
+  // Sensitive: implementations MUST NOT include this value in logs, errors,
+  // or diagnostics.
   string username = 3;
+
+  // Optional authentication password (e.g. SOCKS5 password, or the password
+  // portion of HTTP CONNECT basic authentication).
+  // Sensitive: implementations MUST NOT include this value in logs, errors,
+  // or diagnostics.
   string password = 4;
 
-  // Optional custom authorization header (e.g. "Basic ...", "Bearer ...").
+  // Optional custom authorization header value sent verbatim as the
+  // Proxy-Authorization header (e.g. "Basic ...", "Bearer ..."). Takes
+  // precedence over username/password when set.
+  // Sensitive: implementations MUST NOT include this value in logs, errors,
+  // or diagnostics.
   string auth_header = 5;
 }
 
 // ProxyResult confirms successful proxy negotiation.
 message ProxyResult {
-  // The sequence of successfully traversed proxy hops.
+  // The sequence of successfully traversed proxy hops, as requested.
+  // The Client MUST verify the hop count matches its request and abort on
+  // a mismatch (fail closed).
   repeated type.NetAddr traversed_hops = 1;
 
-  // The external egress IP/port observed after the final proxy hop.
+  // Best-effort observation of the tunnel's egress point from the server's
+  // perspective: the transport peer address of the connection to the first
+  // hop (resolved, not as requested). This is NOT the externally observed
+  // egress address as seen by the target; determining that requires
+  // out-of-band cooperation. Clients MUST NOT rely on this field for
+  // security decisions.
   type.NetAddr egress_address = 2;
 }
