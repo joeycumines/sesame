@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package sesame.v1alpha1.proxy;
+package sesame.proxy.v1alpha1;
 
 import "sesame/type/netaddr.proto";
 

@@ -2,12 +2,12 @@ syntax = "proto3";
 
 package sesame.v1alpha1;
 
-import "google/protobuf/duration.proto";
 import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
 import "google/rpc/status.proto";
+import "sesame/proxy/v1alpha1/proxy.proto";
+import "sesame/tls/v1alpha1/tls.proto";
 import "sesame/type/netaddr.proto";
-import "sesame/v1alpha1/tls.proto";
-import "sesame/v1alpha1/proxy.proto";
 
 option go_package = "github.com/joeycumines/sesame/rc";
 
@@ -66,10 +66,10 @@ message NetConnRequest {
 
     // Remote TLS termination and impersonation configuration (OPTIONAL).
     // If present, Server MUST terminate TLS at the endpoint.
-    tls.TLSOptions tls = 3;
+    .sesame.tls.v1alpha1.TLSOptions tls = 3;
 
     // Egress proxy chaining configuration (OPTIONAL).
-    proxy.ProxyOptions proxy = 4;
+    .sesame.proxy.v1alpha1.ProxyOptions proxy = 4;
 
     // Client-advertised capabilities.
     Capabilities capabilities = 5;
@@ -101,7 +101,7 @@ message NetConnRequest {
     }
 
     message UpgradeTLS {
-      tls.TLSOptions options = 1;
+      .sesame.tls.v1alpha1.TLSOptions options = 1;
     }
 
     message WindowUpdate {
@@ -147,10 +147,10 @@ message NetConnResponse {
     type.NetAddr remote = 2;
 
     // Handshake state if TLS termination was executed during Dial.
-    tls.TLSHandshakeResult tls = 3;
+    .sesame.tls.v1alpha1.TLSHandshakeResult tls = 3;
 
     // Confirmation if proxy chaining was executed during Dial.
-    proxy.ProxyResult proxy = 4;
+    .sesame.proxy.v1alpha1.ProxyResult proxy = 4;
 
     // Server-advertised capabilities.
     Capabilities capabilities = 5;
@@ -185,7 +185,7 @@ message NetConnResponse {
     }
 
     message TLSUpgraded {
-      tls.TLSHandshakeResult result = 1;
+      .sesame.tls.v1alpha1.TLSHandshakeResult result = 1;
     }
 
     message TLSUpgradeFailed {
@@ -216,6 +216,6 @@ message NetConnResponse {
     bool supports_impersonation = 3;
     uint32 max_chunk_size = 4;
     uint32 initial_window_size = 5;
-    repeated tls.FingerprintPreset supported_presets = 6;
+    repeated .sesame.tls.v1alpha1.FingerprintPreset supported_presets = 6;
   }
 }

@@ -19,8 +19,8 @@ import {
   FingerprintPreset,
   TLSHandshakeResult,
   TLSOptions,
-} from '../gen/sesame/v1alpha1/tls_pb';
-import {ProxyResult} from '../gen/sesame/v1alpha1/proxy_pb';
+} from '../gen/sesame/tls/v1alpha1/tls_pb';
+import {ProxyResult} from '../gen/sesame/proxy/v1alpha1/proxy_pb';
 import {StatusSchema} from '../gen/google/rpc/status_pb';
 import {ServerConfig} from '../config';
 import {FlowController} from './flowcontrol';

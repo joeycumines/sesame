@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        v7.36.2
-// source: sesame/v1alpha1/tls.proto
+// source: sesame/tls/v1alpha1/tls.proto
 
 package tls
 
@@ -60,11 +60,11 @@ func (x TLSVersion) String() string {
 }
 
 func (TLSVersion) Descriptor() protoreflect.EnumDescriptor {
-	return file_sesame_v1alpha1_tls_proto_enumTypes[0].Descriptor()
+	return file_sesame_tls_v1alpha1_tls_proto_enumTypes[0].Descriptor()
 }
 
 func (TLSVersion) Type() protoreflect.EnumType {
-	return &file_sesame_v1alpha1_tls_proto_enumTypes[0]
+	return &file_sesame_tls_v1alpha1_tls_proto_enumTypes[0]
 }
 
 func (x TLSVersion) Number() protoreflect.EnumNumber {
@@ -73,7 +73,7 @@ func (x TLSVersion) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use TLSVersion.Descriptor instead.
 func (TLSVersion) EnumDescriptor() ([]byte, []int) {
-	return file_sesame_v1alpha1_tls_proto_rawDescGZIP(), []int{0}
+	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{0}
 }
 
 // FingerprintPreset specifies well-known client cryptographic signatures.
@@ -148,11 +148,11 @@ func (x FingerprintPreset) String() string {
 }
 
 func (FingerprintPreset) Descriptor() protoreflect.EnumDescriptor {
-	return file_sesame_v1alpha1_tls_proto_enumTypes[1].Descriptor()
+	return file_sesame_tls_v1alpha1_tls_proto_enumTypes[1].Descriptor()
 }
 
 func (FingerprintPreset) Type() protoreflect.EnumType {
-	return &file_sesame_v1alpha1_tls_proto_enumTypes[1]
+	return &file_sesame_tls_v1alpha1_tls_proto_enumTypes[1]
 }
 
 func (x FingerprintPreset) Number() protoreflect.EnumNumber {
@@ -161,7 +161,7 @@ func (x FingerprintPreset) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use FingerprintPreset.Descriptor instead.
 func (FingerprintPreset) EnumDescriptor() ([]byte, []int) {
-	return file_sesame_v1alpha1_tls_proto_rawDescGZIP(), []int{1}
+	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{1}
 }
 
 // TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint emulation.
@@ -174,12 +174,12 @@ type TLSOptions struct {
 	// If empty, the implementation MUST NOT send an ALPN extension.
 	AlpnProtocols []string `protobuf:"bytes,2,rep,name=alpn_protocols,json=alpnProtocols,proto3" json:"alpn_protocols,omitempty"`
 	// Minimum TLS protocol version acceptable.
-	MinVersion TLSVersion `protobuf:"varint,3,opt,name=min_version,json=minVersion,proto3,enum=sesame.v1alpha1.tls.TLSVersion" json:"min_version,omitempty"`
+	MinVersion TLSVersion `protobuf:"varint,3,opt,name=min_version,json=minVersion,proto3,enum=sesame.tls.v1alpha1.TLSVersion" json:"min_version,omitempty"`
 	// Maximum TLS protocol version acceptable.
-	MaxVersion TLSVersion `protobuf:"varint,4,opt,name=max_version,json=maxVersion,proto3,enum=sesame.v1alpha1.tls.TLSVersion" json:"max_version,omitempty"`
+	MaxVersion TLSVersion `protobuf:"varint,4,opt,name=max_version,json=maxVersion,proto3,enum=sesame.tls.v1alpha1.TLSVersion" json:"max_version,omitempty"`
 	// Impersonation profile preset for client cryptographic emulation.
 	// If set to anything other than RUNTIME_DEFAULT, the Server MUST fail closed if it cannot satisfy it.
-	FingerprintPreset FingerprintPreset `protobuf:"varint,5,opt,name=fingerprint_preset,json=fingerprintPreset,proto3,enum=sesame.v1alpha1.tls.FingerprintPreset" json:"fingerprint_preset,omitempty"`
+	FingerprintPreset FingerprintPreset `protobuf:"varint,5,opt,name=fingerprint_preset,json=fingerprintPreset,proto3,enum=sesame.tls.v1alpha1.FingerprintPreset" json:"fingerprint_preset,omitempty"`
 	// Explicit cipher suite identifiers (RFC numbers). If non-empty, overrides preset defaults.
 	CipherSuites []uint32 `protobuf:"varint,6,rep,packed,name=cipher_suites,json=cipherSuites,proto3" json:"cipher_suites,omitempty"`
 	// InsecureSkipVerify disables remote certificate verification.
@@ -199,7 +199,7 @@ type TLSOptions struct {
 
 func (x *TLSOptions) Reset() {
 	*x = TLSOptions{}
-	mi := &file_sesame_v1alpha1_tls_proto_msgTypes[0]
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -211,7 +211,7 @@ func (x *TLSOptions) String() string {
 func (*TLSOptions) ProtoMessage() {}
 
 func (x *TLSOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_v1alpha1_tls_proto_msgTypes[0]
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -224,7 +224,7 @@ func (x *TLSOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TLSOptions.ProtoReflect.Descriptor instead.
 func (*TLSOptions) Descriptor() ([]byte, []int) {
-	return file_sesame_v1alpha1_tls_proto_rawDescGZIP(), []int{0}
+	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *TLSOptions) GetServerName() string {
@@ -313,7 +313,7 @@ type TLSHandshakeResult struct {
 	// Negotiated cipher suite identifier (e.g. 0x1301 for TLS_AES_128_GCM_SHA256).
 	CipherSuite uint32 `protobuf:"varint,2,opt,name=cipher_suite,json=cipherSuite,proto3" json:"cipher_suite,omitempty"`
 	// Negotiated TLS version.
-	TlsVersion TLSVersion `protobuf:"varint,3,opt,name=tls_version,json=tlsVersion,proto3,enum=sesame.v1alpha1.tls.TLSVersion" json:"tls_version,omitempty"`
+	TlsVersion TLSVersion `protobuf:"varint,3,opt,name=tls_version,json=tlsVersion,proto3,enum=sesame.tls.v1alpha1.TLSVersion" json:"tls_version,omitempty"`
 	// Server Name Indication acknowledged by the upstream server.
 	ServerName string `protobuf:"bytes,4,opt,name=server_name,json=serverName,proto3" json:"server_name,omitempty"`
 	// Peer certificate chain presented by upstream, formatted as raw DER bytes.
@@ -322,14 +322,14 @@ type TLSHandshakeResult struct {
 	ResumptionTicket []byte `protobuf:"bytes,6,opt,name=resumption_ticket,json=resumptionTicket,proto3" json:"resumption_ticket,omitempty"`
 	// The actual fingerprint preset enforced by the server.
 	// The Client MUST verify that applied_preset matches the requested preset.
-	AppliedPreset FingerprintPreset `protobuf:"varint,7,opt,name=applied_preset,json=appliedPreset,proto3,enum=sesame.v1alpha1.tls.FingerprintPreset" json:"applied_preset,omitempty"`
+	AppliedPreset FingerprintPreset `protobuf:"varint,7,opt,name=applied_preset,json=appliedPreset,proto3,enum=sesame.tls.v1alpha1.FingerprintPreset" json:"applied_preset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TLSHandshakeResult) Reset() {
 	*x = TLSHandshakeResult{}
-	mi := &file_sesame_v1alpha1_tls_proto_msgTypes[1]
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -341,7 +341,7 @@ func (x *TLSHandshakeResult) String() string {
 func (*TLSHandshakeResult) ProtoMessage() {}
 
 func (x *TLSHandshakeResult) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_v1alpha1_tls_proto_msgTypes[1]
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -354,7 +354,7 @@ func (x *TLSHandshakeResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TLSHandshakeResult.ProtoReflect.Descriptor instead.
 func (*TLSHandshakeResult) Descriptor() ([]byte, []int) {
-	return file_sesame_v1alpha1_tls_proto_rawDescGZIP(), []int{1}
+	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *TLSHandshakeResult) GetNegotiatedProtocol() string {
@@ -406,21 +406,21 @@ func (x *TLSHandshakeResult) GetAppliedPreset() FingerprintPreset {
 	return FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED
 }
 
-var File_sesame_v1alpha1_tls_proto protoreflect.FileDescriptor
+var File_sesame_tls_v1alpha1_tls_proto protoreflect.FileDescriptor
 
-const file_sesame_v1alpha1_tls_proto_rawDesc = "" +
+const file_sesame_tls_v1alpha1_tls_proto_rawDesc = "" +
 	"\n" +
-	"\x19sesame/v1alpha1/tls.proto\x12\x13sesame.v1alpha1.tls\"\xb3\x04\n" +
+	"\x1dsesame/tls/v1alpha1/tls.proto\x12\x13sesame.tls.v1alpha1\"\xb3\x04\n" +
 	"\n" +
 	"TLSOptions\x12\x1f\n" +
 	"\vserver_name\x18\x01 \x01(\tR\n" +
 	"serverName\x12%\n" +
 	"\x0ealpn_protocols\x18\x02 \x03(\tR\ralpnProtocols\x12@\n" +
-	"\vmin_version\x18\x03 \x01(\x0e2\x1f.sesame.v1alpha1.tls.TLSVersionR\n" +
+	"\vmin_version\x18\x03 \x01(\x0e2\x1f.sesame.tls.v1alpha1.TLSVersionR\n" +
 	"minVersion\x12@\n" +
-	"\vmax_version\x18\x04 \x01(\x0e2\x1f.sesame.v1alpha1.tls.TLSVersionR\n" +
+	"\vmax_version\x18\x04 \x01(\x0e2\x1f.sesame.tls.v1alpha1.TLSVersionR\n" +
 	"maxVersion\x12U\n" +
-	"\x12fingerprint_preset\x18\x05 \x01(\x0e2&.sesame.v1alpha1.tls.FingerprintPresetR\x11fingerprintPreset\x12#\n" +
+	"\x12fingerprint_preset\x18\x05 \x01(\x0e2&.sesame.tls.v1alpha1.FingerprintPresetR\x11fingerprintPreset\x12#\n" +
 	"\rcipher_suites\x18\x06 \x03(\rR\fcipherSuites\x120\n" +
 	"\x14insecure_skip_verify\x18\a \x01(\bR\x12insecureSkipVerify\x12'\n" +
 	"\x0fca_certificates\x18\b \x01(\fR\x0ecaCertificates\x12-\n" +
@@ -431,13 +431,13 @@ const file_sesame_v1alpha1_tls_proto_rawDesc = "" +
 	"\x12TLSHandshakeResult\x12/\n" +
 	"\x13negotiated_protocol\x18\x01 \x01(\tR\x12negotiatedProtocol\x12!\n" +
 	"\fcipher_suite\x18\x02 \x01(\rR\vcipherSuite\x12@\n" +
-	"\vtls_version\x18\x03 \x01(\x0e2\x1f.sesame.v1alpha1.tls.TLSVersionR\n" +
+	"\vtls_version\x18\x03 \x01(\x0e2\x1f.sesame.tls.v1alpha1.TLSVersionR\n" +
 	"tlsVersion\x12\x1f\n" +
 	"\vserver_name\x18\x04 \x01(\tR\n" +
 	"serverName\x12+\n" +
 	"\x11peer_certificates\x18\x05 \x03(\fR\x10peerCertificates\x12+\n" +
 	"\x11resumption_ticket\x18\x06 \x01(\fR\x10resumptionTicket\x12M\n" +
-	"\x0eapplied_preset\x18\a \x01(\x0e2&.sesame.v1alpha1.tls.FingerprintPresetR\rappliedPreset*]\n" +
+	"\x0eapplied_preset\x18\a \x01(\x0e2&.sesame.tls.v1alpha1.FingerprintPresetR\rappliedPreset*]\n" +
 	"\n" +
 	"TLSVersion\x12\x1b\n" +
 	"\x17TLS_VERSION_UNSPECIFIED\x10\x00\x12\v\n" +
@@ -467,31 +467,31 @@ const file_sesame_v1alpha1_tls_proto_rawDesc = "" +
 	"\x0fRUNTIME_DEFAULT\x10(B&Z$github.com/joeycumines/sesame/rc/tlsb\x06proto3"
 
 var (
-	file_sesame_v1alpha1_tls_proto_rawDescOnce sync.Once
-	file_sesame_v1alpha1_tls_proto_rawDescData []byte
+	file_sesame_tls_v1alpha1_tls_proto_rawDescOnce sync.Once
+	file_sesame_tls_v1alpha1_tls_proto_rawDescData []byte
 )
 
-func file_sesame_v1alpha1_tls_proto_rawDescGZIP() []byte {
-	file_sesame_v1alpha1_tls_proto_rawDescOnce.Do(func() {
-		file_sesame_v1alpha1_tls_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sesame_v1alpha1_tls_proto_rawDesc), len(file_sesame_v1alpha1_tls_proto_rawDesc)))
+func file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP() []byte {
+	file_sesame_tls_v1alpha1_tls_proto_rawDescOnce.Do(func() {
+		file_sesame_tls_v1alpha1_tls_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sesame_tls_v1alpha1_tls_proto_rawDesc), len(file_sesame_tls_v1alpha1_tls_proto_rawDesc)))
 	})
-	return file_sesame_v1alpha1_tls_proto_rawDescData
+	return file_sesame_tls_v1alpha1_tls_proto_rawDescData
 }
 
-var file_sesame_v1alpha1_tls_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_sesame_v1alpha1_tls_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_sesame_v1alpha1_tls_proto_goTypes = []any{
-	(TLSVersion)(0),            // 0: sesame.v1alpha1.tls.TLSVersion
-	(FingerprintPreset)(0),     // 1: sesame.v1alpha1.tls.FingerprintPreset
-	(*TLSOptions)(nil),         // 2: sesame.v1alpha1.tls.TLSOptions
-	(*TLSHandshakeResult)(nil), // 3: sesame.v1alpha1.tls.TLSHandshakeResult
+var file_sesame_tls_v1alpha1_tls_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_sesame_tls_v1alpha1_tls_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_sesame_tls_v1alpha1_tls_proto_goTypes = []any{
+	(TLSVersion)(0),            // 0: sesame.tls.v1alpha1.TLSVersion
+	(FingerprintPreset)(0),     // 1: sesame.tls.v1alpha1.FingerprintPreset
+	(*TLSOptions)(nil),         // 2: sesame.tls.v1alpha1.TLSOptions
+	(*TLSHandshakeResult)(nil), // 3: sesame.tls.v1alpha1.TLSHandshakeResult
 }
-var file_sesame_v1alpha1_tls_proto_depIdxs = []int32{
-	0, // 0: sesame.v1alpha1.tls.TLSOptions.min_version:type_name -> sesame.v1alpha1.tls.TLSVersion
-	0, // 1: sesame.v1alpha1.tls.TLSOptions.max_version:type_name -> sesame.v1alpha1.tls.TLSVersion
-	1, // 2: sesame.v1alpha1.tls.TLSOptions.fingerprint_preset:type_name -> sesame.v1alpha1.tls.FingerprintPreset
-	0, // 3: sesame.v1alpha1.tls.TLSHandshakeResult.tls_version:type_name -> sesame.v1alpha1.tls.TLSVersion
-	1, // 4: sesame.v1alpha1.tls.TLSHandshakeResult.applied_preset:type_name -> sesame.v1alpha1.tls.FingerprintPreset
+var file_sesame_tls_v1alpha1_tls_proto_depIdxs = []int32{
+	0, // 0: sesame.tls.v1alpha1.TLSOptions.min_version:type_name -> sesame.tls.v1alpha1.TLSVersion
+	0, // 1: sesame.tls.v1alpha1.TLSOptions.max_version:type_name -> sesame.tls.v1alpha1.TLSVersion
+	1, // 2: sesame.tls.v1alpha1.TLSOptions.fingerprint_preset:type_name -> sesame.tls.v1alpha1.FingerprintPreset
+	0, // 3: sesame.tls.v1alpha1.TLSHandshakeResult.tls_version:type_name -> sesame.tls.v1alpha1.TLSVersion
+	1, // 4: sesame.tls.v1alpha1.TLSHandshakeResult.applied_preset:type_name -> sesame.tls.v1alpha1.FingerprintPreset
 	5, // [5:5] is the sub-list for method output_type
 	5, // [5:5] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
@@ -499,27 +499,27 @@ var file_sesame_v1alpha1_tls_proto_depIdxs = []int32{
 	0, // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_sesame_v1alpha1_tls_proto_init() }
-func file_sesame_v1alpha1_tls_proto_init() {
-	if File_sesame_v1alpha1_tls_proto != nil {
+func init() { file_sesame_tls_v1alpha1_tls_proto_init() }
+func file_sesame_tls_v1alpha1_tls_proto_init() {
+	if File_sesame_tls_v1alpha1_tls_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sesame_v1alpha1_tls_proto_rawDesc), len(file_sesame_v1alpha1_tls_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sesame_tls_v1alpha1_tls_proto_rawDesc), len(file_sesame_tls_v1alpha1_tls_proto_rawDesc)),
 			NumEnums:      2,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_sesame_v1alpha1_tls_proto_goTypes,
-		DependencyIndexes: file_sesame_v1alpha1_tls_proto_depIdxs,
-		EnumInfos:         file_sesame_v1alpha1_tls_proto_enumTypes,
-		MessageInfos:      file_sesame_v1alpha1_tls_proto_msgTypes,
+		GoTypes:           file_sesame_tls_v1alpha1_tls_proto_goTypes,
+		DependencyIndexes: file_sesame_tls_v1alpha1_tls_proto_depIdxs,
+		EnumInfos:         file_sesame_tls_v1alpha1_tls_proto_enumTypes,
+		MessageInfos:      file_sesame_tls_v1alpha1_tls_proto_msgTypes,
 	}.Build()
-	File_sesame_v1alpha1_tls_proto = out.File
-	file_sesame_v1alpha1_tls_proto_goTypes = nil
-	file_sesame_v1alpha1_tls_proto_depIdxs = nil
+	File_sesame_tls_v1alpha1_tls_proto = out.File
+	file_sesame_tls_v1alpha1_tls_proto_goTypes = nil
+	file_sesame_tls_v1alpha1_tls_proto_depIdxs = nil
 }

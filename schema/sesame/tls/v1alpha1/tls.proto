@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package sesame.v1alpha1.tls;
+package sesame.tls.v1alpha1;
 
 option go_package = "github.com/joeycumines/sesame/rc/tls";
 
