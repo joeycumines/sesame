@@ -206,7 +206,7 @@ async function run() {
           case: 'ping',
           value: create(NetConnRequest_Control_PingSchema, {
             id: 777n,
-            timestampNs: 999999n,
+            timestampNanos: 999999n,
           }),
         },
       }),
