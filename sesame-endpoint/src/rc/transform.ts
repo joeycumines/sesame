@@ -893,6 +893,18 @@ function socks5Handshake(
 
           const extra = buffer.subarray(expectedLen);
           if (extra.length > 0) {
+            // Pause first: unshifted bytes are only re-emitted to a
+            // later 'data' listener if the stream is paused when that
+            // listener attaches. On a flowing socket the unshift
+            // re-enters THIS handler with tunnel payload, which it
+            // re-parses as handshake frames - and because `buffer`
+            // still holds the reply, Buffer.concat doubles it every
+            // re-entry until the runtime's typed-array limit throws
+            // (measured: a proxy coalescing early bytes with its
+            // CONNECT reply crashed the handshake with RangeError).
+            // The server resumes the socket after attaching its relay
+            // listener, mirroring the HTTP CONNECT path.
+            socket.pause();
             socket.unshift(extra);
           }
 

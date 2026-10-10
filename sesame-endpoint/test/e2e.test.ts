@@ -42,6 +42,172 @@ const FIXTURES_DIR = fs.existsSync(path.join(__dirname, 'fixtures'))
 const CERT_PEM = fs.readFileSync(path.join(FIXTURES_DIR, 'cert.pem'));
 const KEY_PEM = fs.readFileSync(path.join(FIXTURES_DIR, 'key.pem'));
 
+// Byte-level SOCKS5 mock (RFC 1928/1929) for exercising the endpoint's
+// hand-rolled framing. Each connection runs a greeting -> (auth) ->
+// connect state machine, records every frame the client sent, and on
+// success pipes to the real target the client asked for, so tunnel
+// payloads round-trip like they would through a real proxy.
+interface Socks5MockFrame {
+  greeting: Buffer;
+  auth: Buffer | null;
+  connect: Buffer | null;
+}
+
+interface Socks5MockOptions {
+  // Answer the greeting by selecting 0x02 (username/password) instead of
+  // 0x00 (no auth).
+  requireAuth?: boolean;
+  // Reject the RFC 1929 subnegotiation with status 0x01.
+  authReject?: boolean;
+  // Reply with this REP byte instead of 0x00 (succeeded).
+  connectRep?: number;
+  // Append these bytes to the connect reply: early tunnel payload a
+  // fast proxy coalesced into the same TCP segment.
+  coalesceWithReply?: Buffer;
+  // Skip dialing the real target (for failure scenarios).
+  noUpstream?: boolean;
+}
+
+function formatIpv6(bytes: Buffer): string {
+  const groups: string[] = [];
+  for (let i = 0; i < 16; i += 2) {
+    groups.push(((bytes[i] << 8) | bytes[i + 1]).toString(16));
+  }
+  return groups.join(':');
+}
+
+function makeSocks5Mock(opts: Socks5MockOptions = {}) {
+  const frames: Socks5MockFrame[] = [];
+
+  const server = net.createServer(raw => {
+    let stage: 'greeting' | 'auth' | 'connect' | 'tunnel' = 'greeting';
+    let buf = Buffer.alloc(0);
+    const frame: Socks5MockFrame = {
+      greeting: Buffer.alloc(0),
+      auth: null,
+      connect: null,
+    };
+    frames.push(frame);
+    let upstream: net.Socket | null = null;
+
+    const dialUpstream = (connect: Buffer) => {
+      const atyp = connect[3];
+      let host: string;
+      let addrOff: number;
+      let addrLen: number;
+      if (atyp === 0x01) {
+        host = `${connect[4]}.${connect[5]}.${connect[6]}.${connect[7]}`;
+        addrOff = 4;
+        addrLen = 4;
+      } else if (atyp === 0x04) {
+        host = formatIpv6(connect.subarray(4, 20));
+        addrOff = 4;
+        addrLen = 16;
+      } else {
+        const domainLen = connect[4];
+        host = connect.subarray(5, 5 + domainLen).toString('utf-8');
+        addrOff = 5 + domainLen;
+        addrLen = 0;
+      }
+      const port =
+        (connect[addrOff + addrLen] << 8) | connect[addrOff + addrLen + 1];
+      upstream = net.connect(port, host, () => {
+        upstream?.pipe(raw);
+      });
+      // The endpoint writes tunnel payload the instant the handshake
+      // resolves, racing the upstream connect; pipe immediately - net
+      // buffers writes to a connecting socket.
+      raw.pipe(upstream!);
+      upstream.on('error', () => raw.destroy());
+    };
+
+    raw.on('data', chunk => {
+      if (stage === 'tunnel') {
+        // raw -> upstream is handled by the pipe attached in
+        // dialUpstream; this handler is parsing-only.
+        return;
+      }
+      buf = Buffer.concat([buf, chunk]);
+
+      if (stage === 'greeting') {
+        if (buf.length < 2) return;
+        const nMethods = buf[1];
+        if (buf.length < 2 + nMethods) return;
+        frame.greeting = buf.subarray(0, 2 + nMethods);
+        buf = buf.subarray(2 + nMethods);
+        raw.write(Buffer.from([0x05, opts.requireAuth ? 0x02 : 0x00]));
+        stage = opts.requireAuth ? 'auth' : 'connect';
+      }
+
+      if (stage === 'auth') {
+        if (buf.length < 2) return;
+        const uLen = buf[1];
+        if (buf.length < 2 + uLen + 1) return;
+        const pLen = buf[2 + uLen];
+        if (buf.length < 2 + uLen + 1 + pLen) return;
+        frame.auth = buf.subarray(0, 2 + uLen + 1 + pLen);
+        buf = buf.subarray(2 + uLen + 1 + pLen);
+        if (opts.authReject) {
+          raw.write(Buffer.from([0x01, 0x01]));
+          raw.destroy();
+          return;
+        }
+        raw.write(Buffer.from([0x01, 0x00]));
+        stage = 'connect';
+      }
+
+      if (stage === 'connect') {
+        if (buf.length < 5) return;
+        const atyp = buf[3];
+        let addrLen = 0;
+        if (atyp === 0x01) addrLen = 4;
+        else if (atyp === 0x04) addrLen = 16;
+        else if (atyp === 0x03) addrLen = 1 + buf[4];
+        else {
+          raw.destroy();
+          return;
+        }
+        const total = 4 + addrLen + 2;
+        if (buf.length < total) return;
+        frame.connect = buf.subarray(0, total);
+        buf = buf.subarray(total);
+
+        const reply = Buffer.concat([
+          Buffer.from([
+            0x05,
+            opts.connectRep ?? 0x00,
+            0x00,
+            0x01,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+          ]),
+          opts.coalesceWithReply ?? Buffer.alloc(0),
+        ]);
+        raw.write(reply);
+        if ((opts.connectRep ?? 0x00) !== 0x00) {
+          raw.destroy();
+          return;
+        }
+        // Enter tunnel state immediately: the endpoint may write
+        // payload before the upstream dial completes.
+        stage = 'tunnel';
+        if (!opts.noUpstream) {
+          dialUpstream(frame.connect);
+        }
+      }
+    });
+
+    raw.on('close', () => upstream?.destroy());
+    raw.on('error', () => upstream?.destroy());
+  });
+
+  return {server, frames: () => frames};
+}
+
 class RequestStream {
   private queue: NetConnRequest[] = [];
   private waiters: Array<{
@@ -665,6 +831,428 @@ describe('sesame-endpoint E2E Suite', () => {
       reqStream.close();
     } finally {
       await new Promise<void>(r => coalescingProxy.close(() => r()));
+    }
+  });
+
+  it('traverses a SOCKS5 proxy hop and round-trips payload', async () => {
+    const mock = makeSocks5Mock();
+    await new Promise<void>(r => mock.server.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.server.address() as net.AddressInfo).port;
+
+    try {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                // A domain target exercises the ATYP 0x03 encoding.
+                address: `localhost:${tcpEchoPort}`,
+              }),
+              proxy: create(ProxyOptionsSchema, {
+                hops: [
+                  create(ProxyHopSchema, {
+                    type: ProxyHop_Type.SOCKS5,
+                    address: create(NetAddrSchema, {
+                      network: 'tcp',
+                      address: `127.0.0.1:${mockPort}`,
+                    }),
+                  }),
+                ],
+              }),
+            }),
+          },
+        }),
+      );
+
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'bytes',
+            value: new TextEncoder().encode('HELLO-SOCKS5'),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+      const conn = first.value.data.value;
+      expect(conn.proxy).toBeDefined();
+      expect(conn.proxy?.traversedHops.length).toBe(1);
+
+      const second = await iterator.next();
+      expect(second.value.data.case).toBe('bytes');
+      expect(new TextDecoder().decode(second.value.data.value)).toBe(
+        'HELLO-SOCKS5',
+      );
+
+      // The framing is the thing under test: verify the exact bytes
+      // the client sent - a no-auth greeting and a domain-typed
+      // CONNECT carrying the target port in network byte order.
+      const frame = mock.frames().at(-1)!;
+      expect(frame.greeting).toEqual(Buffer.from([0x05, 0x01, 0x00]));
+      expect(frame.auth).toBeNull();
+      expect(frame.connect).toEqual(
+        Buffer.concat([
+          Buffer.from([0x05, 0x01, 0x00, 0x03, 'localhost'.length]),
+          Buffer.from('localhost', 'utf-8'),
+          Buffer.from([tcpEchoPort >> 8, tcpEchoPort & 0xff]),
+        ]),
+      );
+
+      reqStream.close();
+    } finally {
+      await new Promise<void>(r => mock.server.close(() => r()));
+    }
+  });
+
+  it('authenticates to SOCKS5 with RFC 1929 username/password', async () => {
+    const mock = makeSocks5Mock({requireAuth: true});
+    await new Promise<void>(r => mock.server.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.server.address() as net.AddressInfo).port;
+
+    try {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: `localhost:${tcpEchoPort}`,
+              }),
+              proxy: create(ProxyOptionsSchema, {
+                hops: [
+                  create(ProxyHopSchema, {
+                    type: ProxyHop_Type.SOCKS5,
+                    address: create(NetAddrSchema, {
+                      network: 'tcp',
+                      address: `127.0.0.1:${mockPort}`,
+                    }),
+                    username: 'socksuser',
+                    password: 'sockspass',
+                  }),
+                ],
+              }),
+            }),
+          },
+        }),
+      );
+
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'bytes',
+            value: new TextEncoder().encode('AUTH-ECHO'),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      const second = await iterator.next();
+      expect(second.value.data.case).toBe('bytes');
+      expect(new TextDecoder().decode(second.value.data.value)).toBe(
+        'AUTH-ECHO',
+      );
+
+      // The client must offer exactly [no-auth, username/password] and
+      // then send the RFC 1929 subnegotiation verbatim.
+      const frame = mock.frames().at(-1)!;
+      expect(frame.greeting).toEqual(Buffer.from([0x05, 0x02, 0x00, 0x02]));
+      expect(frame.auth).toEqual(
+        Buffer.concat([
+          Buffer.from([0x01, 'socksuser'.length]),
+          Buffer.from('socksuser', 'utf-8'),
+          Buffer.from(['sockspass'.length]),
+          Buffer.from('sockspass', 'utf-8'),
+        ]),
+      );
+      expect(frame.connect?.subarray(0, 4)).toEqual(
+        Buffer.from([0x05, 0x01, 0x00, 0x03]),
+      );
+
+      reqStream.close();
+    } finally {
+      await new Promise<void>(r => mock.server.close(() => r()));
+    }
+  });
+
+  it('surfaces a SOCKS5 auth rejection as PermissionDenied', async () => {
+    const mock = makeSocks5Mock({requireAuth: true, authReject: true});
+    await new Promise<void>(r => mock.server.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.server.address() as net.AddressInfo).port;
+
+    try {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: `localhost:${tcpEchoPort}`,
+              }),
+              proxy: create(ProxyOptionsSchema, {
+                hops: [
+                  create(ProxyHopSchema, {
+                    type: ProxyHop_Type.SOCKS5,
+                    address: create(NetAddrSchema, {
+                      network: 'tcp',
+                      address: `127.0.0.1:${mockPort}`,
+                    }),
+                    username: 'wronguser',
+                    password: 'wrongpass',
+                  }),
+                ],
+              }),
+            }),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      try {
+        await iterator.next();
+        expect.unreachable('should have rejected the SOCKS5 auth');
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(ConnectError);
+        const ce = err as ConnectError;
+        expect(ce.code).toBe(Code.PermissionDenied);
+        expect(ce.message).toContain('SOCKS5 auth failed');
+      }
+
+      // The rejected credentials were still transmitted per RFC 1929 -
+      // the mock saw exactly what the hop configured.
+      const frame = mock.frames().at(-1)!;
+      expect(frame.auth).toEqual(
+        Buffer.concat([
+          Buffer.from([0x01, 'wronguser'.length]),
+          Buffer.from('wronguser', 'utf-8'),
+          Buffer.from(['wrongpass'.length]),
+          Buffer.from('wrongpass', 'utf-8'),
+        ]),
+      );
+
+      reqStream.close();
+    } finally {
+      await new Promise<void>(r => mock.server.close(() => r()));
+    }
+  });
+
+  it('encodes IPv4 and IPv6 literal targets correctly', async () => {
+    const echoV6 = net.createServer(s => s.pipe(s));
+    await new Promise<void>(r => echoV6.listen(0, '::1', () => r()));
+    const v6Port = (echoV6.address() as net.AddressInfo).port;
+
+    const mock = makeSocks5Mock();
+    await new Promise<void>(r => mock.server.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.server.address() as net.AddressInfo).port;
+
+    const dialThroughMock = async (target: string, payload: string) => {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: target,
+              }),
+              proxy: create(ProxyOptionsSchema, {
+                hops: [
+                  create(ProxyHopSchema, {
+                    type: ProxyHop_Type.SOCKS5,
+                    address: create(NetAddrSchema, {
+                      network: 'tcp',
+                      address: `127.0.0.1:${mockPort}`,
+                    }),
+                  }),
+                ],
+              }),
+            }),
+          },
+        }),
+      );
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'bytes',
+            value: new TextEncoder().encode(payload),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+      const second = await iterator.next();
+      expect(second.value.data.case).toBe('bytes');
+      expect(new TextDecoder().decode(second.value.data.value)).toBe(payload);
+      reqStream.close();
+    };
+
+    try {
+      // IPv4 literal: ATYP 0x01 with the four octets inline.
+      await dialThroughMock(`127.0.0.1:${tcpEchoPort}`, 'V4-OK');
+      expect(mock.frames()[0].connect).toEqual(
+        Buffer.from([
+          0x05,
+          0x01,
+          0x00,
+          0x01,
+          127,
+          0,
+          0,
+          1,
+          tcpEchoPort >> 8,
+          tcpEchoPort & 0xff,
+        ]),
+      );
+
+      // Bracketed IPv6 literal: ATYP 0x04 with 16 wire-order bytes
+      // (::1 is fifteen zero bytes then one).
+      await dialThroughMock(`[::1]:${v6Port}`, 'V6-OK');
+      const v6Addr = Buffer.alloc(16);
+      v6Addr[15] = 1;
+      expect(mock.frames()[1].connect).toEqual(
+        Buffer.concat([
+          Buffer.from([0x05, 0x01, 0x00, 0x04]),
+          v6Addr,
+          Buffer.from([v6Port >> 8, v6Port & 0xff]),
+        ]),
+      );
+    } finally {
+      await new Promise<void>(r => mock.server.close(() => r()));
+      await new Promise<void>(r => echoV6.close(() => r()));
+    }
+  });
+
+  it('surfaces a non-zero SOCKS5 connect reply as Unavailable', async () => {
+    const mock = makeSocks5Mock({connectRep: 0x05, noUpstream: true});
+    await new Promise<void>(r => mock.server.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.server.address() as net.AddressInfo).port;
+
+    try {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: `localhost:${tcpEchoPort}`,
+              }),
+              proxy: create(ProxyOptionsSchema, {
+                hops: [
+                  create(ProxyHopSchema, {
+                    type: ProxyHop_Type.SOCKS5,
+                    address: create(NetAddrSchema, {
+                      network: 'tcp',
+                      address: `127.0.0.1:${mockPort}`,
+                    }),
+                  }),
+                ],
+              }),
+            }),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      try {
+        await iterator.next();
+        expect.unreachable('should have surfaced the SOCKS5 reply code');
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(ConnectError);
+        const ce = err as ConnectError;
+        expect(ce.code).toBe(Code.Unavailable);
+        expect(ce.message).toContain('SOCKS5 connect failed');
+        expect(ce.message).toContain('reply code 5');
+      }
+
+      // The CONNECT request itself was well-formed before the refusal.
+      expect(mock.frames().at(-1)!.connect).toBeDefined();
+
+      reqStream.close();
+    } finally {
+      await new Promise<void>(r => mock.server.close(() => r()));
+    }
+  });
+
+  it('preserves early tunnel bytes coalesced with the SOCKS5 connect reply', async () => {
+    // A fast proxy may pipeline the first upstream flight in the same
+    // TCP segment as the CONNECT reply; those bytes are tunnel payload
+    // and must survive the handshake (mirrors the HTTP CONNECT
+    // coalescing test and Go's bufferedPrefixConn).
+    const earlyPayload = Buffer.from('SOCKS-EARLY');
+    const mock = makeSocks5Mock({
+      coalesceWithReply: earlyPayload,
+      noUpstream: true,
+    });
+    await new Promise<void>(r => mock.server.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.server.address() as net.AddressInfo).port;
+
+    try {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: `localhost:${tcpEchoPort}`,
+              }),
+              proxy: create(ProxyOptionsSchema, {
+                hops: [
+                  create(ProxyHopSchema, {
+                    type: ProxyHop_Type.SOCKS5,
+                    address: create(NetAddrSchema, {
+                      network: 'tcp',
+                      address: `127.0.0.1:${mockPort}`,
+                    }),
+                  }),
+                ],
+              }),
+            }),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      const second = await iterator.next();
+      expect(second.value.data.case).toBe('bytes');
+      expect(Buffer.from(second.value.data.value as Uint8Array)).toEqual(
+        earlyPayload,
+      );
+
+      reqStream.close();
+    } finally {
+      await new Promise<void>(r => mock.server.close(() => r()));
     }
   });
 
