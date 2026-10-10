@@ -171,6 +171,15 @@ tools: sesame-endpoint.install
 generate: sesame-endpoint.generate
 	hack/generate.sh
 
+# Manual TLS ClientHello verification utility (internal/cmd/quick-test-tls).
+# Not part of check: the endpoint track needs a running bun/node subprocess.
+.PHONY: quick-test-tls
+quick-test-tls: sesame-endpoint.build
+	$(GO) run $(GO_FLAGS) ./internal/cmd/quick-test-tls -endpoint \
+		-cli $(SESAME_ENDPOINT_DIR)/build/src/cli.js \
+		-json scratch/testdata/quick-test-tls/results.json \
+		-html scratch/tls-report.html
+
 .PHONY: ci
 ci:
 	$(GO) env

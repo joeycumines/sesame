@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TLS ClientHello Impersonation — Test Report</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2129; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --green: #3fb950; --red: #f85149;
+    --amber: #d29922; --blue: #58a6ff; --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 20px 64px; }
+  header.top { position: sticky; top: 0; z-index: 10; background: rgba(13,17,23,.92);
+               backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); padding: 14px 0 12px; margin-bottom: 20px; }
+  header.top .wrap { padding-top: 0; padding-bottom: 0; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  .verdict { font: 600 12px/1 var(--mono); padding: 7px 12px; border-radius: 20px; border: 1px solid; }
+  .verdict.pass { color: var(--green); border-color: var(--green); background: rgba(63,185,80,.08); }
+  .verdict.fail { color: var(--red); border-color: var(--red); background: rgba(248,81,73,.08); }
+  .meta { color: var(--muted); font-size: 12px; width: 100%; }
+  .meta code { font-family: var(--mono); color: var(--text); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 18px 0; }
+  .tile { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .tile .n { font: 700 26px/1.1 var(--mono); }
+  .tile .l { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; margin-top: 4px; }
+  .tile.ok .n { color: var(--green); } .tile.bad .n { color: var(--red); }
+  .tile.warn .n { color: var(--amber); } .tile.dim .n { color: var(--muted); }
+  h2 { font-size: 14px; margin: 28px 0 10px; color: var(--blue); font-weight: 650; letter-spacing: .3px; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0 14px; }
+  .chip { font: 500 12px/1 var(--mono); color: var(--muted); background: var(--panel); border: 1px solid var(--border);
+          border-radius: 16px; padding: 6px 12px; cursor: pointer; user-select: none; }
+  .chip:hover { color: var(--text); border-color: var(--muted); }
+  .chip.active { color: var(--blue); border-color: var(--blue); background: rgba(88,166,255,.08); }
+  .scenario { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+  .scenario.open { border-color: #3d444d; }
+  .s-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; flex-wrap: wrap; }
+  .s-head:hover { background: var(--panel2); }
+  .badge { font: 600 10.5px/1 var(--mono); padding: 4px 8px; border-radius: 4px; letter-spacing: .5px; flex: none; }
+  .badge.pass { color: #0d1117; background: var(--green); }
+  .badge.fail { color: #fff; background: var(--red); }
+  .badge.skip { color: var(--bg); background: var(--muted); }
+  .sid { font: 600 12.5px var(--mono); color: var(--blue); }
+  .sname { color: var(--text); font-size: 13px; }
+  .outcome { color: var(--muted); font-size: 12px; margin-left: auto; font-family: var(--mono); }
+  .chev { color: var(--muted); transition: transform .15s; flex: none; }
+  .scenario.open .chev { transform: rotate(90deg); }
+  .s-body { display: none; border-top: 1px solid var(--border); padding: 12px 14px 14px; }
+  .scenario.open .s-body { display: block; }
+  table.checks { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.checks th { text-align: left; color: var(--muted); font-size: 10.5px; text-transform: uppercase;
+                    letter-spacing: .6px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+  table.checks td { padding: 6px 8px; border-bottom: 1px solid rgba(48,54,61,.5); vertical-align: top; }
+  table.checks tr:last-child td { border-bottom: none; }
+  .icon-pass { color: var(--green); font-weight: 700; }
+  .icon-fail { color: var(--red); font-weight: 700; }
+  .deet-name { color: var(--text); }
+  .deet-id { color: var(--muted); font: 11px var(--mono); }
+  .detail { color: var(--muted); font-family: var(--mono); font-size: 11.5px; word-break: break-word; }
+  .gaps { margin-top: 12px; border: 1px solid rgba(210,153,34,.45); background: rgba(210,153,34,.06);
+          border-radius: 6px; padding: 10px 12px; }
+  .gaps h4 { margin: 0 0 6px; color: var(--amber); font-size: 12px; font-weight: 650; }
+  .gaps p { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+  .gap-row { font-family: var(--mono); font-size: 11.5px; color: var(--text); padding: 3px 0; }
+  .gap-row .g-id { color: var(--amber); }
+  .spec { margin: 0 0 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+          padding: 8px 12px; font: 11.5px var(--mono); color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+  .spec b { color: var(--blue); font-weight: 600; }
+  details.raw, details.facts { background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+          padding: 10px 14px; margin-top: 14px; }
+  details.raw summary, details.facts summary { cursor: pointer; color: var(--blue); font-weight: 600; font-size: 13px; }
+  details.raw pre { font: 11px/1.5 var(--mono); overflow-x: auto; color: var(--muted);
+          background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; max-height: 480px; }
+  details.facts ul { margin: 10px 0 4px; padding-left: 20px; color: var(--muted); font-size: 12.5px; }
+  details.facts li { margin: 5px 0; }
+  details.facts code { font-family: var(--mono); color: var(--text); font-size: 11.5px; }
+  .repro { margin-top: 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+          padding: 10px 12px; font: 11.5px var(--mono); color: var(--muted); }
+  footer { margin-top: 30px; color: var(--muted); font-size: 11.5px; border-top: 1px solid var(--border); padding-top: 14px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>TLS ClientHello Impersonation — Test Report</h1>
+    <span id="verdict" class="verdict"></span>
+    <div class="meta" id="meta"></div>
+  </div>
+</header>
+<div class="wrap">
+  <div class="tiles" id="tiles"></div>
+  <div class="controls" id="controls"></div>
+  <div id="sections"></div>
+
+  <details class="facts">
+    <summary>Engine ceilings &amp; documented gaps (context)</summary>
+    <ul>
+      <li><b>Go engine</b> (<code>crypto/tls</code>, wire-proven Go 1.27): <code>cipher_suites</code>/<code>supported_groups</code> are membership filters over fixed internal preference orders; session_id always 32 bytes; legacy_version always <code>0x0303</code>; no GREASE, sigalg, extension-order, or padding control. Honors a spec only on exact match, fails closed otherwise.</li>
+      <li><b>Builtin TS engine</b> (Bun/Node <code>node:tls</code>): all capabilities false — any non-default spec dimension fails closed. Bun <code>node:tls</code> sends record version <code>0x0301</code> and omits <code>status_request(5)</code>/<code>SCT(18)</code>; Bun <code>fetch</code> (the opencode reference) sends <code>0x0303</code> with both.</li>
+      <li><b>Opencode fidelity</b>: opencode ships Bun; matching its ClientHello exactly is the job of the planned native BoringSSL N-API addon (<code>ts-native-addon</code>). The endpoint under Bun already matches on extension order, groups, session_id, ALPN, and GREASE-absence.</li>
+      <li><b>Browser fidelity</b>: full Chrome ClientHello fidelity (arbitrary extension order + GREASE placement) needs a manual ClientHello builder behind the same engine contract — out of reach for both builtin engines by design.</li>
+    </ul>
+  </details>
+
+  <details class="raw">
+    <summary>Raw results.json</summary>
+    <pre id="raw"></pre>
+  </details>
+
+  <div class="repro">Reproduce: go run ./internal/cmd/quick-test-tls -endpoint -json results.json -html tls-report.html</div>
+
+  <footer>Generated by <code>internal/cmd/quick-test-tls</code> · sesame monorepo · decomposed ClientHelloSpec API (no presets, no modes)</footer>
+</div>
+
+<script>
+const DATA = __REPORT_DATA__;
+
+const PATH_LABELS = {
+  'go-engine': 'Track A · Go engine — Go app → browser (fail-closed + exact-match contract)',
+  'endpoint-bun': 'Track B · sesame-endpoint under Bun — opencode impersonation'
+};
+
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null) continue;
+    e.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return e;
+}
+
+const totalGaps = DATA.scenarios.reduce((n, s) => n + ((s.gaps || []).length), 0);
+
+// Verdict
+const v = document.getElementById('verdict');
+if (DATA.summary.failed === 0) {
+  v.className = 'verdict pass';
+  v.textContent = 'ALL ' + (DATA.summary.total - DATA.summary.skipped) + ' EXECUTED SCENARIOS PASS';
+} else {
+  v.className = 'verdict fail';
+  v.textContent = DATA.summary.failed + ' SCENARIO(S) FAILED';
+}
+
+// Meta
+document.getElementById('meta').innerHTML =
+  'generated <code>' + DATA.generated_at + '</code> · Go <code>' + DATA.go_version +
+  '</code> · commit <code>' + (DATA.commit || 'unknown') + '</code> · module <code>' + (DATA.module || '') + '</code>';
+
+// Tiles
+const tiles = [
+  { n: DATA.summary.total, l: 'scenarios', c: 'dim' },
+  { n: DATA.summary.passed, l: 'passed', c: 'ok' },
+  { n: DATA.summary.failed, l: 'failed', c: DATA.summary.failed ? 'bad' : 'dim' },
+  { n: DATA.summary.skipped, l: 'skipped', c: 'dim' },
+  { n: totalGaps, l: 'documented gaps', c: totalGaps ? 'warn' : 'dim' }
+];
+const tilesEl = document.getElementById('tiles');
+for (const t of tiles) tilesEl.append(h('div', { class: 'tile ' + t.c }, h('div', { class: 'n' }, t.n), h('div', { class: 'l' }, t.l)));
+
+// Controls
+let activePath = null;
+const controlsEl = document.getElementById('controls');
+function chip(label, path) {
+  const c = h('span', { class: 'chip' + (path === activePath ? ' active' : ''), onclick: () => { activePath = path; renderAll(); } }, label);
+  return c;
+}
+function renderControls() {
+  controlsEl.innerHTML = '';
+  controlsEl.append(chip('all paths', null));
+  for (const p of Object.keys(PATH_LABELS)) controlsEl.append(chip(p, p));
+  const expAll = h('span', { class: 'chip', style: 'margin-left:auto', onclick: () => setAll(true) }, 'expand all');
+  const colAll = h('span', { class: 'chip', onclick: () => setAll(false) }, 'collapse all');
+  controlsEl.append(expAll, colAll);
+}
+function setAll(open) {
+  document.querySelectorAll('.scenario').forEach(s => {
+    if (s.dataset.hidden === '1') return;
+    s.classList.toggle('open', open);
+  });
+}
+
+// Sections
+const sectionsEl = document.getElementById('sections');
+function renderSections() {
+  sectionsEl.innerHTML = '';
+  const paths = [...new Set(DATA.scenarios.map(s => s.path))];
+  for (const p of paths) {
+    if (activePath && p !== activePath) continue;
+    sectionsEl.append(h('h2', {}, PATH_LABELS[p] || p));
+    for (const s of DATA.scenarios.filter(x => x.path === p)) sectionsEl.append(scenarioCard(s));
+  }
+}
+
+function scenarioCard(s) {
+  const kind = s.skipped ? 'skip' : (s.passed ? 'pass' : 'fail');
+  const card = h('div', { class: 'scenario' });
+  const nchecks = (s.checks || []).length;
+  const ngaps = (s.gaps || []).length;
+  const head = h('div', { class: 's-head', onclick: () => card.classList.toggle('open') },
+    h('span', { class: 'badge ' + kind }, kind.toUpperCase()),
+    h('span', { class: 'sid' }, s.id),
+    h('span', { class: 'sname' }, s.name),
+    h('span', { class: 'outcome' }, s.outcome + ' · ' + nchecks + ' checks' + (ngaps ? ' · ' + ngaps + ' gaps' : '')),
+    h('span', { class: 'chev' }, '▶')
+  );
+  const body = h('div', { class: 's-body' });
+  if (s.requested_spec) body.append(h('div', { class: 'spec' }, 'requested spec: ' + JSON.stringify(s.requested_spec)));
+  if (s.skip_reason) body.append(h('div', { class: 'spec' }, 'skip reason: ' + s.skip_reason));
+  if (nchecks) {
+    const tbl = h('table', { class: 'checks' },
+      h('tr', {}, h('th', {}, ''), h('th', {}, 'deet'), h('th', {}, 'evidence')));
+    for (const c of s.checks) {
+      tbl.append(h('tr', {},
+        h('td', {}, h('span', { class: c.pass ? 'icon-pass' : 'icon-fail' }, c.pass ? '✓' : '✗')),
+        h('td', {}, h('div', { class: 'deet-name' }, c.deet.name), h('div', { class: 'deet-id' }, c.deet.id)),
+        h('td', {}, h('div', { class: 'detail' }, c.detail))
+      ));
+    }
+    body.append(tbl);
+  }
+  if (ngaps) {
+    const gb = h('div', { class: 'gaps' },
+      h('h4', {}, 'Documented engine-ceiling gaps (work items, not defects)'),
+      h('p', {}, 'Dimensions where the builtin engine honestly cannot match the impersonation reference. Closing them is scoped to the native BoringSSL addon / a manual ClientHello builder.'));
+    for (const g of s.gaps) gb.append(h('div', { class: 'gap-row' }, h('span', { class: 'g-id' }, '◈ ' + g.deet.id), ' — ' + g.detail));
+    body.append(gb);
+  }
+  card.append(head, body);
+  return card;
+}
+
+function renderAll() { renderControls(); renderSections(); }
+renderAll();
+
+// Raw JSON
+document.getElementById('raw').textContent = JSON.stringify(DATA, null, 2);
+</script>
+</body>
+</html>
