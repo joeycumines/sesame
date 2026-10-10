@@ -175,6 +175,7 @@ generate: sesame-endpoint.generate
 # Not part of check: the endpoint track needs a running bun/node subprocess.
 .PHONY: quick-test-tls
 quick-test-tls: sesame-endpoint.build
+	@mkdir -p scratch/testdata/quick-test-tls
 	$(GO) run $(GO_FLAGS) ./internal/cmd/quick-test-tls -endpoint \
 		-cli $(SESAME_ENDPOINT_DIR)/build/src/cli.js \
 		-json scratch/testdata/quick-test-tls/results.json \
