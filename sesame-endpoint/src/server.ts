@@ -18,7 +18,10 @@ export function createEndpointServer(
   tlsProvider?: TLSProvider,
 ): EndpointServer {
   const routes = (router: ConnectRouter) => {
-    router.service(RemoteControl, createRemoteControlService(config, tlsProvider));
+    router.service(
+      RemoteControl,
+      createRemoteControlService(config, tlsProvider),
+    );
   };
 
   const handler = connectNodeAdapter({routes});

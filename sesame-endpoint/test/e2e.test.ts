@@ -442,9 +442,7 @@ describe('sesame-endpoint E2E Suite', () => {
     } catch (err: unknown) {
       expect(err).toBeInstanceOf(ConnectError);
       expect((err as ConnectError).code).toBe(Code.FailedPrecondition);
-      expect((err as ConnectError).message).toContain(
-        'signature_algorithms',
-      );
+      expect((err as ConnectError).message).toContain('signature_algorithms');
     }
 
     reqStream.close();

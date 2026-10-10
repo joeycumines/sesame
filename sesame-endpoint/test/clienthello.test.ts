@@ -126,39 +126,29 @@ describe('validateClientHelloSpec', () => {
 
 describe('assertBuiltinClientHelloHonorable', () => {
   it('accepts undefined spec', () => {
-    expect(() =>
-      assertBuiltinClientHelloHonorable(undefined),
-    ).not.toThrow();
+    expect(() => assertBuiltinClientHelloHonorable(undefined)).not.toThrow();
   });
 
   it('accepts empty/default spec', () => {
     const spec = create(ClientHelloSpecSchema, {});
-    expect(() =>
-      assertBuiltinClientHelloHonorable(spec),
-    ).not.toThrow();
+    expect(() => assertBuiltinClientHelloHonorable(spec)).not.toThrow();
   });
 
   it('accepts compression [0]', () => {
     const spec = create(ClientHelloSpecSchema, {compressionMethods: [0]});
-    expect(() =>
-      assertBuiltinClientHelloHonorable(spec),
-    ).not.toThrow();
+    expect(() => assertBuiltinClientHelloHonorable(spec)).not.toThrow();
   });
 
   it('accepts sessionIdLength 0 and 32', () => {
     for (const v of [0, 32]) {
       const spec = create(ClientHelloSpecSchema, {sessionIdLength: v});
-      expect(() =>
-        assertBuiltinClientHelloHonorable(spec),
-      ).not.toThrow();
+      expect(() => assertBuiltinClientHelloHonorable(spec)).not.toThrow();
     }
   });
 
   it('rejects non-empty cipherSuites', () => {
     const spec = create(ClientHelloSpecSchema, {cipherSuites: [0x1301]});
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
     try {
       assertBuiltinClientHelloHonorable(spec);
     } catch (err) {
@@ -169,73 +159,55 @@ describe('assertBuiltinClientHelloHonorable', () => {
 
   it('rejects non-empty supportedGroups', () => {
     const spec = create(ClientHelloSpecSchema, {supportedGroups: [29]});
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 
   it('rejects non-empty signatureAlgorithms', () => {
     const spec = create(ClientHelloSpecSchema, {
       signatureAlgorithms: [0x0403],
     });
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 
   it('rejects non-empty extensions', () => {
     const spec = create(ClientHelloSpecSchema, {
       extensions: [{type: 43, body: undefined}],
     });
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 
   it('rejects compression other than [0]', () => {
     const spec = create(ClientHelloSpecSchema, {compressionMethods: [1]});
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 
   it('rejects multi-method compression', () => {
     const spec = create(ClientHelloSpecSchema, {
       compressionMethods: [0, 1],
     });
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 
   it('rejects sessionIdLength -1', () => {
     const spec = create(ClientHelloSpecSchema, {sessionIdLength: -1});
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 
   it('rejects sessionIdLength 16', () => {
     const spec = create(ClientHelloSpecSchema, {sessionIdLength: 16});
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 
   it('rejects non-unspecified legacyVersion', () => {
     const spec = create(ClientHelloSpecSchema, {
       legacyVersion: TLSVersion.TLS_1_2,
     });
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 
   it('rejects non-zero padToSize', () => {
     const spec = create(ClientHelloSpecSchema, {padToSize: 512});
-    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(
-      ConnectError,
-    );
+    expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 });
 
