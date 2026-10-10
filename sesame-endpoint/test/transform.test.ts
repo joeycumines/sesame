@@ -71,6 +71,7 @@ describe('executeProxyHops control-byte rejection', () => {
   const expectInvalidArgument = async (
     target: string,
     hops: ProxyHop[],
+    messageFragment = 'control byte',
   ): Promise<void> => {
     try {
       await executeProxyHops('tcp', target, create(ProxyOptionsSchema, {hops}));
@@ -78,10 +79,12 @@ describe('executeProxyHops control-byte rejection', () => {
       expect(err).toBeInstanceOf(ConnectError);
       const ce = err as ConnectError;
       expect(ce.code).toBe(Code.InvalidArgument);
-      expect(ce.message).toContain('control byte');
+      expect(ce.message).toContain(messageFragment);
       return;
     }
-    throw new Error('expected InvalidArgument for a control-byte field');
+    throw new Error(
+      `expected InvalidArgument (${messageFragment}) for a proxy field`,
+    );
   };
 
   it('rejects CR/LF injected into the CONNECT target', async () => {
@@ -145,5 +148,107 @@ describe('executeProxyHops control-byte rejection', () => {
     expect(err).toBeInstanceOf(ConnectError);
     const ce = err as ConnectError;
     expect(ce.code).not.toBe(Code.InvalidArgument);
+  });
+
+  it('rejects a SOCKS5 target domain longer than the 255-byte u8 field', async () => {
+    // RFC 1928 ATYP 0x03 carries the domain behind a u8 length: a
+    // >255-byte host cannot be encoded and previously wrapped the
+    // length byte. Rejection must happen before any dialing.
+    const oversized = 'a'.repeat(256) + '.example:443';
+    await expectInvalidArgument(
+      oversized,
+      [
+        create(ProxyHopSchema, {
+          type: ProxyHop_Type.SOCKS5,
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: 'socks.internal:1080',
+          }),
+        }),
+      ],
+      '255-byte limit',
+    );
+  });
+
+  it('lets the same oversized domain through an HTTP CONNECT hop', async () => {
+    // HTTP CONNECT interpolates the target into a raw request line -
+    // no length field - so the oversized domain must pass validation
+    // and reach the dial stage (non-InvalidArgument failure).
+    const oversized = 'a'.repeat(256) + '.example:443';
+    let err: unknown;
+    try {
+      await executeProxyHops(
+        'tcp',
+        oversized,
+        create(ProxyOptionsSchema, {
+          hops: [
+            create(ProxyHopSchema, {
+              type: ProxyHop_Type.HTTP_CONNECT,
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: 'proxy.internal:8080',
+              }),
+            }),
+          ],
+        }),
+      );
+    } catch (e: unknown) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ConnectError);
+    expect((err as ConnectError).code).not.toBe(Code.InvalidArgument);
+  });
+
+  it('accepts a SOCKS5 target domain of exactly 255 bytes', async () => {
+    // The boundary must pass validation and reach the dial stage.
+    const exact255 = 'a'.repeat(250) + '.test:443';
+    let err: unknown;
+    try {
+      await executeProxyHops(
+        'tcp',
+        exact255,
+        create(ProxyOptionsSchema, {
+          hops: [
+            create(ProxyHopSchema, {
+              type: ProxyHop_Type.SOCKS5,
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: 'socks.internal:1080',
+              }),
+            }),
+          ],
+        }),
+      );
+    } catch (e: unknown) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ConnectError);
+    expect((err as ConnectError).code).not.toBe(Code.InvalidArgument);
+  });
+
+  it("rejects an oversized NEXT-hop address as a SOCKS5 hop's target", async () => {
+    // Chained case: hop 0 is SOCKS5, so its CONNECT target is hop 1's
+    // address - oversized there must be rejected before any dialing.
+    const oversized = 'a'.repeat(256) + '.example:443';
+    await expectInvalidArgument(
+      'target.internal:443',
+      [
+        create(ProxyHopSchema, {
+          type: ProxyHop_Type.SOCKS5,
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: 'socks.internal:1080',
+          }),
+        }),
+        create(ProxyHopSchema, {
+          type: ProxyHop_Type.SOCKS5,
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: oversized,
+          }),
+        }),
+      ],
+      '255-byte limit',
+    );
   });
 });

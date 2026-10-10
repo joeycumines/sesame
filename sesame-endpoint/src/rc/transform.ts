@@ -463,6 +463,7 @@ export async function executeProxyHops(
   }
 
   validateProxyWireFields(targetAddress, hops);
+  validateSocks5Targets(targetAddress, hops);
 
   const traversedHops: NetAddr[] = [];
   const firstHop = hops[0];
@@ -567,6 +568,46 @@ function rejectControlBytes(value: string, field: string): void {
     if (c < 0x20 || c === 0x7f) {
       throw new ConnectError(
         `sesame/rc/netconn: ${field} contains a control byte at offset ${i}; proxy handshake fields must not carry CR/LF or other control characters`,
+        Code.InvalidArgument,
+      );
+    }
+  }
+}
+
+// validateSocks5Targets mirrors the Go reference: per SOCKS5 hop, the
+// address that hop will CONNECT to (the next hop's address, or the
+// tunnel target for the last hop) must be encodable - RFC 1928 carries
+// a domain target behind a u8 length field (ATYP 0x03), so a non-IP
+// host longer than 255 bytes would silently wrap the length and
+// corrupt the frame. HTTP CONNECT has no such limit and is untouched.
+function validateSocks5Targets(
+  targetAddress: string,
+  hops: readonly ProxyHop[],
+): void {
+  for (let i = 0; i < hops.length; i++) {
+    if (hops[i].type !== ProxyHop_Type.SOCKS5) {
+      continue;
+    }
+    const target =
+      i + 1 < hops.length
+        ? (hops[i + 1].address?.address ?? '')
+        : targetAddress;
+    const lastColon = target.lastIndexOf(':');
+    if (lastColon === -1) {
+      // Malformed targets are the dial path's problem; the
+      // encodability check only rejects what cannot be encoded.
+      continue;
+    }
+    let host = target.slice(0, lastColon);
+    if (host.startsWith('[') && host.endsWith(']')) {
+      host = host.slice(1, -1);
+    }
+    if (net.isIPv4(host) || net.isIPv6(host)) {
+      continue;
+    }
+    if (host.length > 255) {
+      throw new ConnectError(
+        `sesame/rc/netconn: SOCKS5 target domain exceeds the RFC 1928 255-byte limit (${host.length} bytes)`,
         Code.InvalidArgument,
       );
     }

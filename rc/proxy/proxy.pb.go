@@ -132,6 +132,13 @@ func (x *ProxyOptions) GetHops() []*ProxyHop {
 type ProxyHop struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Traversal mechanism (REQUIRED).
+	//
+	// SOCKS5 note: each hop connects to the NEXT hop's address (or the
+	// tunnel target for the last hop). RFC 1928 encodes a domain target
+	// behind a u8 length field (ATYP 0x03), so a non-IP host longer than
+	// 255 bytes cannot be encoded on the wire - implementations MUST
+	// reject such a target with INVALID_ARGUMENT rather than truncating
+	// the length.
 	Type ProxyHop_Type `protobuf:"varint,1,opt,name=type,proto3,enum=sesame.proxy.v1alpha1.ProxyHop_Type" json:"type,omitempty"`
 	// Address of the intermediate proxy server (REQUIRED).
 	Address *netaddr.NetAddr `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`

@@ -517,6 +517,88 @@ func TestExecuteProxyHops_RejectsControlBytes(t *testing.T) {
 	}
 }
 
+func TestExecuteProxyHops_RejectsOversizedSocks5Domain(t *testing.T) {
+	// RFC 1928 carries a domain target behind a u8 length field
+	// (ATYP 0x03): a host longer than 255 bytes cannot be encoded, and
+	// both stacks previously wrote the truncated byte (Go via x/net,
+	// TS directly). Validation must reject before any dialing, without
+	// over-rejecting HTTP CONNECT (raw request line, no length limit)
+	// or the 255-byte boundary.
+	oversized := strings.Repeat("a", 256) + ".example:443"
+	exact255 := strings.Repeat("a", 250) + ".test:443"
+	socksHop := func(address string) *sesameproxy.ProxyHop {
+		return &sesameproxy.ProxyHop{
+			Type:    sesameproxy.ProxyHop_SOCKS5,
+			Address: &netaddr.NetAddr{Network: "tcp", Address: address},
+		}
+	}
+	httpHop := &sesameproxy.ProxyHop{
+		Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
+		Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
+	}
+
+	neverDial := dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		t.Fatal("dialer must not be called for an unencodable SOCKS5 target")
+		return nil, nil
+	})
+
+	// (a) Oversized domain on a SOCKS5 hop's target (last hop).
+	_, _, err := ExecuteProxyHops(context.Background(), neverDial,
+		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{socksHop("proxy.internal:1080")}},
+		"tcp", oversized)
+	if err == nil || status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument for a >255-byte SOCKS5 target domain, got %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "255-byte limit") {
+		t.Fatalf("expected the RFC 1928 limit in the error, got %v", err)
+	}
+
+	// (b) The same oversized domain on an HTTP CONNECT hop: no length
+	// field on the wire, so validation must pass and the dial stage
+	// must be reached.
+	_, _, err = ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		return nil, errors.New("dial reached")
+	}),
+		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{httpHop}},
+		"tcp", oversized)
+	if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
+		t.Fatalf("expected HTTP CONNECT to accept an oversized domain target and reach the dial, got %v", err)
+	}
+
+	// (c) Exactly 255 bytes: passes validation (reaches the dial).
+	_, _, err = ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		return nil, errors.New("dial reached")
+	}),
+		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{socksHop("proxy.internal:1080")}},
+		"tcp", exact255)
+	if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
+		t.Fatalf("expected the 255-byte boundary to pass validation and reach the dial, got %v", err)
+	}
+
+	// (d) Chained case: an oversized NEXT-hop address as a SOCKS5
+	// hop's CONNECT target - rejected before any dialing.
+	_, _, err = ExecuteProxyHops(context.Background(), neverDial,
+		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{
+			socksHop("proxy.internal:1080"),
+			{Type: sesameproxy.ProxyHop_SOCKS5, Address: &netaddr.NetAddr{Network: "tcp", Address: oversized}},
+		}},
+		"tcp", "target.internal:443")
+	if err == nil || status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument for an oversized chained SOCKS5 target, got %v", err)
+	}
+
+	// (e) IP-literal targets use ATYP 1/4 (no length field) and must
+	// pass validation regardless of address length semantics.
+	_, _, err = ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		return nil, errors.New("dial reached")
+	}),
+		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{socksHop("proxy.internal:1080")}},
+		"tcp", "[::1]:443")
+	if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
+		t.Fatalf("expected the IPv6-literal SOCKS5 target to pass validation and reach the dial, got %v", err)
+	}
+}
+
 // dialerFunc adapts a function to the Dialer interface.
 type dialerFunc func(ctx context.Context, network, address string) (net.Conn, error)
 

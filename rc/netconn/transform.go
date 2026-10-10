@@ -217,6 +217,9 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 	if err := validateProxyWireFields(targetAddress, hops); err != nil {
 		return nil, nil, err
 	}
+	if err := validateSocks5Targets(targetAddress, hops); err != nil {
+		return nil, nil, err
+	}
 	traversed := make([]*netaddr.NetAddr, 0, len(hops))
 
 	// Dial the first hop using the base dialer
@@ -316,6 +319,46 @@ func rejectControlBytes(s, field string) error {
 		if s[i] < 0x20 || s[i] == 0x7f {
 			return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: %s contains a control byte at offset %d; proxy handshake fields must not carry CR/LF or other control characters", field, i)
 		}
+	}
+	return nil
+}
+
+// validateSocks5Targets rejects, per SOCKS5 hop, a CONNECT target the
+// wire format cannot encode: RFC 1928 carries a domain target behind a
+// u8 length field (ATYP 0x03), so a non-IP host longer than 255 bytes
+// would silently wrap the length and corrupt the frame - the x/net
+// dialer the Go stack delegates to writes the same truncated byte.
+// The target of hop i is the next hop's address, or the tunnel target
+// for the last hop. HTTP CONNECT has no such limit and is untouched.
+func validateSocks5Targets(targetAddress string, hops []*sesameproxy.ProxyHop) error {
+	for i, hop := range hops {
+		if hop.GetType() != sesameproxy.ProxyHop_SOCKS5 {
+			continue
+		}
+		target := targetAddress
+		if i+1 < len(hops) {
+			target = hops[i+1].GetAddress().GetAddress()
+		}
+		if err := validateSocks5TargetEncodable(target); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSocks5TargetEncodable(target string) error {
+	host, _, err := net.SplitHostPort(target)
+	if err != nil {
+		// Malformed targets are the dial path's problem; the
+		// encodability check only rejects what cannot be encoded.
+		return nil
+	}
+	if net.ParseIP(host) != nil {
+		// IP literals use ATYP 1/4 - no length field involved.
+		return nil
+	}
+	if len(host) > 255 {
+		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: SOCKS5 target domain exceeds the RFC 1928 255-byte limit (%d bytes)", len(host))
 	}
 	return nil
 }
