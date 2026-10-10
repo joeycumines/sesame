@@ -3,7 +3,9 @@ package netconn
 import (
 	"context"
 	cryptotls "crypto/tls"
+	"errors"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -413,6 +415,105 @@ func TestExecuteProxyHops_TooManyHops(t *testing.T) {
 	}
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestExecuteProxyHops_RejectsControlBytes(t *testing.T) {
+	// CR/LF in a proxy handshake field would inject header or request
+	// lines into the raw CONNECT request; other control bytes are
+	// garbage in an authority or header value. Validation must fire
+	// before any dialing.
+	validAddr := &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}
+
+	cases := []struct {
+		name    string
+		target  string
+		hopMods [2]func(*sesameproxy.ProxyHop)
+	}{
+		{
+			name:   "CR/LF in target injects a Host line",
+			target: "target.internal:443\r\nHost: evil.example",
+		},
+		{
+			name:   "NUL in target",
+			target: "target\x00.internal:443",
+		},
+		{
+			name:   "DEL in target",
+			target: "target.internal:443\x7f",
+		},
+		{
+			name:   "CR in hop address",
+			target: "target.internal:443",
+			hopMods: [2]func(*sesameproxy.ProxyHop){func(h *sesameproxy.ProxyHop) {
+				h.Address = &netaddr.NetAddr{Network: "tcp", Address: "proxy\r.internal:8080"}
+			}},
+		},
+		{
+			name:   "LF in second hop address",
+			target: "target.internal:443",
+			hopMods: [2]func(*sesameproxy.ProxyHop){
+				nil,
+				func(h *sesameproxy.ProxyHop) {
+					h.Address = &netaddr.NetAddr{Network: "tcp", Address: "proxy2.\ninternal:8080"}
+				},
+			},
+		},
+		{
+			name:    "CRLF in auth_header injects a header line",
+			target:  "target.internal:443",
+			hopMods: [2]func(*sesameproxy.ProxyHop){func(h *sesameproxy.ProxyHop) { h.AuthHeader = "Bearer tok\r\nX-Injected: 1" }},
+		},
+		{
+			name:    "NUL in auth_header",
+			target:  "target.internal:443",
+			hopMods: [2]func(*sesameproxy.ProxyHop){func(h *sesameproxy.ProxyHop) { h.AuthHeader = "Basic abc\x00def" }},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			hops := make([]*sesameproxy.ProxyHop, len(tc.hopMods))
+			for i, mod := range tc.hopMods {
+				hop := &sesameproxy.ProxyHop{
+					Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
+					Address: validAddr,
+				}
+				if mod != nil {
+					mod(hop)
+				}
+				hops[i] = hop
+			}
+
+			_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+				t.Fatal("dialer must not be called for a control-byte proxy field")
+				return nil, nil
+			}), &sesameproxy.ProxyOptions{Hops: hops}, "tcp", tc.target)
+			if err == nil {
+				t.Fatal("expected InvalidArgument for a control byte in a proxy handshake field")
+			}
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("expected InvalidArgument, got %v", err)
+			}
+		})
+	}
+
+	// Clean fields must still reach the dialer (validation must not
+	// over-reject): the dial failure surfacing proves it got past
+	// validation. The dial error is formatted with %v (not wrapped),
+	// so assert on the code and the message.
+	_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		return nil, errors.New("dial reached")
+	}), &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{{
+		Type:       sesameproxy.ProxyHop_HTTP_CONNECT,
+		Address:    validAddr,
+		AuthHeader: "Bearer valid-token",
+	}}}, "tcp", "target.internal:443")
+	if err == nil {
+		t.Fatal("expected the dialer to be reached for clean fields")
+	}
+	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
+		t.Fatalf("expected a first-hop dial failure for clean fields, got %v", err)
 	}
 }
 

@@ -232,6 +232,9 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 	}
 
 	hops := proxyOpts.GetHops()
+	if err := validateProxyWireFields(targetAddress, hops); err != nil {
+		return nil, nil, err
+	}
 	traversed := make([]*netaddr.NetAddr, 0, len(hops))
 
 	// Dial the first hop using the base dialer
@@ -296,6 +299,43 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 	}
 
 	return currentConn, res, nil
+}
+
+// validateProxyWireFields rejects control bytes in the strings that are
+// interpolated verbatim into a raw HTTP CONNECT request line: the
+// tunnel target (request line and Host header), each hop's auth_header
+// (Proxy-Authorization line), and each subsequent hop address (the
+// CONNECT target of the next hop's handshake). CR/LF in any of them
+// would inject header or request lines into the proxy request; other
+// C0 controls and DEL are garbage in an authority or header value and
+// are rejected by the same fail-closed rule. Credentials are outside
+// this rule: usernames and passwords travel base64-encoded (CONNECT
+// basic auth) or length-prefixed (SOCKS5 RFC 1929), so they cannot
+// break request framing.
+func validateProxyWireFields(targetAddress string, hops []*sesameproxy.ProxyHop) error {
+	if err := rejectControlBytes(targetAddress, "proxy target address"); err != nil {
+		return err
+	}
+	for i, hop := range hops {
+		if err := rejectControlBytes(hop.GetAddress().GetAddress(), fmt.Sprintf("proxy hop %d address", i)); err != nil {
+			return err
+		}
+		if err := rejectControlBytes(hop.GetAuthHeader(), fmt.Sprintf("proxy hop %d auth_header", i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rejectControlBytes fails closed on any C0 control or DEL byte. The
+// offending value is never echoed: proxy fields carry credentials.
+func rejectControlBytes(s, field string) error {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] == 0x7f {
+			return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: %s contains a control byte at offset %d; proxy handshake fields must not carry CR/LF or other control characters", field, i)
+		}
+	}
+	return nil
 }
 
 // proxyHandshakeTimeout bounds proxy protocol handshakes (HTTP CONNECT,

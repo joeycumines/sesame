@@ -462,6 +462,8 @@ export async function executeProxyHops(
     );
   }
 
+  validateProxyWireFields(targetAddress, hops);
+
   const traversedHops: NetAddr[] = [];
   const firstHop = hops[0];
   if (!firstHop.address?.address) {
@@ -533,6 +535,42 @@ export async function executeProxyHops(
   });
 
   return {socket: currentSocket, result};
+}
+
+// validateProxyWireFields mirrors the Go reference: it rejects control
+// bytes in the strings interpolated verbatim into a raw HTTP CONNECT
+// request line - the tunnel target (request line and Host header), each
+// hop's authHeader (Proxy-Authorization line), and each subsequent hop
+// address (the CONNECT target of the next hop's handshake). CR/LF in
+// any of them would inject header or request lines into the proxy
+// request; other C0 controls and DEL are garbage in an authority or
+// header value and are rejected by the same fail-closed rule.
+// Credentials are outside this rule: usernames and passwords travel
+// base64-encoded (CONNECT basic auth) or length-prefixed (SOCKS5 RFC
+// 1929), so they cannot break request framing.
+function validateProxyWireFields(
+  targetAddress: string,
+  hops: readonly ProxyHop[],
+): void {
+  rejectControlBytes(targetAddress, 'proxy target address');
+  hops.forEach((hop, i) => {
+    rejectControlBytes(hop.address?.address ?? '', `proxy hop ${i} address`);
+    rejectControlBytes(hop.authHeader, `proxy hop ${i} auth_header`);
+  });
+}
+
+// rejectControlBytes fails closed on any C0 control or DEL byte. The
+// offending value is never echoed: proxy fields carry credentials.
+function rejectControlBytes(value: string, field: string): void {
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) {
+      throw new ConnectError(
+        `sesame/rc/netconn: ${field} contains a control byte at offset ${i}; proxy handshake fields must not carry CR/LF or other control characters`,
+        Code.InvalidArgument,
+      );
+    }
+  }
 }
 
 function dialTcp(
