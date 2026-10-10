@@ -422,3 +422,51 @@ type dialerFunc func(ctx context.Context, network, address string) (net.Conn, er
 func (f dialerFunc) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	return f(ctx, network, address)
 }
+
+// closeWriteRecorder counts CloseWrite calls and stands in for a
+// half-close-capable upstream.
+type closeWriteRecorder struct {
+	net.Conn
+	calls int
+}
+
+func (c *closeWriteRecorder) CloseWrite() error {
+	c.calls++
+	return nil
+}
+
+func TestBufferedPrefixConn_CloseWriteDelegates(t *testing.T) {
+	// The server's half-close handler type-asserts
+	// interface{ CloseWrite() error } against the active conn; a
+	// bufferedPrefixConn returned from the HTTP CONNECT path must promote
+	// the wrapped conn's CloseWrite, or client half-closes are silently
+	// dropped on every proxied tunnel.
+	_, pipeEnd := net.Pipe()
+	defer pipeEnd.Close()
+
+	recorder := &closeWriteRecorder{Conn: pipeEnd}
+	bpc := &bufferedPrefixConn{Conn: recorder, prefix: []byte("PRE")}
+
+	if err := bpc.CloseWrite(); err != nil {
+		t.Fatalf("CloseWrite failed: %v", err)
+	}
+	if recorder.calls != 1 {
+		t.Fatalf("expected CloseWrite to delegate to the wrapped conn once, got %d calls", recorder.calls)
+	}
+
+	// The prefix is read-side state and must still drain after the write
+	// side closed.
+	buf := make([]byte, 3)
+	if n, err := bpc.Read(buf); err != nil || string(buf[:n]) != "PRE" {
+		t.Fatalf("prefix read after CloseWrite = %q, %v; want PRE, <nil>", buf[:n], err)
+	}
+
+	// A wrapped conn without CloseWrite must report the limitation
+	// instead of pretending the half-close happened.
+	_, bareEnd := net.Pipe()
+	defer bareEnd.Close()
+	bare := &bufferedPrefixConn{Conn: bareEnd}
+	if err := bare.CloseWrite(); err == nil {
+		t.Fatal("expected an error when the wrapped conn does not support CloseWrite, got nil")
+	}
+}

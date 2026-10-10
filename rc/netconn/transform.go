@@ -413,4 +413,17 @@ func (b *bufferedPrefixConn) Read(p []byte) (int, error) {
 	return b.Conn.Read(p)
 }
 
+// CloseWrite half-closes the tunnel by delegating to the wrapped conn.
+// The buffered prefix is read-side state, so reads keep draining it
+// after the write side closes. A wrapped conn without CloseWrite
+// reports that honestly instead of failing the type assertion at the
+// caller.
+func (b *bufferedPrefixConn) CloseWrite() error {
+	cw, ok := b.Conn.(interface{ CloseWrite() error })
+	if !ok {
+		return errors.New("sesame/rc/netconn: wrapped connection does not support half-close")
+	}
+	return cw.CloseWrite()
+}
+
 var timeZero = time.Time{}

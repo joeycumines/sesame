@@ -1104,6 +1104,204 @@ func TestClientServer_InStream_FlowControl(t *testing.T) {
 	}
 }
 
+func TestClientServer_InStream_HalfClose(t *testing.T) {
+	// Termination flow (d): client half_close must close only the
+	// server's write side to the target (a real FIN), and the relay MUST
+	// keep running until the target terminates. The upstream is a real
+	// TCP server so the FIN is observable, which a net.Pipe cannot be.
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen failed: %v", err)
+	}
+	defer ln.Close()
+
+	sawFin := make(chan string, 1)
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				buf := make([]byte, 1024)
+				for {
+					n, err := c.Read(buf)
+					if n > 0 {
+						_, _ = c.Write(buf[:n])
+					}
+					if err != nil {
+						select {
+						case sawFin <- err.Error():
+						default:
+						}
+						_, _ = c.Write([]byte("FINAL"))
+						return
+					}
+				}
+			}(c)
+		}
+	}()
+
+	server := netconn.Server{}
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	client := netconn.Client{
+		API: rc.NewRemoteControlClient(gc),
+		Capabilities: &rc.NetConnRequest_Capabilities{
+			SupportsOpportunisticTls: true,
+			SupportsFlowControl:      true,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := client.DialContext(ctx, "tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	defer conn.Close()
+
+	inStreamConn, ok := conn.(netconn.InStreamConn)
+	if !ok {
+		t.Fatalf("expected InStreamConn, got %T", conn)
+	}
+
+	// Echo roundtrip proves the tunnel before the half-close.
+	if _, err := inStreamConn.Write([]byte("PING")); err != nil {
+		t.Fatalf("write PING failed: %v", err)
+	}
+	echo := make([]byte, 4)
+	if _, err := io.ReadFull(inStreamConn, echo); err != nil {
+		t.Fatalf("read echo failed: %v", err)
+	}
+	if string(echo) != "PING" {
+		t.Fatalf("echo = %q, want PING", echo)
+	}
+
+	// Client-initiated write-side close.
+	if err := inStreamConn.CloseWrite(); err != nil {
+		t.Fatalf("CloseWrite failed: %v", err)
+	}
+
+	// The relay continues: the marker written after the target saw the
+	// FIN must still arrive, then the target closes and the stream ends
+	// cleanly (the half_close event surfaces as a clean io.EOF).
+	final := make([]byte, 5)
+	if _, err := io.ReadFull(inStreamConn, final); err != nil {
+		t.Fatalf("read FINAL after half-close failed: %v", err)
+	}
+	if string(final) != "FINAL" {
+		t.Fatalf("post-half-close read = %q, want FINAL", final)
+	}
+	if _, err := inStreamConn.Read(echo); err != io.EOF {
+		t.Fatalf("expected clean io.EOF after target close, got %v", err)
+	}
+
+	select {
+	case finErr := <-sawFin:
+		if finErr != "EOF" {
+			t.Fatalf("upstream read error = %q, want EOF (the FIN)", finErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("upstream never observed the half-close (no FIN reached the target)")
+	}
+}
+
+func TestClientServer_InStream_HalfClose_UnsupportedConnFailsClosed(t *testing.T) {
+	// net.Pipe conns have no CloseWrite: the server cannot deliver a
+	// half-close over such a transport, and silently dropping the
+	// request would leave the client believing the target saw a FIN.
+	// The stream must terminate with an error naming the limitation.
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	clientPipe, serverPipe := net.Pipe()
+	defer clientPipe.Close()
+	defer serverPipe.Close()
+
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			if _, err := serverPipe.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	client := netconn.Client{
+		API: rc.NewRemoteControlClient(gc),
+		Capabilities: &rc.NetConnRequest_Capabilities{
+			SupportsOpportunisticTls: true,
+			SupportsFlowControl:      true,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	conn, err := client.DialContext(ctx, "tcp", "pipe.internal:80")
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	defer conn.Close()
+
+	inStreamConn, ok := conn.(netconn.InStreamConn)
+	if !ok {
+		t.Fatalf("expected InStreamConn, got %T", conn)
+	}
+
+	// The control message sends fine; the failure is upstream.
+	if err := inStreamConn.CloseWrite(); err != nil {
+		t.Fatalf("CloseWrite send failed: %v", err)
+	}
+
+	type readResult struct {
+		n   int
+		err error
+	}
+	readCh := make(chan readResult, 1)
+	go func() {
+		buf := make([]byte, 32)
+		n, err := inStreamConn.Read(buf)
+		readCh <- readResult{n, err}
+	}()
+
+	select {
+	case res := <-readCh:
+		if res.err == nil {
+			t.Fatalf("expected a stream error after an undeliverable half-close, got a successful read of %d bytes", res.n)
+		}
+		if !strings.Contains(res.err.Error(), "does not support half-close") {
+			t.Fatalf("expected 'does not support half-close' error, got %v", res.err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("stream did not terminate after an undeliverable half-close (silently dropped?)")
+	}
+}
+
 type mockPipeDialer struct {
 	conn net.Conn
 }

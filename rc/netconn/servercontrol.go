@@ -502,11 +502,25 @@ func RunServerDemux(
 					}
 
 				case *rc.NetConnRequest_Control_HalfClose_:
+					// Termination flow (d): the server MUST close only its
+					// write side to the target. A transport that cannot
+					// half-close cannot fulfill the contract, and silently
+					// dropping the request would leave the client believing
+					// the target saw a FIN. Fail closed instead.
 					s.connMu.RLock()
 					c := s.activeConn
 					s.connMu.RUnlock()
-					if hc, ok := c.(interface{ CloseWrite() error }); ok {
-						_ = hc.CloseWrite()
+					hc, ok := c.(interface{ CloseWrite() error })
+					if !ok {
+						errCh <- grpcstatus.Error(codes.Unavailable, "sesame/rc/netconn: upstream connection does not support half-close")
+						return
+					}
+					if err := hc.CloseWrite(); err != nil && !errors.Is(err, net.ErrClosed) {
+						// ErrClosed is the benign already-fully-closed race:
+						// the reader is about to relay the real EOF. Anything
+						// else is a genuine failure to honor the half-close.
+						errCh <- grpcstatus.Errorf(codes.Unavailable, "sesame/rc/netconn: half-close failed: %v", err)
+						return
 					}
 
 				case *rc.NetConnRequest_Control_Ping_:

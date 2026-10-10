@@ -16,6 +16,7 @@ import {
   NetConnRequest_ControlSchema,
   NetConnRequest_Control_UpgradeTLSSchema,
   NetConnRequest_Control_ResetSchema,
+  NetConnRequest_Control_HalfCloseSchema,
   NetConnRequest_Control_PingSchema,
   NetConnRequest_Control_WindowUpdateSchema,
   NetConnRequest_CapabilitiesSchema,
@@ -971,6 +972,124 @@ describe('sesame-endpoint E2E Suite', () => {
       }
       expect(upstreamFullyClosed).toBe(true);
     } finally {
+      await new Promise<void>(r => upstream.close(() => r()));
+    }
+  });
+
+  it('relays halfClose to the upstream and keeps the tunnel open until the target ends', async () => {
+    // Termination flow (d): halfClose closes only the server's write
+    // side to the target (a real FIN reaches the upstream), and the
+    // relay continues until the target terminates.
+    let sawFin = false;
+    const upstream = net.createServer(rawSocket => {
+      rawSocket.on('data', chunk => {
+        rawSocket.write(chunk); // echo until the FIN arrives
+      });
+      rawSocket.on('end', () => {
+        // The tunnel's write side closed: a FIN reached the upstream.
+        // Prove the relay continues by writing a final marker and only
+        // then closing.
+        sawFin = true;
+        rawSocket.end('FINAL');
+      });
+    });
+    await new Promise<void>(r => upstream.listen(0, '127.0.0.1', () => r()));
+    const upstreamPort = (upstream.address() as net.AddressInfo).port;
+
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${upstreamPort}`,
+            }),
+            capabilities: create(NetConnRequest_CapabilitiesSchema, {
+              supportsOpportunisticTls: true,
+              supportsFlowControl: true,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    // Flow control is on, so windowUpdate events interleave with bytes
+    // in the response stream; skip them until the wanted message class
+    // arrives.
+    const nextBytes = async (): Promise<Uint8Array> => {
+      for (;;) {
+        const resp = await iterator.next();
+        if (resp.done) {
+          throw new Error('response stream ended before expected bytes');
+        }
+        if (resp.value.data.case === 'bytes') {
+          return resp.value.data.value;
+        }
+      }
+    };
+    const nextHalfCloseEvent = async (): Promise<void> => {
+      for (;;) {
+        const resp = await iterator.next();
+        if (resp.done) {
+          throw new Error('response stream ended before the halfClose event');
+        }
+        if (
+          resp.value.data.case === 'control' &&
+          resp.value.data.value.event.case === 'halfClose'
+        ) {
+          return;
+        }
+      }
+    };
+
+    try {
+      const first = await iterator.next();
+      expect(first.value.data.case).toBe('conn');
+
+      // Echo roundtrip proves the tunnel before the half-close.
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'bytes',
+            value: new Uint8Array([0x50, 0x49, 0x4e, 0x47]), // "PING"
+          },
+        }),
+      );
+      expect(Buffer.from(await nextBytes()).toString()).toBe('PING');
+
+      // Client-initiated write-side close.
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'control',
+            value: create(NetConnRequest_ControlSchema, {
+              action: {
+                case: 'halfClose',
+                value: create(NetConnRequest_Control_HalfCloseSchema, {}),
+              },
+            }),
+          },
+        }),
+      );
+
+      // The relay continues: the post-FIN marker arrives, then the
+      // upstream closes and the server relays the halfClose event, and
+      // only then does the response stream end.
+      expect(Buffer.from(await nextBytes()).toString()).toBe('FINAL');
+
+      await nextHalfCloseEvent();
+
+      const done = await iterator.next();
+      expect(done.done).toBe(true);
+
+      expect(sawFin).toBe(true);
+    } finally {
+      reqStream.close();
       await new Promise<void>(r => upstream.close(() => r()));
     }
   });
