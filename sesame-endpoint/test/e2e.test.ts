@@ -1921,18 +1921,34 @@ describe('sesame-endpoint E2E Suite', () => {
         }),
       );
 
-      // Should receive tlsUpgradeFailed control event or stream termination
-      const failResp = await iterator.next();
-      if (!failResp.done) {
-        expect(failResp.value.data.case).toBe('control');
-        if (failResp.value.data.case === 'control') {
-          expect(failResp.value.data.value.event.case).toBe('tlsUpgradeFailed');
-        }
+      // The event arrives first, then the stream terminates with the
+      // failure status (wire-contract parity with the Go reference:
+      // never OK, never cleartext). Flow control is on, so skip any
+      // windowUpdate events on the way.
+      let failResp = await iterator.next();
+      while (
+        !failResp.done &&
+        !(
+          failResp.value.data.case === 'control' &&
+          failResp.value.data.value.event.case === 'tlsUpgradeFailed'
+        )
+      ) {
+        failResp = await iterator.next();
       }
+      expect(failResp.done).toBe(false);
+      expect(failResp.value.data.case).toBe('control');
+      expect(failResp.value.data.value.event.case).toBe('tlsUpgradeFailed');
+
+      let terminalErr: unknown;
+      try {
+        await iterator.next();
+      } catch (err: unknown) {
+        terminalErr = err;
+      }
+      expect(terminalErr).toBeInstanceOf(ConnectError);
+      const ce = terminalErr as ConnectError;
+      expect(ce.code).toBe(Code.Unavailable);
       reqStream.close();
-    } catch (err: unknown) {
-      // ConnectError from stream failure is also acceptable fail-closed behavior
-      expect(err).toBeDefined();
     } finally {
       await new Promise<void>(r => nonTlsServer.close(() => r()));
     }

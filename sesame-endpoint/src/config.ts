@@ -179,13 +179,18 @@ export function parseConfig(
   if (isNaN(port) || port < 1 || port > 65535) {
     throw new Error(`Invalid port: ${port}. Must be between 1 and 65535`);
   }
+  // The wire contract (remotecontrol.proto) requires advertised chunk and
+  // window sizes not to exceed the stream's gRPC per-message receive limit;
+  // the grpc-go default is 4MiB, so that is the interop-safe ceiling here.
+  const MAX_CHUNK_SIZE_CEILING = 4 * 1024 * 1024;
+
   if (
     isNaN(maxChunkSize) ||
     maxChunkSize < 512 ||
-    maxChunkSize > 16 * 1024 * 1024
+    maxChunkSize > MAX_CHUNK_SIZE_CEILING
   ) {
     throw new Error(
-      `Invalid maxChunkSize: ${maxChunkSize}. Must be between 512 and 16777216`,
+      `Invalid maxChunkSize: ${maxChunkSize}. Must be between 512 and ${MAX_CHUNK_SIZE_CEILING} (the gRPC per-message receive limit; advertised values must not exceed it per the wire contract)`,
     );
   }
   if (
@@ -249,7 +254,7 @@ Sesame Endpoint Server (RemoteControl.NetConn)
 Options:
   --host <string>                 Bind host address (default: 127.0.0.1)
   --port <number>                 Bind port (default: 50051)
-  --max-chunk-size <bytes>        Max chunk size for stream payloads (default: 32768)
+  --max-chunk-size <bytes>        Max chunk size for stream payloads (default: 32768, max: 4194304)
   --initial-window-size <bytes>   Initial stream flow control credit (default: 65535)
   --read-timeout-ms <ms>          Socket read timeout in ms (default: 30000, 0=disable)
   --dial-timeout-ms <ms>          Default upstream dial timeout in ms (default: 10000)

@@ -21,6 +21,12 @@ import (
 
 type (
 	// InStreamConn extends net.Conn with in-stream transformation and control methods.
+	//
+	// Close cancels the underlying RPC: the server observes the
+	// cancellation and destroys the upstream connection (an abrupt
+	// close). A graceful finish is CloseWrite (which sends the
+	// half_close control; the target sees a FIN while the relay
+	// continues) followed by reading until the target's EOF.
 	InStreamConn interface {
 		net.Conn
 		TLSResult() *sesametls.TLSHandshakeResult
@@ -470,7 +476,11 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 	c.upgradeMu.Lock()
 	if c.pendingUpgrade != nil {
 		c.upgradeMu.Unlock()
-		return nil, statusError(codes.AlreadyExists, "sesame/rc/netconn: another TLS upgrade is already pending")
+		// FAILED_PRECONDITION, not AlreadyExists: the operation is
+		// rejected because the connection is not in the required
+		// state (no upgrade pending), not because a resource
+		// creation conflicted.
+		return nil, statusError(codes.FailedPrecondition, "sesame/rc/netconn: another TLS upgrade is already pending")
 	}
 	c.pendingUpgrade = ch
 	c.upgradeMu.Unlock()
@@ -499,7 +509,7 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 	select {
 	case <-ctx.Done():
 		// Clear the pending slot so a later UpgradeTLS does not fail
-		// with AlreadyExists for a dead request. If the result raced
+		// with FailedPrecondition for a dead request. If the result raced
 		// us and already arrived, it was buffered into ch - drain it.
 		c.upgradeMu.Lock()
 		c.pendingUpgrade = nil

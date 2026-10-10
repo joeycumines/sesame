@@ -1608,7 +1608,7 @@ func dialControlConnWithProvider(t *testing.T, provider netconn.TLSProvider) (ne
 
 // TestClientServer_UpgradeTLS_TimeoutClearsPending: a timed-out UpgradeTLS
 // must clear the pending slot so a subsequent UpgradeTLS does not return
-// AlreadyExists for a dead request.
+// FailedPrecondition (pending-conflict) for a dead request.
 func TestClientServer_UpgradeTLS_TimeoutClearsPending(t *testing.T) {
 	provider := &blockingTLSProvider{release: make(chan struct{})}
 	conn, _ := dialControlConnWithProvider(t, provider)
@@ -1622,13 +1622,13 @@ func TestClientServer_UpgradeTLS_TimeoutClearsPending(t *testing.T) {
 	}
 
 	// The pending slot must be clear: a second UpgradeTLS must not fail
-	// with AlreadyExists (it gets a fresh pending registration and then
-	// hits its own short timeout).
+	// with the pending-conflict error (it gets a fresh pending
+	// registration and then hits its own short timeout).
 	secondCtx, secondCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer secondCancel()
 	_, err = conn.UpgradeTLS(secondCtx, &sesametls.TLSOptions{ServerName: "example.com"})
-	if status.Code(err) == codes.AlreadyExists {
-		t.Fatalf("second UpgradeTLS failed with AlreadyExists; pending slot was not cleared: %v", err)
+	if status.Code(err) == codes.FailedPrecondition && strings.Contains(err.Error(), "already pending") {
+		t.Fatalf("second UpgradeTLS failed with the pending-conflict error; pending slot was not cleared: %v", err)
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected DeadlineExceeded from second blocked upgrade, got %v", err)

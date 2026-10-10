@@ -33,25 +33,7 @@ type (
 		TLSHandshakeResult() *sesametls.TLSHandshakeResult
 		ProxyResult() *sesameproxy.ProxyResult
 	}
-
-	transformedConn struct {
-		net.Conn
-		tlsResult   *sesametls.TLSHandshakeResult
-		proxyResult *sesameproxy.ProxyResult
-	}
 )
-
-var (
-	_ ConnTransformResult = (*transformedConn)(nil)
-)
-
-func (c *transformedConn) TLSHandshakeResult() *sesametls.TLSHandshakeResult {
-	return c.tlsResult
-}
-
-func (c *transformedConn) ProxyResult() *sesameproxy.ProxyResult {
-	return c.proxyResult
-}
 
 // ProtoToTLSVersion maps a protobuf TLSVersion to the crypto/tls version constant.
 func ProtoToTLSVersion(v sesametls.TLSVersion) uint16 {

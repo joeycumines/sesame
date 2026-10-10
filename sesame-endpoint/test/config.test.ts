@@ -113,6 +113,22 @@ describe('config parser', () => {
     );
   });
 
+  it('caps maxChunkSize at the gRPC per-message receive limit', () => {
+    // Advertised chunk sizes must not exceed the stream's gRPC
+    // per-message receive limit (grpc-go default 4MiB) per the wire
+    // contract; the parser enforces the interop-safe ceiling.
+    expect(
+      parseConfig(['--max-chunk-size', String(4 * 1024 * 1024)]).config!
+        .maxChunkSize,
+    ).toBe(4 * 1024 * 1024);
+    expect(() => parseConfig(['--max-chunk-size', '4194305'])).toThrow(
+      'Invalid maxChunkSize',
+    );
+    expect(() =>
+      parseConfig(['--max-chunk-size', String(16 * 1024 * 1024)]),
+    ).toThrow('Invalid maxChunkSize');
+  });
+
   it('parses enable flags strictly: only true/false/1/0 are accepted', () => {
     // Accepted spellings, flag form.
     expect(

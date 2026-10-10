@@ -21,7 +21,19 @@ import (
 type (
 	// Server implements rc.RemoteControlServer's NetConn method.
 	Server struct {
-		Dialer       DialerFactory
+		Dialer DialerFactory
+		// Capabilities advertises the server's support matrix. When nil,
+		// a default advertisement is used (flow control + opportunistic
+		// TLS, DefaultChunkSize, DefaultInitialWindowSize, and the Go
+		// engine's honest ClientHello capabilities).
+		//
+		// Per the wire contract (remotecontrol.proto), advertised chunk
+		// and window sizes MUST NOT exceed the stream's gRPC
+		// per-message receive limit (grpc-go default 4MiB): a peer
+		// honoring an oversized advertisement fails at runtime on
+		// messages its gRPC stack refuses to receive. The handler cannot
+		// discover the host's configured limit, so correctness here is
+		// the operator's responsibility.
 		Capabilities *rc.NetConnResponse_Capabilities
 		TLSProvider  TLSProvider
 		//lint:ignore U1000 it is actually used

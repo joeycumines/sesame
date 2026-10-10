@@ -21,6 +21,33 @@ and rejects any non-default spec dimension; full-fidelity impersonation
 (e.g. opencode/Bun) is provided by plugging a custom `TLSProvider` into
 `createRemoteControlService`.
 
+## Cross-stack behavior notes
+
+The Go reference implementation (`rc/netconn`) plus
+`remotecontrol.proto` define the wire contract; this endpoint matches
+their observable semantics. A few deployment-policy defaults differ
+intentionally and are recorded here so cross-stack testing is not
+surprising:
+
+- **Idle read timeout**: this endpoint tears down a tunnel whose
+  upstream reads nothing for 30s (`DeadlineExceeded`); disable with
+  `--read-timeout-ms 0`. The Go server applies no idle timeout.
+- **Dial timeout default**: 10s here (`--dial-timeout-ms 0` disables);
+  the Go server honors per-request dial timeouts and is otherwise
+  unlimited.
+- **Proxy auth precedence**: `auth_header` > the configured
+  `SESAME_ENDPOINT_PROXY_AUTH_TOKEN` (sent as a Bearer token) > basic
+  `username`/`password`. The Go stack uses `auth_header` > basic
+  credentials only.
+- **Upgrade failure**: both stacks emit `tls_upgrade_failed` and then
+  terminate the stream with the failure status — never `OK`, never
+  cleartext. Treat the event, not the terminal status, as the upgrade
+  outcome.
+- **Advertised `max_chunk_size`**: the wire contract requires
+  advertised chunk and window sizes not to exceed the stream's gRPC
+  per-message receive limit (grpc-go default: 4MiB); this endpoint
+  enforces that ceiling at configuration parse time.
+
 To install dependencies:
 
 ```bash

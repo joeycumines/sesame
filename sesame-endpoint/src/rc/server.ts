@@ -585,6 +585,13 @@ export function createRemoteControlService(
               },
             }),
           );
+          // Wire-contract parity with the Go reference: the server
+          // terminates the stream with the failure status after
+          // emitting the event - never OK, never cleartext.
+          // AsyncQueue.close is first-wins, so close with the error
+          // BEFORE cleanupAll's plain close; queued responses (the
+          // event) still drain before the error surfaces to the RPC.
+          responseQueue.close(new ConnectError(message, errCode));
           cleanupAll();
           throw err;
         }
