@@ -395,6 +395,29 @@ func TestExecuteTLSHandshake_RejectsMinVersionAboveMax(t *testing.T) {
 	}
 }
 
+func TestExecuteTLSHandshake_NilOptionsRejected(t *testing.T) {
+	// The exported handshake must not silently no-op for nil options:
+	// a caller passing nil needs an explicit error, not a passthrough
+	// that leaves the connection cleartext while the caller believes
+	// TLS was negotiated.
+	_, _, err := ExecuteTLSHandshake(context.Background(), nil, nil, "example.com", nil)
+	if err == nil {
+		t.Fatal("expected an explicit error for nil options")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument, got %v", err)
+	}
+}
+
+func TestBuildTLSConfig_NilOptionsRejected(t *testing.T) {
+	// Same contract as ExecuteTLSHandshake: a silent (nil, nil) return
+	// let callers proceed with no TLS configuration and no error.
+	cfg, err := BuildTLSConfig(nil, "example.com")
+	if err == nil || status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument for nil options, got cfg=%v err=%v", cfg, err)
+	}
+}
+
 func TestExecuteProxyHops_TooManyHops(t *testing.T) {
 	hops := make([]*sesameproxy.ProxyHop, MaxProxyHops+1)
 	for i := range hops {

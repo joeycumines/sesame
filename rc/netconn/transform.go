@@ -68,9 +68,13 @@ func TLSVersionToProto(v uint16) sesametls.TLSVersion {
 }
 
 // BuildTLSConfig constructs a crypto/tls.Config from a sesametls.TLSOptions message.
+//
+// opts are REQUIRED: nil is an explicit error, for the same reason as
+// ExecuteTLSHandshake - a silent (nil, nil) return let callers proceed
+// with no TLS configuration and no error.
 func BuildTLSConfig(opts *sesametls.TLSOptions, defaultServerName string) (*cryptotls.Config, error) {
 	if opts == nil {
-		return nil, nil
+		return nil, status.Error(codes.InvalidArgument, "sesame/rc/netconn: tls options required")
 	}
 
 	serverName := opts.GetServerName()
@@ -146,9 +150,14 @@ func ExtractTLSHandshakeResult(state cryptotls.ConnectionState, appliedSpec *ses
 }
 
 // ExecuteTLSHandshake wraps an existing connection with TLS using either a custom TLSProvider or standard crypto/tls.
+//
+// opts are REQUIRED: nil is an explicit error. The previous silent
+// (rawConn, nil, nil) passthrough was a trap for third-party callers -
+// the connection stayed cleartext while the caller believed TLS had
+// been negotiated. In-repo callers all guard at their call boundary.
 func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.TLSOptions, defaultServerName string, provider TLSProvider) (net.Conn, *sesametls.TLSHandshakeResult, error) {
 	if opts == nil {
-		return rawConn, nil, nil
+		return nil, nil, status.Error(codes.InvalidArgument, "sesame/rc/netconn: tls options required")
 	}
 
 	// Version-range validation applies to every provider, not just the
