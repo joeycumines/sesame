@@ -203,9 +203,13 @@ func (x *NetConnRequest_Control_UpgradeTLS) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *NetConnRequest_Control_UpgradeTLS:
 		x.Options = v.GetOptions()
+		x.RequestId = v.GetRequestId()
 	default:
 		if v, ok := v.(interface{ GetOptions() *tls.TLSOptions }); ok {
 			x.Options = v.GetOptions()
+		}
+		if v, ok := v.(interface{ GetRequestId() int64 }); ok {
+			x.RequestId = v.GetRequestId()
 		}
 	}
 }
@@ -215,6 +219,7 @@ func (x *NetConnRequest_Control_UpgradeTLS) Proto_ShallowClone() (c *NetConnRequ
 	if x != nil {
 		c = new(NetConnRequest_Control_UpgradeTLS)
 		c.Options = x.Options
+		c.RequestId = x.RequestId
 	}
 	return
 }
@@ -559,11 +564,15 @@ func (x *NetConnResponse_Control_TLSUpgraded) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
 	case *NetConnResponse_Control_TLSUpgraded:
 		x.Result = v.GetResult()
+		x.RequestId = v.GetRequestId()
 	default:
 		if v, ok := v.(interface {
 			GetResult() *tls.TLSHandshakeResult
 		}); ok {
 			x.Result = v.GetResult()
+		}
+		if v, ok := v.(interface{ GetRequestId() int64 }); ok {
+			x.RequestId = v.GetRequestId()
 		}
 	}
 }
@@ -573,6 +582,7 @@ func (x *NetConnResponse_Control_TLSUpgraded) Proto_ShallowClone() (c *NetConnRe
 	if x != nil {
 		c = new(NetConnResponse_Control_TLSUpgraded)
 		c.Result = x.Result
+		c.RequestId = x.RequestId
 	}
 	return
 }
@@ -586,9 +596,13 @@ func (x *NetConnResponse_Control_TLSUpgradeFailed) Proto_ShallowCopy(v interface
 	switch v := v.(type) {
 	case *NetConnResponse_Control_TLSUpgradeFailed:
 		x.Error = v.GetError()
+		x.RequestId = v.GetRequestId()
 	default:
 		if v, ok := v.(interface{ GetError() *status.Status }); ok {
 			x.Error = v.GetError()
+		}
+		if v, ok := v.(interface{ GetRequestId() int64 }); ok {
+			x.RequestId = v.GetRequestId()
 		}
 	}
 }
@@ -598,6 +612,7 @@ func (x *NetConnResponse_Control_TLSUpgradeFailed) Proto_ShallowClone() (c *NetC
 	if x != nil {
 		c = new(NetConnResponse_Control_TLSUpgradeFailed)
 		c.Error = x.Error
+		c.RequestId = x.RequestId
 	}
 	return
 }

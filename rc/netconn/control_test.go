@@ -11,6 +11,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"math/big"
@@ -1604,6 +1605,157 @@ func dialControlConnWithProvider(t *testing.T, provider netconn.TLSProvider) (ne
 	t.Cleanup(func() { _ = conn.Close() })
 
 	return conn.(netconn.InStreamConn), serverPipe
+}
+
+// TestClientServer_UpgradeTLS_RequestIDEchoed drives a RAW control-mode
+// client (not the netconn.Client wrapper) against the real server so
+// the upgrade_tls request_id is observable on the wire: the server must
+// echo it verbatim in TlsUpgraded, including the id-less legacy 0.
+func TestClientServer_UpgradeTLS_RequestIDEchoed(t *testing.T) {
+	for _, requestID := range []int64{0, 777} {
+		t.Run(fmt.Sprintf("id=%d", requestID), func(t *testing.T) {
+			ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+			if ccFactory == nil {
+				t.Skip("inprocgrpc factory unavailable")
+			}
+
+			tlsCert, _ := generateSelfSignedCert(t)
+			clientPipe, serverPipe := net.Pipe()
+			defer clientPipe.Close()
+			defer serverPipe.Close()
+
+			// Upstream: a TLS server on the pipe, no cleartext
+			// preamble - the upgrade's ClientHello is its first read.
+			go func() {
+				tlsServer := cryptotls.Server(serverPipe, &cryptotls.Config{
+					Certificates: []cryptotls.Certificate{tlsCert},
+				})
+				_ = tlsServer.Handshake()
+			}()
+
+			server := netconn.Server{
+				Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+					return &mockPipeDialer{conn: clientPipe}, nil
+				},
+			}
+			gc := ccFactory(func(h testutil.GRPCServer) {
+				rc.RegisterRemoteControlServer(h, &server)
+			})
+			defer gc.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			raw, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+			if err != nil {
+				t.Fatalf("NetConn failed: %v", err)
+			}
+			defer raw.CloseSend()
+
+			if err := raw.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Dial_{
+				Dial: &rc.NetConnRequest_Dial{
+					Address: &netaddr.NetAddr{Network: "tcp", Address: "mail.internal:25"},
+					Capabilities: &rc.NetConnRequest_Capabilities{
+						SupportsOpportunisticTls: true,
+						SupportsFlowControl:      true,
+					},
+				},
+			}}); err != nil {
+				t.Fatalf("dial send failed: %v", err)
+			}
+
+			if err := raw.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Control_{
+				Control: &rc.NetConnRequest_Control{
+					Action: &rc.NetConnRequest_Control_UpgradeTls{
+						UpgradeTls: &rc.NetConnRequest_Control_UpgradeTLS{
+							Options: &sesametls.TLSOptions{
+								ServerName:         "mail.internal",
+								InsecureSkipVerify: true,
+							},
+							RequestId: requestID,
+						},
+					},
+				},
+			}}); err != nil {
+				t.Fatalf("upgrade send failed: %v", err)
+			}
+
+			for {
+				resp, err := raw.Recv()
+				if err != nil {
+					t.Fatalf("recv failed: %v", err)
+				}
+				if ctl := resp.GetControl(); ctl != nil {
+					if failed := ctl.GetTlsUpgradeFailed(); failed != nil {
+						t.Fatalf("upgrade failed: code=%d msg=%q", failed.GetError().GetCode(), failed.GetError().GetMessage())
+					}
+					if upgraded := ctl.GetTlsUpgraded(); upgraded != nil {
+						if got := upgraded.GetRequestId(); got != requestID {
+							t.Fatalf("server echoed request_id %d, want %d verbatim", got, requestID)
+						}
+						return
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestClientServer_UpgradeTLS_MismatchedResultPoisons pins the
+// request-correlation contract: a result arriving for a call the client
+// is no longer waiting on (here: the first call timed out, a retry is
+// pending, and the FIRST call's late result lands) must poison the
+// connection instead of being honored by the retry. Pre-correlation,
+// the retry received the stale result as its own - the exact
+// misattribution the request_id fields exist to close.
+func TestClientServer_UpgradeTLS_MismatchedResultPoisons(t *testing.T) {
+	provider := &blockingTLSProvider{release: make(chan struct{})}
+	conn, _ := dialControlConnWithProvider(t, provider)
+
+	// First call: times out against the blocked provider, clearing
+	// its pending slot.
+	firstCtx, firstCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer firstCancel()
+	_, err := conn.UpgradeTLS(firstCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded from blocked first upgrade, got %v", err)
+	}
+
+	// Retry: registers a fresh pending call with a fresh request id.
+	resultCh := make(chan struct{}, 1)
+	var retryResult *sesametls.TLSHandshakeResult
+	var retryErr error
+	go func() {
+		defer func() { resultCh <- struct{}{} }()
+		retryCtx, retryCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer retryCancel()
+		retryResult, retryErr = conn.UpgradeTLS(retryCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+	}()
+
+	// Let the server finish the FIRST upgrade: its TlsUpgraded carries
+	// the first call's id, which no longer matches the retry's.
+	provider.unblock()
+
+	select {
+	case <-resultCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the retry did not settle after the stale result arrived")
+	}
+
+	// The stale result must NOT be honored as the retry's success.
+	if retryErr == nil {
+		t.Fatalf("the retry must not honor the first call's late result: got result %+v", retryResult)
+	}
+	if !strings.Contains(retryErr.Error(), "does not match pending upgrade") {
+		t.Fatalf("expected a request-id mismatch error, got %v", retryErr)
+	}
+
+	// Fail closed: the connection is torn down, not left in an
+	// unknowable TLS state.
+	buf := make([]byte, 32)
+	if _, err := conn.Read(buf); err == nil {
+		t.Fatal("expected a read error on the poisoned connection")
+	}
 }
 
 // TestClientServer_UpgradeTLS_TimeoutClearsPending: a timed-out UpgradeTLS

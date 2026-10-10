@@ -1434,7 +1434,9 @@ describe('sesame-endpoint E2E Suite', () => {
         '220',
       );
 
-      // 4. Send in-stream UpgradeTLS command
+      // 4. Send in-stream UpgradeTLS command, tagged with a
+      // correlation id the server must echo verbatim.
+      const upgradeRequestId = 4242n;
       reqStream.push(
         create(NetConnRequestSchema, {
           data: {
@@ -1447,6 +1449,7 @@ describe('sesame-endpoint E2E Suite', () => {
                     serverName: 'localhost',
                     insecureSkipVerify: true,
                   }),
+                  requestId: upgradeRequestId,
                 }),
               },
             }),
@@ -1460,6 +1463,7 @@ describe('sesame-endpoint E2E Suite', () => {
       const ctl = upgradeResp.value.data.value;
       expect(ctl.event.case).toBe('tlsUpgraded');
       expect(ctl.event.value.result).toBeDefined();
+      expect(ctl.event.value.requestId).toBe(upgradeRequestId);
 
       // 6. Send encrypted payload
       reqStream.push(
@@ -1960,7 +1964,9 @@ describe('sesame-endpoint E2E Suite', () => {
       const first = await iterator.next();
       expect(first.value.data.case).toBe('conn');
 
-      // Request TLS upgrade on non-TLS upstream
+      // Request TLS upgrade on non-TLS upstream, tagged with a
+      // correlation id the failure event must echo verbatim.
+      const failRequestId = 99n;
       reqStream.push(
         create(NetConnRequestSchema, {
           data: {
@@ -1973,6 +1979,7 @@ describe('sesame-endpoint E2E Suite', () => {
                     serverName: 'localhost',
                     insecureSkipVerify: true,
                   }),
+                  requestId: failRequestId,
                 }),
               },
             }),
@@ -1997,6 +2004,9 @@ describe('sesame-endpoint E2E Suite', () => {
       expect(failResp.done).toBe(false);
       expect(failResp.value.data.case).toBe('control');
       expect(failResp.value.data.value.event.case).toBe('tlsUpgradeFailed');
+      expect(failResp.value.data.value.event.value.requestId).toBe(
+        failRequestId,
+      );
 
       let terminalErr: unknown;
       try {

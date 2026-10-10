@@ -9,14 +9,18 @@ import (
 	sesametls "github.com/joeycumines/sesame/rc/tls"
 )
 
-// fakeUpgradeStream lets handleUpgradeTLS emit its TlsUpgraded response
-// without a live gRPC stream; any other use panics via the nil
-// embedded interface.
+// fakeUpgradeStream records the TlsUpgraded response handleUpgradeTLS
+// emits; any other use panics via the nil embedded interface.
 type fakeUpgradeStream struct {
 	rc.RemoteControl_NetConnServer
+
+	sent []*rc.NetConnResponse
 }
 
-func (f *fakeUpgradeStream) Send(*rc.NetConnResponse) error { return nil }
+func (f *fakeUpgradeStream) Send(resp *rc.NetConnResponse) error {
+	f.sent = append(f.sent, resp)
+	return nil
+}
 
 // fixedUpgrader is a TLSProvider that hands back a predetermined conn.
 type fixedUpgrader struct {
@@ -47,8 +51,9 @@ func TestHandleUpgradeTLS_SwapBeforeResumeSignal(t *testing.T) {
 	defer upgradedPeer.Close()
 
 	provider := &fixedUpgrader{conn: upgradedConn}
+	stream := &fakeUpgradeStream{}
 	s := &serverControlState{
-		stream:       &fakeUpgradeStream{},
+		stream:       stream,
 		tlsProvider:  provider,
 		activeConn:   rawConn,
 		pauseReq:     make(chan struct{}, 1),
@@ -62,11 +67,25 @@ func TestHandleUpgradeTLS_SwapBeforeResumeSignal(t *testing.T) {
 		s.pausedAck <- struct{}{}
 	}()
 
-	if err := s.handleUpgradeTLS(context.Background(), &sesametls.TLSOptions{ServerName: "upgrade.internal"}); err != nil {
+	// request_id 0 exercises the id-less legacy path: the server must
+	// echo it verbatim.
+	if err := s.handleUpgradeTLS(context.Background(), &sesametls.TLSOptions{ServerName: "upgrade.internal"}, 0); err != nil {
 		t.Fatalf("handleUpgradeTLS failed: %v", err)
 	}
 	if provider.seen != rawConn {
 		t.Fatal("the handshake must run on the pre-upgrade active conn")
+	}
+
+	// The TlsUpgraded response carries the request id verbatim.
+	if len(stream.sent) != 1 {
+		t.Fatalf("expected exactly one response, got %d", len(stream.sent))
+	}
+	upgraded := stream.sent[0].GetControl().GetTlsUpgraded()
+	if upgraded == nil {
+		t.Fatalf("expected a TlsUpgraded event, got %v", stream.sent[0].GetData())
+	}
+	if upgraded.GetRequestId() != 0 {
+		t.Fatalf("legacy request_id 0 must be echoed verbatim, got %d", upgraded.GetRequestId())
 	}
 
 	s.connMu.RLock()

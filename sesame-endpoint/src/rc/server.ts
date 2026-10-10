@@ -513,7 +513,10 @@ export function createRemoteControlService(
       activeSocket.resume();
 
       // In-stream TLS Upgrade handler
-      const handleUpgradeTLS = async (opts?: TLSOptions) => {
+      const handleUpgradeTLS = async (
+        opts: TLSOptions | undefined,
+        requestId: bigint,
+      ) => {
         if (!opts) {
           throw new ConnectError(
             'sesame/rc/netconn: upgrade_tls requires options',
@@ -554,6 +557,7 @@ export function createRemoteControlService(
                     case: 'tlsUpgraded',
                     value: create(NetConnResponse_Control_TLSUpgradedSchema, {
                       result,
+                      requestId,
                     }),
                   },
                 }),
@@ -578,6 +582,7 @@ export function createRemoteControlService(
                           code: errCode,
                           message,
                         }),
+                        requestId,
                       },
                     ),
                   },
@@ -687,7 +692,13 @@ export function createRemoteControlService(
                     Code.FailedPrecondition,
                   );
                 }
-                await handleUpgradeTLS(ctl.action.value.options);
+                // The request id is echoed verbatim in whichever result
+                // this upgrade emits (the Ping precedent), so the
+                // client can correlate results to calls.
+                await handleUpgradeTLS(
+                  ctl.action.value.options,
+                  ctl.action.value.requestId,
+                );
               } else if (ctl.action.case === 'windowUpdate') {
                 // Negative credit is a protocol violation, not an unknown
                 // message: fail closed rather than letting a malformed

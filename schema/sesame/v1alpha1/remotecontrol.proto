@@ -153,6 +153,16 @@ message NetConnRequest {
     message UpgradeTLS {
       // TLS configuration for the upgrade (REQUIRED).
       .sesame.tls.v1alpha1.TLSOptions options = 1;
+
+      // Per-call correlation ID, echoed verbatim by the server in
+      // whichever result it emits for this request (TLSUpgraded or
+      // TLSUpgradeFailed) - the Ping precedent: the server MUST NOT
+      // substitute its own value. 0 means unset/legacy. A client that
+      // tags its calls SHOULD treat a result whose request_id does not
+      // match its pending call as unsolicited and fail closed: with no
+      // correlation, a retried upgrade could honor the first (timed
+      // out) call's late result.
+      int64 request_id = 2;
     }
 
     message WindowUpdate {
@@ -286,11 +296,19 @@ message NetConnResponse {
     message TLSUpgraded {
       // Negotiated TLS session state.
       .sesame.tls.v1alpha1.TLSHandshakeResult result = 1;
+
+      // The request_id of the upgrade_tls this result belongs to,
+      // echoed verbatim (0 if the request carried no id).
+      int64 request_id = 2;
     }
 
     message TLSUpgradeFailed {
       // Failure detail. code is a canonical google.rpc.Code.
       google.rpc.Status error = 1;
+
+      // The request_id of the upgrade_tls this result belongs to,
+      // echoed verbatim (0 if the request carried no id).
+      int64 request_id = 2;
     }
 
     message WindowUpdate {

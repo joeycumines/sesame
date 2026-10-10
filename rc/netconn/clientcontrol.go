@@ -76,8 +76,16 @@ type (
 		pingsMu      sync.Mutex
 		pendingPings map[int64]chan int64
 
-		upgradeMu      sync.Mutex
-		pendingUpgrade chan upgradeResult
+		upgradeMu        sync.Mutex
+		pendingUpgrade   chan upgradeResult
+		pendingUpgradeID int64
+
+		// upgradeCounter generates per-call correlation IDs for
+		// upgrade_tls, echoed by the server in whichever result it
+		// emits for the call (the Ping precedent). Without
+		// correlation, a retried upgrade could honor the first
+		// (timed-out) call's late result.
+		upgradeCounter atomic.Int64
 
 		// maxChunk bounds each NetConnRequest_Bytes payload to the
 		// server-advertised max_chunk_size. A large flow-control window
@@ -223,18 +231,30 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 
 			switch event := ctl.GetEvent().(type) {
 			case *rc.NetConnResponse_Control_TlsUpgraded:
+				result := event.TlsUpgraded.GetResult()
+				requestID := event.TlsUpgraded.GetRequestId()
 				c.upgradeMu.Lock()
 				ch := c.pendingUpgrade
-				c.pendingUpgrade = nil
-				if ch != nil {
-					c.tlsResult = event.TlsUpgraded.GetResult()
+				id := c.pendingUpgradeID
+				mismatch := ch != nil && requestID != id
+				if mismatch {
+					// A result for a different UpgradeTLS call must not be
+					// honored: with no correlation this was exactly the
+					// window where a retried upgrade received the first
+					// (timed-out) call's late result. Deliver the failure to
+					// the waiter, then fail closed.
+					ch <- upgradeResult{err: fmt.Errorf("sesame/rc/netconn: TlsUpgraded request_id %d does not match pending upgrade request_id %d", requestID, id)}
+					c.pendingUpgrade = nil
+				} else if ch != nil {
+					c.pendingUpgrade = nil
+					c.tlsResult = result
 					// Send under the mutex: the buffered cap-1 channel and
 					// the single-send-per-slot invariant make this
 					// non-blocking, and it linearizes result delivery
 					// against a concurrently timing-out UpgradeTLS - the
 					// result is either honored by its drain or the slot
 					// is already nil and we poison. Never both nor neither.
-					ch <- upgradeResult{result: event.TlsUpgraded.GetResult()}
+					ch <- upgradeResult{result: result}
 				}
 				c.upgradeMu.Unlock()
 				if ch == nil {
@@ -247,27 +267,42 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 					c.poison(errors.New("sesame/rc/netconn: unsolicited TlsUpgraded event"))
 					return
 				}
+				if mismatch {
+					c.poison(fmt.Errorf("sesame/rc/netconn: TlsUpgraded request_id %d does not match pending upgrade request_id %d", requestID, id))
+					return
+				}
 
 			case *rc.NetConnResponse_Control_TlsUpgradeFailed:
+				requestID := event.TlsUpgradeFailed.GetRequestId()
 				c.upgradeMu.Lock()
 				ch := c.pendingUpgrade
-				c.pendingUpgrade = nil
+				id := c.pendingUpgradeID
+				mismatch := ch != nil && requestID != id
 				if ch != nil {
-					errMsg := "sesame/rc/netconn: TLS upgrade failed"
-					if st := event.TlsUpgradeFailed.GetError(); st != nil {
-						errMsg = fmt.Sprintf("sesame/rc/netconn: TLS upgrade failed (code %d): %s", st.GetCode(), st.GetMessage())
+					c.pendingUpgrade = nil
+					if mismatch {
+						ch <- upgradeResult{err: fmt.Errorf("sesame/rc/netconn: TLSUpgradeFailed request_id %d does not match pending upgrade request_id %d", requestID, id)}
+					} else {
+						errMsg := "sesame/rc/netconn: TLS upgrade failed"
+						if st := event.TlsUpgradeFailed.GetError(); st != nil {
+							errMsg = fmt.Sprintf("sesame/rc/netconn: TLS upgrade failed (code %d): %s", st.GetCode(), st.GetMessage())
+						}
+						// Under the mutex, for the same linearization as above
+						// (cosmetic here - the server stays cleartext on
+						// failure - but the pattern must not diverge).
+						ch <- upgradeResult{err: errors.New(errMsg)}
 					}
-					// Under the mutex, for the same linearization as above
-					// (cosmetic here - the server stays cleartext on
-					// failure - but the pattern must not diverge).
-					ch <- upgradeResult{err: errors.New(errMsg)}
 				}
 				c.upgradeMu.Unlock()
 				if ch == nil {
 					// Same unknowable-state reasoning as TlsUpgraded: a
 					// failure result nobody is waiting for means lost
 					// synchronization with the server's upgrade state.
-					c.poison(errors.New("sesame/rc/netconn: unsolicited TlsUpgradeFailed event"))
+					c.poison(errors.New("sesame/rc/netconn: unsolicited TLSUpgradeFailed event"))
+					return
+				}
+				if mismatch {
+					c.poison(fmt.Errorf("sesame/rc/netconn: TLSUpgradeFailed request_id %d does not match pending upgrade request_id %d", requestID, id))
 					return
 				}
 
@@ -471,6 +506,7 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 		return nil, statusError(codes.InvalidArgument, "sesame/rc/netconn: upgrade_tls requires options")
 	}
 
+	requestID := c.upgradeCounter.Add(1)
 	ch := make(chan upgradeResult, 1)
 
 	c.upgradeMu.Lock()
@@ -483,6 +519,7 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 		return nil, statusError(codes.FailedPrecondition, "sesame/rc/netconn: another TLS upgrade is already pending")
 	}
 	c.pendingUpgrade = ch
+	c.pendingUpgradeID = requestID
 	c.upgradeMu.Unlock()
 
 	c.sendMu.Lock()
@@ -491,7 +528,8 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 			Control: &rc.NetConnRequest_Control{
 				Action: &rc.NetConnRequest_Control_UpgradeTls{
 					UpgradeTls: &rc.NetConnRequest_Control_UpgradeTLS{
-						Options: opts,
+						Options:   opts,
+						RequestId: requestID,
 					},
 				},
 			},
@@ -502,6 +540,7 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 	if sendErr != nil {
 		c.upgradeMu.Lock()
 		c.pendingUpgrade = nil
+		c.pendingUpgradeID = 0
 		c.upgradeMu.Unlock()
 		return nil, sendErr
 	}
@@ -513,6 +552,7 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 		// us and already arrived, it was buffered into ch - drain it.
 		c.upgradeMu.Lock()
 		c.pendingUpgrade = nil
+		c.pendingUpgradeID = 0
 		c.upgradeMu.Unlock()
 		select {
 		case res := <-ch:

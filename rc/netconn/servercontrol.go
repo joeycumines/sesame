@@ -482,7 +482,7 @@ func RunServerDemux(
 						errCh <- grpcstatus.Error(codes.FailedPrecondition, "sesame/rc/netconn: opportunistic TLS is disabled by server policy")
 						return
 					}
-					upgradeErr := s.handleUpgradeTLS(ctx, action.UpgradeTls.GetOptions())
+					upgradeErr := s.handleUpgradeTLS(ctx, action.UpgradeTls.GetOptions(), action.UpgradeTls.GetRequestId())
 					if upgradeErr != nil {
 						errCh <- upgradeErr
 						return
@@ -574,7 +574,7 @@ func rpcStatusCode(code int32) codes.Code {
 	return codes.Canceled
 }
 
-func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesametls.TLSOptions) error {
+func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesametls.TLSOptions, requestID int64) error {
 	// 1. Pause outbound reader
 	s.connMu.RLock()
 	c := s.activeConn
@@ -620,6 +620,7 @@ func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesamet
 								Code:    int32(st.Code()),
 								Message: st.Message(),
 							},
+							RequestId: requestID,
 						},
 					},
 				},
@@ -636,7 +637,8 @@ func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesamet
 			Control: &rc.NetConnResponse_Control{
 				Event: &rc.NetConnResponse_Control_TlsUpgraded{
 					TlsUpgraded: &rc.NetConnResponse_Control_TLSUpgraded{
-						Result: result,
+						Result:    result,
+						RequestId: requestID,
 					},
 				},
 			},

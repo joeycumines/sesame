@@ -582,7 +582,16 @@ func (x *NetConnRequest_Capabilities) GetMaxChunkSize() int32 {
 type NetConnRequest_Control_UpgradeTLS struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// TLS configuration for the upgrade (REQUIRED).
-	Options       *tls.TLSOptions `protobuf:"bytes,1,opt,name=options,proto3" json:"options,omitempty"`
+	Options *tls.TLSOptions `protobuf:"bytes,1,opt,name=options,proto3" json:"options,omitempty"`
+	// Per-call correlation ID, echoed verbatim by the server in
+	// whichever result it emits for this request (TLSUpgraded or
+	// TLSUpgradeFailed) - the Ping precedent: the server MUST NOT
+	// substitute its own value. 0 means unset/legacy. A client that
+	// tags its calls SHOULD treat a result whose request_id does not
+	// match its pending call as unsolicited and fail closed: with no
+	// correlation, a retried upgrade could honor the first (timed
+	// out) call's late result.
+	RequestId     int64 `protobuf:"varint,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -622,6 +631,13 @@ func (x *NetConnRequest_Control_UpgradeTLS) GetOptions() *tls.TLSOptions {
 		return x.Options
 	}
 	return nil
+}
+
+func (x *NetConnRequest_Control_UpgradeTLS) GetRequestId() int64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
 }
 
 type NetConnRequest_Control_WindowUpdate struct {
@@ -1184,7 +1200,10 @@ func (x *NetConnResponse_Capabilities) GetClientHelloCapabilities() *tls.ClientH
 type NetConnResponse_Control_TLSUpgraded struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Negotiated TLS session state.
-	Result        *tls.TLSHandshakeResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	Result *tls.TLSHandshakeResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
+	// The request_id of the upgrade_tls this result belongs to,
+	// echoed verbatim (0 if the request carried no id).
+	RequestId     int64 `protobuf:"varint,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1226,10 +1245,20 @@ func (x *NetConnResponse_Control_TLSUpgraded) GetResult() *tls.TLSHandshakeResul
 	return nil
 }
 
+func (x *NetConnResponse_Control_TLSUpgraded) GetRequestId() int64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
+}
+
 type NetConnResponse_Control_TLSUpgradeFailed struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Failure detail. code is a canonical google.rpc.Code.
-	Error         *status.Status `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	Error *status.Status `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	// The request_id of the upgrade_tls this result belongs to,
+	// echoed verbatim (0 if the request carried no id).
+	RequestId     int64 `protobuf:"varint,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1269,6 +1298,13 @@ func (x *NetConnResponse_Control_TLSUpgradeFailed) GetError() *status.Status {
 		return x.Error
 	}
 	return nil
+}
+
+func (x *NetConnResponse_Control_TLSUpgradeFailed) GetRequestId() int64 {
+	if x != nil {
+		return x.RequestId
+	}
+	return 0
 }
 
 type NetConnResponse_Control_WindowUpdate struct {
@@ -1477,7 +1513,7 @@ var File_sesame_v1alpha1_remotecontrol_proto protoreflect.FileDescriptor
 
 const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\n" +
-	"#sesame/v1alpha1/remotecontrol.proto\x12\x0fsesame.v1alpha1\x1a\x19google/protobuf/any.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x17google/rpc/status.proto\x1a!sesame/proxy/v1alpha1/proxy.proto\x1a\x1dsesame/tls/v1alpha1/tls.proto\x1a\x19sesame/type/netaddr.proto\"\xc0\v\n" +
+	"#sesame/v1alpha1/remotecontrol.proto\x12\x0fsesame.v1alpha1\x1a\x19google/protobuf/any.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x17google/rpc/status.proto\x1a!sesame/proxy/v1alpha1/proxy.proto\x1a\x1dsesame/tls/v1alpha1/tls.proto\x1a\x19sesame/type/netaddr.proto\"\xdf\v\n" +
 	"\x0eNetConnRequest\x12:\n" +
 	"\x04dial\x18\x01 \x01(\v2$.sesame.v1alpha1.NetConnRequest.DialH\x00R\x04dial\x12\x16\n" +
 	"\x05bytes\x18\x02 \x01(\fH\x00R\x05bytes\x12C\n" +
@@ -1488,7 +1524,7 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x03tls\x18\x03 \x01(\v2\x1f.sesame.tls.v1alpha1.TLSOptionsR\x03tls\x129\n" +
 	"\x05proxy\x18\x04 \x01(\v2#.sesame.proxy.v1alpha1.ProxyOptionsR\x05proxy\x12P\n" +
 	"\fcapabilities\x18\x05 \x01(\v2,.sesame.v1alpha1.NetConnRequest.CapabilitiesR\fcapabilities\x12.\n" +
-	"\aoptions\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\aoptions\x1a\xd5\x05\n" +
+	"\aoptions\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\aoptions\x1a\xf4\x05\n" +
 	"\aControl\x12U\n" +
 	"\vupgrade_tls\x18\x01 \x01(\v22.sesame.v1alpha1.NetConnRequest.Control.UpgradeTLSH\x00R\n" +
 	"upgradeTls\x12[\n" +
@@ -1497,10 +1533,12 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"half_close\x18\x03 \x01(\v21.sesame.v1alpha1.NetConnRequest.Control.HalfCloseH\x00R\thalfClose\x12B\n" +
 	"\x04ping\x18\x04 \x01(\v2,.sesame.v1alpha1.NetConnRequest.Control.PingH\x00R\x04ping\x12E\n" +
 	"\x05reset\x18\x05 \x01(\v2-.sesame.v1alpha1.NetConnRequest.Control.ResetH\x00R\x05reset\x12.\n" +
-	"\x06custom\x18\x0f \x01(\v2\x14.google.protobuf.AnyH\x00R\x06custom\x1aG\n" +
+	"\x06custom\x18\x0f \x01(\v2\x14.google.protobuf.AnyH\x00R\x06custom\x1af\n" +
 	"\n" +
 	"UpgradeTLS\x129\n" +
-	"\aoptions\x18\x01 \x01(\v2\x1f.sesame.tls.v1alpha1.TLSOptionsR\aoptions\x1a1\n" +
+	"\aoptions\x18\x01 \x01(\v2\x1f.sesame.tls.v1alpha1.TLSOptionsR\aoptions\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\x03R\trequestId\x1a1\n" +
 	"\fWindowUpdate\x12!\n" +
 	"\fcredit_bytes\x18\x01 \x01(\x05R\vcreditBytes\x1a\v\n" +
 	"\tHalfClose\x1a?\n" +
@@ -1515,7 +1553,7 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x12.\n" +
 	"\x13initial_window_size\x18\x03 \x01(\x05R\x11initialWindowSize\x12$\n" +
 	"\x0emax_chunk_size\x18\x04 \x01(\x05R\fmaxChunkSizeB\x06\n" +
-	"\x04data\"\xb5\x0e\n" +
+	"\x04data\"\xf3\x0e\n" +
 	"\x0fNetConnResponse\x12;\n" +
 	"\x04conn\x18\x01 \x01(\v2%.sesame.v1alpha1.NetConnResponse.ConnH\x00R\x04conn\x12\x16\n" +
 	"\x05bytes\x18\x02 \x01(\fH\x00R\x05bytes\x12D\n" +
@@ -1526,7 +1564,7 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x03tls\x18\x03 \x01(\v2'.sesame.tls.v1alpha1.TLSHandshakeResultR\x03tls\x128\n" +
 	"\x05proxy\x18\x04 \x01(\v2\".sesame.proxy.v1alpha1.ProxyResultR\x05proxy\x12Q\n" +
 	"\fcapabilities\x18\x05 \x01(\v2-.sesame.v1alpha1.NetConnResponse.CapabilitiesR\fcapabilities\x12A\n" +
-	"\x11custom_attributes\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\x10customAttributes\x1a\xcd\a\n" +
+	"\x11custom_attributes\x18\x0f \x03(\v2\x14.google.protobuf.AnyR\x10customAttributes\x1a\x8b\b\n" +
 	"\aControl\x12Y\n" +
 	"\ftls_upgraded\x18\x01 \x01(\v24.sesame.v1alpha1.NetConnResponse.Control.TLSUpgradedH\x00R\vtlsUpgraded\x12i\n" +
 	"\x12tls_upgrade_failed\x18\x02 \x01(\v29.sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailedH\x00R\x10tlsUpgradeFailed\x12\\\n" +
@@ -1535,11 +1573,15 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"half_close\x18\x04 \x01(\v22.sesame.v1alpha1.NetConnResponse.Control.HalfCloseH\x00R\thalfClose\x12C\n" +
 	"\x04pong\x18\x05 \x01(\v2-.sesame.v1alpha1.NetConnResponse.Control.PongH\x00R\x04pong\x12L\n" +
 	"\ametrics\x18\x06 \x01(\v20.sesame.v1alpha1.NetConnResponse.Control.MetricsH\x00R\ametrics\x12.\n" +
-	"\x06custom\x18\x0f \x01(\v2\x14.google.protobuf.AnyH\x00R\x06custom\x1aN\n" +
+	"\x06custom\x18\x0f \x01(\v2\x14.google.protobuf.AnyH\x00R\x06custom\x1am\n" +
 	"\vTLSUpgraded\x12?\n" +
-	"\x06result\x18\x01 \x01(\v2'.sesame.tls.v1alpha1.TLSHandshakeResultR\x06result\x1a<\n" +
+	"\x06result\x18\x01 \x01(\v2'.sesame.tls.v1alpha1.TLSHandshakeResultR\x06result\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\x03R\trequestId\x1a[\n" +
 	"\x10TLSUpgradeFailed\x12(\n" +
-	"\x05error\x18\x01 \x01(\v2\x12.google.rpc.StatusR\x05error\x1a1\n" +
+	"\x05error\x18\x01 \x01(\v2\x12.google.rpc.StatusR\x05error\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\x03R\trequestId\x1a1\n" +
 	"\fWindowUpdate\x12!\n" +
 	"\fcredit_bytes\x18\x01 \x01(\x05R\vcreditBytes\x1a\v\n" +
 	"\tHalfClose\x1a?\n" +
