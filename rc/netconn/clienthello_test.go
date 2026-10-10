@@ -348,6 +348,12 @@ func TestGoClientHelloEmissionMatchesRequest(t *testing.T) {
 			if len(groupsBody) != 2+4 {
 				t.Fatalf("supported_groups body = %x, want a 2-entry list", groupsBody)
 			}
+			// The u16 list-length prefix is part of the wire format; a
+			// drift that corrupts it while preserving the entries must
+			// still fail the pin.
+			if listLen := binary.BigEndian.Uint16(groupsBody[:2]); listLen != 4 {
+				t.Fatalf("supported_groups list-length prefix = %d, want 4", listLen)
+			}
 			if binary.BigEndian.Uint16(groupsBody[2:]) != 29 || binary.BigEndian.Uint16(groupsBody[4:]) != 23 {
 				t.Errorf("wire supported_groups = %v, want [29 23]", []uint16{binary.BigEndian.Uint16(groupsBody[2:]), binary.BigEndian.Uint16(groupsBody[4:])})
 			}

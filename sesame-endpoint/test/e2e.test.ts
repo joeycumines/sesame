@@ -988,6 +988,65 @@ describe('sesame-endpoint E2E Suite', () => {
     }
   });
 
+  it('rejects RFC 1929 credentials longer than the 255-byte length prefix', async () => {
+    // A 256-byte username would wrap the u8 length field and corrupt
+    // the auth frame; matching the Go reference, the handshake rejects
+    // it instead of writing a malformed frame.
+    const mock = makeSocks5Mock({requireAuth: true});
+    await new Promise<void>(r => mock.server.listen(0, '127.0.0.1', () => r()));
+    const mockPort = (mock.server.address() as net.AddressInfo).port;
+
+    try {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: `localhost:${tcpEchoPort}`,
+              }),
+              proxy: create(ProxyOptionsSchema, {
+                hops: [
+                  create(ProxyHopSchema, {
+                    type: ProxyHop_Type.SOCKS5,
+                    address: create(NetAddrSchema, {
+                      network: 'tcp',
+                      address: `127.0.0.1:${mockPort}`,
+                    }),
+                    username: 'a'.repeat(256),
+                    password: 'sockspass',
+                  }),
+                ],
+              }),
+            }),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      try {
+        await iterator.next();
+        expect.unreachable('should have rejected the oversized credential');
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(ConnectError);
+        const ce = err as ConnectError;
+        expect(ce.code).toBe(Code.Unavailable);
+        expect(ce.message).toContain('255-byte limit');
+      }
+
+      // The malformed auth frame must never reach the wire.
+      expect(mock.frames().at(-1)!.auth).toBeNull();
+
+      reqStream.close();
+    } finally {
+      await new Promise<void>(r => mock.server.close(() => r()));
+    }
+  });
+
   it('surfaces a SOCKS5 auth rejection as PermissionDenied', async () => {
     const mock = makeSocks5Mock({requireAuth: true, authReject: true});
     await new Promise<void>(r => mock.server.listen(0, '127.0.0.1', () => r()));

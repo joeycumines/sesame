@@ -832,6 +832,18 @@ function socks5Handshake(
               hop.password || fallbackSecrets?.proxyPassword || '';
             const u = Buffer.from(username, 'utf-8');
             const p = Buffer.from(password, 'utf-8');
+            // RFC 1929 fields are length-prefixed by a single byte;
+            // anything longer cannot be encoded and would silently
+            // corrupt the frame (a 256-byte username writes length
+            // 0x00). The Go reference rejects the same input
+            // (x/net socks: invalid username/password) as a
+            // handshake failure; never echo the values themselves.
+            if (u.length > 255 || p.length > 255) {
+              throw new ConnectError(
+                'sesame/rc/netconn: SOCKS5 username/password exceed the RFC 1929 255-byte limit',
+                Code.Unavailable,
+              );
+            }
             const authReq = Buffer.concat([
               Buffer.from([0x01, u.length]),
               u,

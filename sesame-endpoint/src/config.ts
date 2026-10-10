@@ -180,8 +180,9 @@ export function parseConfig(
     throw new Error(`Invalid port: ${port}. Must be between 1 and 65535`);
   }
   // The wire contract (remotecontrol.proto) requires advertised chunk and
-  // window sizes not to exceed the stream's gRPC per-message receive limit;
-  // the grpc-go default is 4MiB, so that is the interop-safe ceiling here.
+  // window sizes not to exceed the stream's gRPC per-message receive
+  // limit; the grpc-go default is 4MiB, so that is the interop-safe
+  // ceiling here.
   const MAX_CHUNK_SIZE_CEILING = 4 * 1024 * 1024;
 
   if (
@@ -196,10 +197,10 @@ export function parseConfig(
   if (
     isNaN(initialWindowSize) ||
     initialWindowSize < 1024 ||
-    initialWindowSize > 1024 * 1024 * 1024
+    initialWindowSize > MAX_CHUNK_SIZE_CEILING
   ) {
     throw new Error(
-      `Invalid initialWindowSize: ${initialWindowSize}. Must be between 1024 and 1073741824`,
+      `Invalid initialWindowSize: ${initialWindowSize}. Must be between 1024 and ${MAX_CHUNK_SIZE_CEILING} (the gRPC per-message receive limit; advertised values must not exceed it per the wire contract)`,
     );
   }
   if (isNaN(readTimeoutMs) || readTimeoutMs < 0) {
@@ -255,7 +256,7 @@ Options:
   --host <string>                 Bind host address (default: 127.0.0.1)
   --port <number>                 Bind port (default: 50051)
   --max-chunk-size <bytes>        Max chunk size for stream payloads (default: 32768, max: 4194304)
-  --initial-window-size <bytes>   Initial stream flow control credit (default: 65535)
+  --initial-window-size <bytes>   Initial stream flow control credit (default: 65535, max: 4194304)
   --read-timeout-ms <ms>          Socket read timeout in ms (default: 30000, 0=disable)
   --dial-timeout-ms <ms>          Default upstream dial timeout in ms (default: 10000)
   --enable-opportunistic-tls <b>  Enable in-stream UpgradeTLS (default: true)

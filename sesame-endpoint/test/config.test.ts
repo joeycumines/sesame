@@ -129,6 +129,19 @@ describe('config parser', () => {
     ).toThrow('Invalid maxChunkSize');
   });
 
+  it('caps initialWindowSize at the gRPC per-message receive limit', () => {
+    // Same wire-contract rule as max_chunk_size: advertised chunk and
+    // window sizes must not exceed the stream's gRPC per-message
+    // receive limit (grpc-go default 4MiB).
+    expect(
+      parseConfig(['--initial-window-size', String(4 * 1024 * 1024)]).config!
+        .initialWindowSize,
+    ).toBe(4 * 1024 * 1024);
+    expect(() => parseConfig(['--initial-window-size', '4194305'])).toThrow(
+      'Invalid initialWindowSize',
+    );
+  });
+
   it('parses enable flags strictly: only true/false/1/0 are accepted', () => {
     // Accepted spellings, flag form.
     expect(
