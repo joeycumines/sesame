@@ -1,0 +1,4 @@
+[test]
+# Only discover tests in the source test/ directory.
+# build/test/ contains tsc-compiled duplicates that break module resolution.
+root = "test"

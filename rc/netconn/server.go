@@ -144,7 +144,7 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 			SupportsOpportunisticTls: true,
 			MaxChunkSize:             DefaultChunkSize,
 			InitialWindowSize:        DefaultInitialWindowSize,
-			SupportedPresets:         []sesametls.FingerprintPreset{sesametls.FingerprintPreset_RUNTIME_DEFAULT},
+			ClientHelloCapabilities:  GoClientHelloCapabilities(),
 		}
 	}
 

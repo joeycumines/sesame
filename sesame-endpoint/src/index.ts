@@ -14,6 +14,7 @@ export {FlowController} from './rc/flowcontrol';
 
 export {
   TLSExecutionResult,
+  TLSProvider,
   ProxyExecutionResult,
   executeTLSHandshake,
   executeProxyHops,
@@ -21,6 +22,9 @@ export {
   createNetAddrFromSocket,
   protoToTLSVersion,
   tlsVersionToProto,
+  validateClientHelloSpec,
+  assertBuiltinClientHelloHonorable,
+  builtinClientHelloCapabilities,
 } from './rc/transform';
 
 export * from './gen/sesame/v1alpha1/remotecontrol_pb';

@@ -3,7 +3,9 @@ import * as tls from 'node:tls';
 import {Code, ConnectError} from '@connectrpc/connect';
 import {create} from '@bufbuild/protobuf';
 import {
-  FingerprintPreset,
+  ClientHelloCapabilities,
+  ClientHelloCapabilitiesSchema,
+  ClientHelloSpec,
   TLSHandshakeResult,
   TLSHandshakeResultSchema,
   TLSOptions,
@@ -97,6 +99,159 @@ export interface TLSExecutionResult {
   readonly result: TLSHandshakeResult;
 }
 
+// TLSProvider mirrors the Go rc/netconn.TLSProvider contract: a custom
+// engine that can perform a TLS handshake with full ClientHello control.
+// When present, the builtin node:tls path is bypassed entirely.
+export interface TLSProvider {
+  handshake(
+    socket: net.Socket,
+    opts: TLSOptions,
+    defaultServerName: string,
+    fallbackSecrets?: ServerSecrets,
+  ): Promise<TLSExecutionResult>;
+}
+
+// validateClientHelloSpec checks numeric ranges in the spec. Throws
+// ConnectError(Code.InvalidArgument) on any violation. Call before any
+// engine-specific logic.
+export function validateClientHelloSpec(
+  spec: ClientHelloSpec | undefined,
+): void {
+  if (!spec) return;
+  for (const v of spec.cipherSuites) {
+    if (v < 0 || v > 65535) {
+      throw new ConnectError(
+        `sesame/rc/netconn: cipher_suites value out of range [0, 65535]: ${v}`,
+        Code.InvalidArgument,
+      );
+    }
+  }
+  for (const v of spec.supportedGroups) {
+    if (v < 0 || v > 65535) {
+      throw new ConnectError(
+        `sesame/rc/netconn: supported_groups value out of range [0, 65535]: ${v}`,
+        Code.InvalidArgument,
+      );
+    }
+  }
+  for (const v of spec.signatureAlgorithms) {
+    if (v < 0 || v > 65535) {
+      throw new ConnectError(
+        `sesame/rc/netconn: signature_algorithms value out of range [0, 65535]: ${v}`,
+        Code.InvalidArgument,
+      );
+    }
+  }
+  for (const ext of spec.extensions) {
+    if (!ext) {
+      throw new ConnectError(
+        'sesame/rc/netconn: nil extension entry in client_hello.extensions',
+        Code.InvalidArgument,
+      );
+    }
+    if (ext.type < 0 || ext.type > 65535) {
+      throw new ConnectError(
+        `sesame/rc/netconn: extension type out of range [0, 65535]: ${ext.type}`,
+        Code.InvalidArgument,
+      );
+    }
+  }
+  for (const v of spec.compressionMethods) {
+    if (v < 0 || v > 255) {
+      throw new ConnectError(
+        `sesame/rc/netconn: compression_methods value out of range [0, 255]: ${v}`,
+        Code.InvalidArgument,
+      );
+    }
+  }
+  if (spec.sessionIdLength < -1 || spec.sessionIdLength > 32) {
+    throw new ConnectError(
+      `sesame/rc/netconn: session_id_length out of range [-1, 32]: ${spec.sessionIdLength}`,
+      Code.InvalidArgument,
+    );
+  }
+  if (spec.padToSize < 0) {
+    throw new ConnectError(
+      `sesame/rc/netconn: pad_to_size must not be negative: ${spec.padToSize}`,
+      Code.InvalidArgument,
+    );
+  }
+}
+
+// assertBuiltinClientHelloHonorable checks that the builtin node:tls/Bun
+// engine can honor the spec. The builtin engine has NO public control for
+// any ClientHello dimension, so any non-default value is rejected with
+// FAILED_PRECONDITION. An empty/default spec is always honorable.
+export function assertBuiltinClientHelloHonorable(
+  spec: ClientHelloSpec | undefined,
+): void {
+  if (!spec) return;
+  if (spec.cipherSuites.length > 0) {
+    throw new ConnectError(
+      'sesame/rc/netconn: builtin engine cannot honor client_hello.cipher_suites; custom TLSProvider required',
+      Code.FailedPrecondition,
+    );
+  }
+  if (spec.supportedGroups.length > 0) {
+    throw new ConnectError(
+      'sesame/rc/netconn: builtin engine cannot honor client_hello.supported_groups; custom TLSProvider required',
+      Code.FailedPrecondition,
+    );
+  }
+  if (spec.signatureAlgorithms.length > 0) {
+    throw new ConnectError(
+      'sesame/rc/netconn: builtin engine cannot honor client_hello.signature_algorithms; custom TLSProvider required',
+      Code.FailedPrecondition,
+    );
+  }
+  if (spec.extensions.length > 0) {
+    throw new ConnectError(
+      'sesame/rc/netconn: builtin engine cannot honor client_hello.extensions; custom TLSProvider required',
+      Code.FailedPrecondition,
+    );
+  }
+  // compressionMethods: accept [] or exactly [0] (null compression).
+  if (
+    spec.compressionMethods.length > 0 &&
+    !(spec.compressionMethods.length === 1 && spec.compressionMethods[0] === 0)
+  ) {
+    throw new ConnectError(
+      'sesame/rc/netconn: builtin engine cannot honor client_hello.compression_methods; custom TLSProvider required',
+      Code.FailedPrecondition,
+    );
+  }
+  // sessionIdLength: 0 (engine default) and 32 (explicit match) are
+  // compatible; these runtimes send a 32-byte session id.
+  if (spec.sessionIdLength !== 0 && spec.sessionIdLength !== 32) {
+    throw new ConnectError(
+      `sesame/rc/netconn: builtin engine cannot honor client_hello.session_id_length=${spec.sessionIdLength}; custom TLSProvider required`,
+      Code.FailedPrecondition,
+    );
+  }
+  // legacyVersion: must be UNSPECIFIED (engine default).
+  if (spec.legacyVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED) {
+    throw new ConnectError(
+      'sesame/rc/netconn: builtin engine cannot honor client_hello.legacy_version; custom TLSProvider required',
+      Code.FailedPrecondition,
+    );
+  }
+  // padToSize: must be 0 (no padding).
+  if (spec.padToSize !== 0) {
+    throw new ConnectError(
+      'sesame/rc/netconn: builtin engine cannot honor client_hello.pad_to_size; custom TLSProvider required',
+      Code.FailedPrecondition,
+    );
+  }
+}
+
+// builtinClientHelloCapabilities returns the honest capability advertisement
+// for the builtin node:tls/Bun engine: all dimensions false, because the
+// builtin engine has no public ClientHello control. Compatible defaults are
+// not control.
+export function builtinClientHelloCapabilities(): ClientHelloCapabilities {
+  return create(ClientHelloCapabilitiesSchema, {});
+}
+
 // IANA cipher suite identifiers for the names Node/Bun report from
 // TLSSocket.getCipher() (standardName preferred, opensslName fallback).
 // Unrecognized names yield 0; the negotiated suite is metadata, not a
@@ -143,6 +298,7 @@ export async function executeTLSHandshake(
   opts: TLSOptions,
   defaultServerName: string,
   fallbackSecrets?: ServerSecrets,
+  provider?: TLSProvider,
 ): Promise<TLSExecutionResult> {
   // Version-range validation at the API boundary, matching the Go
   // reference: a floor above its ceiling can never negotiate.
@@ -158,28 +314,18 @@ export async function executeTLSHandshake(
     );
   }
 
-  const preset = opts.fingerprintPreset;
-  if (
-    preset !== FingerprintPreset.FINGERPRINT_PRESET_UNSPECIFIED &&
-    preset !== FingerprintPreset.RUNTIME_DEFAULT
-  ) {
-    throw new ConnectError(
-      `sesame/rc/netconn: requested fingerprint preset ${preset} is not supported by standard runtime; custom TLSProvider required`,
-      Code.FailedPrecondition,
-    );
+  // ClientHelloSpec validation applies to every provider path.
+  validateClientHelloSpec(opts.clientHello);
+
+  // When a custom provider is present, delegate after range+schema
+  // validation. The provider itself is responsible for honoring
+  // client_hello fail-closed and echoing appliedClientHello.
+  if (provider) {
+    return provider.handshake(socket, opts, defaultServerName, fallbackSecrets);
   }
 
-  // Explicit cipher suite restriction cannot be honored by the standard
-  // runtime (Node/Bun tls.connect takes OpenSSL names, not IANA IDs, and
-  // no verified ID-to-name map exists here). Fail closed rather than
-  // negotiating with defaults while reporting success: a client asking
-  // for a restricted suite set must never silently get runtime defaults.
-  if (opts.cipherSuites && opts.cipherSuites.length > 0) {
-    throw new ConnectError(
-      'sesame/rc/netconn: cipher_suites restriction is not supported by standard runtime; custom TLSProvider required',
-      Code.FailedPrecondition,
-    );
-  }
+  // Builtin engine: fail closed on any non-default spec dimension.
+  assertBuiltinClientHelloHonorable(opts.clientHello);
 
   let serverName = opts.serverName || defaultServerName;
   // A bare IPv6 literal is already a valid SNI value; only strip a port when
@@ -256,7 +402,7 @@ export async function executeTLSHandshake(
         tlsVersion: tlsVersionToProto(tlsSocket.getProtocol()),
         serverName,
         peerCertificates,
-        appliedPreset: FingerprintPreset.RUNTIME_DEFAULT,
+        appliedClientHello: opts.clientHello,
       });
 
       resolve({tlsSocket, result});

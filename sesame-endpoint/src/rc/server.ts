@@ -16,7 +16,6 @@ import {
   NetConnResponse_Control_PongSchema,
 } from '../gen/sesame/v1alpha1/remotecontrol_pb';
 import {
-  FingerprintPreset,
   TLSHandshakeResult,
   TLSOptions,
   TLSVersion,
@@ -26,10 +25,14 @@ import {StatusSchema} from '../gen/google/rpc/status_pb';
 import {ServerConfig} from '../config';
 import {FlowController} from './flowcontrol';
 import {
+  assertBuiltinClientHelloHonorable,
+  builtinClientHelloCapabilities,
   createNetAddrFromSocket,
   executeProxyHops,
   executeTLSHandshake,
   parseHostPort,
+  TLSProvider,
+  validateClientHelloSpec,
 } from './transform';
 
 // Resolves once the socket drains, or rejects if it terminates or the
@@ -139,7 +142,10 @@ class AsyncQueue<T> {
   }
 }
 
-export function createRemoteControlService(config: ServerConfig) {
+export function createRemoteControlService(
+  config: ServerConfig,
+  tlsProvider?: TLSProvider,
+) {
   return {
     async *netConn(
       reqStream: AsyncIterable<NetConnRequest>,
@@ -189,24 +195,12 @@ export function createRemoteControlService(config: ServerConfig) {
         );
       }
 
-      // Check fingerprint preset and cipher suite restriction upfront
+      // Validate ClientHelloSpec and version range upfront, before any
+      // dialing, mirroring the Go server's boundary validation.
       if (dialReq.tls) {
-        const preset = dialReq.tls.fingerprintPreset;
-        if (
-          preset !== FingerprintPreset.FINGERPRINT_PRESET_UNSPECIFIED &&
-          preset !== FingerprintPreset.RUNTIME_DEFAULT &&
-          !config.supportedPresets.includes(preset)
-        ) {
-          throw new ConnectError(
-            `sesame/rc/netconn: requested fingerprint preset ${preset} is not supported by standard runtime; custom TLSProvider required`,
-            Code.FailedPrecondition,
-          );
-        }
-        if (dialReq.tls.cipherSuites && dialReq.tls.cipherSuites.length > 0) {
-          throw new ConnectError(
-            'sesame/rc/netconn: cipher_suites restriction is not supported by standard runtime; custom TLSProvider required',
-            Code.FailedPrecondition,
-          );
+        validateClientHelloSpec(dialReq.tls.clientHello);
+        if (!tlsProvider) {
+          assertBuiltinClientHelloHonorable(dialReq.tls.clientHello);
         }
         // Version-range validation at the API boundary, before any dialing:
         // a floor above its ceiling can never negotiate. TLSVersion values
@@ -317,6 +311,7 @@ export function createRemoteControlService(config: ServerConfig) {
           dialReq.tls,
           targetAddr,
           config.secrets,
+          tlsProvider,
         );
         activeSocket = tRes.tlsSocket;
         tlsResult = tRes.result;
@@ -327,7 +322,7 @@ export function createRemoteControlService(config: ServerConfig) {
         supportsOpportunisticTls: config.enableOpportunisticTls,
         maxChunkSize: config.maxChunkSize,
         initialWindowSize: config.initialWindowSize,
-        supportedPresets: [...config.supportedPresets],
+        clientHelloCapabilities: builtinClientHelloCapabilities(),
       });
 
       // 2. Yield initial Conn response
@@ -526,6 +521,12 @@ export function createRemoteControlService(config: ServerConfig) {
           );
         }
 
+        // Validate clientHello upfront BEFORE pausing the socket.
+        validateClientHelloSpec(opts.clientHello);
+        if (!tlsProvider) {
+          assertBuiltinClientHelloHonorable(opts.clientHello);
+        }
+
         pausedForUpgrade = true;
         activeSocket.pause();
         await waitForIdle();
@@ -537,6 +538,7 @@ export function createRemoteControlService(config: ServerConfig) {
             opts,
             targetAddr,
             config.secrets,
+            tlsProvider,
           );
           activeSocket = tlsSocket;
           pausedForUpgrade = false;

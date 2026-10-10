@@ -4,6 +4,7 @@ import {ConnectRouter} from '@connectrpc/connect';
 import {connectNodeAdapter} from '@connectrpc/connect-node';
 import {RemoteControl} from './gen/sesame/v1alpha1/remotecontrol_pb';
 import {createRemoteControlService} from './rc/server';
+import {TLSProvider} from './rc/transform';
 import {ServerConfig} from './config';
 
 export interface EndpointServer {
@@ -12,9 +13,12 @@ export interface EndpointServer {
   close(): Promise<void>;
 }
 
-export function createEndpointServer(config: ServerConfig): EndpointServer {
+export function createEndpointServer(
+  config: ServerConfig,
+  tlsProvider?: TLSProvider,
+): EndpointServer {
   const routes = (router: ConnectRouter) => {
-    router.service(RemoteControl, createRemoteControlService(config));
+    router.service(RemoteControl, createRemoteControlService(config, tlsProvider));
   };
 
   const handler = connectNodeAdapter({routes});

@@ -71,10 +71,14 @@ func TestBuildTLSConfig_ALPN_Rule(t *testing.T) {
 	}
 }
 
-func TestExecuteTLSHandshake_UnsupportedPreset(t *testing.T) {
-	// Server MUST return FAILED_PRECONDITION if preset cannot be satisfied
+func TestExecuteTLSHandshake_FailsClosedOnUnhonorableSpec(t *testing.T) {
+	// The builtin engine MUST fail closed (FAILED_PRECONDITION) when a
+	// requested ClientHello dimension cannot be honored exactly.
 	opts := &sesametls.TLSOptions{
-		FingerprintPreset: sesametls.FingerprintPreset_CHROME_131,
+		ServerName: "example.com",
+		ClientHello: &sesametls.ClientHelloSpec{
+			SignatureAlgorithms: []int32{0x0403},
+		},
 	}
 
 	rawConn, peerConn := net.Pipe()
@@ -83,7 +87,21 @@ func TestExecuteTLSHandshake_UnsupportedPreset(t *testing.T) {
 
 	_, _, err := ExecuteTLSHandshake(context.Background(), rawConn, opts, "example.com", nil)
 	if err == nil {
-		t.Fatal("expected error for unsupported preset without custom TLSProvider, got nil")
+		t.Fatal("expected error for un-honorable client_hello dimension without custom TLSProvider, got nil")
+	}
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("expected FailedPrecondition, got %v", err)
+	}
+
+	// Range violations are INVALID_ARGUMENT and equally rejected.
+	_, _, err = ExecuteTLSHandshake(context.Background(), rawConn, &sesametls.TLSOptions{
+		ServerName: "example.com",
+		ClientHello: &sesametls.ClientHelloSpec{
+			CipherSuites: []int32{1 << 20},
+		},
+	}, "example.com", nil)
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument for out-of-range cipher suite, got %v", err)
 	}
 }
 
@@ -281,40 +299,56 @@ func TestSocks5Handshake_ArmsFallbackDeadline(t *testing.T) {
 	}
 }
 
-func TestBuildTLSConfig_RejectsOutOfRangeCipherSuite(t *testing.T) {
-	_, err := BuildTLSConfig(&sesametls.TLSOptions{
-		ServerName:   "example.com",
-		CipherSuites: []int32{0x1301, 1 << 20},
-	}, "")
-	if err == nil {
-		t.Fatal("expected InvalidArgument for out-of-range cipher suite")
+func TestValidateClientHelloSpec_RejectsOutOfRangeValues(t *testing.T) {
+	cases := []struct {
+		name string
+		spec *sesametls.ClientHelloSpec
+	}{
+		{"cipher suite above uint16", &sesametls.ClientHelloSpec{CipherSuites: []int32{0x1301, 1 << 20}}},
+		{"negative cipher suite", &sesametls.ClientHelloSpec{CipherSuites: []int32{-1}}},
+		{"supported group above uint16", &sesametls.ClientHelloSpec{SupportedGroups: []int32{70000}}},
+		{"negative supported group", &sesametls.ClientHelloSpec{SupportedGroups: []int32{-29}}},
+		{"signature algorithm above uint16", &sesametls.ClientHelloSpec{SignatureAlgorithms: []int32{1 << 16}}},
+		{"negative signature algorithm", &sesametls.ClientHelloSpec{SignatureAlgorithms: []int32{-1}}},
+		{"extension type above uint16", &sesametls.ClientHelloSpec{Extensions: []*sesametls.ClientHelloExtension{{Type: 1 << 16}}}},
+		{"negative extension type", &sesametls.ClientHelloSpec{Extensions: []*sesametls.ClientHelloExtension{{Type: -1}}}},
+		{"nil extension entry", &sesametls.ClientHelloSpec{Extensions: []*sesametls.ClientHelloExtension{nil}}},
+		{"compression method above uint8", &sesametls.ClientHelloSpec{CompressionMethods: []int32{256}}},
+		{"negative compression method", &sesametls.ClientHelloSpec{CompressionMethods: []int32{-1}}},
+		{"session id length below sentinel", &sesametls.ClientHelloSpec{SessionIdLength: -2}},
+		{"session id length above 32", &sesametls.ClientHelloSpec{SessionIdLength: 33}},
+		{"negative pad to size", &sesametls.ClientHelloSpec{PadToSize: -1}},
 	}
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument, got %v", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateClientHelloSpec(tc.spec)
+			if err == nil {
+				t.Fatal("expected InvalidArgument, got nil")
+			}
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("expected InvalidArgument, got %v", err)
+			}
+		})
 	}
 
-	// Negative values are equally invalid post the int32 migration.
-	_, err = BuildTLSConfig(&sesametls.TLSOptions{
-		ServerName:   "example.com",
-		CipherSuites: []int32{-1},
-	}, "")
-	if err == nil {
-		t.Fatal("expected InvalidArgument for negative cipher suite")
+	// In-range values must validate cleanly, including GREASE-range IDs.
+	valid := &sesametls.ClientHelloSpec{
+		CipherSuites:        []int32{0x1301, 0xc02b, 0x0a0a},
+		SupportedGroups:     []int32{29, 23, 0x1a1a},
+		SignatureAlgorithms: []int32{0x0403},
+		Extensions: []*sesametls.ClientHelloExtension{
+			{Type: 0, Body: &sesametls.ClientHelloExtension_Raw{Raw: []byte{}}},
+			{Type: 65535, Body: &sesametls.ClientHelloExtension_Auto{Auto: &sesametls.AutoExtensionBody{}}},
+		},
+		CompressionMethods: []int32{0},
+		SessionIdLength:    32,
+		PadToSize:          512,
 	}
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument, got %v", err)
+	if err := ValidateClientHelloSpec(valid); err != nil {
+		t.Fatalf("expected valid spec, got %v", err)
 	}
-
-	// In-range values must still build.
-	cfg, err := BuildTLSConfig(&sesametls.TLSOptions{
-		ServerName:   "example.com",
-		CipherSuites: []int32{0x1301},
-	}, "")
-	if err != nil {
-		t.Fatalf("BuildTLSConfig failed for valid suite: %v", err)
-	}
-	if len(cfg.CipherSuites) != 1 || cfg.CipherSuites[0] != 0x1301 {
-		t.Fatalf("unexpected cipher suites: %v", cfg.CipherSuites)
+	if err := ValidateClientHelloSpec(nil); err != nil {
+		t.Fatalf("nil spec must validate (engine default), got %v", err)
 	}
 }
 

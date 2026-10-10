@@ -367,21 +367,25 @@ func runSesameEndpointSubprocessSuite(t *testing.T, runtimeBin string) {
 		}
 	})
 
-	// Test D: Fail-Closed unsupported fingerprint preset rejection
-	t.Run("FailClosed_PresetRejection", func(t *testing.T) {
+	// Test D: Fail-Closed rejection of a ClientHello dimension the endpoint's
+	// active engine cannot honor exactly.
+	t.Run("FailClosed_ClientHelloRejection", func(t *testing.T) {
 		dialCtx, dialCancel := context.WithTimeout(ctx, 2*time.Second)
 		defer dialCancel()
 
 		badClient := netconn.Client{
 			API: rc.NewRemoteControlClient(cc),
 			TLS: &sesametls.TLSOptions{
-				FingerprintPreset: sesametls.FingerprintPreset_CHROME_131,
+				ClientHello: &sesametls.ClientHelloSpec{
+					// Neither builtin engine exposes signature_algorithms control.
+					SignatureAlgorithms: []int32{0x0403},
+				},
 			},
 		}
 
 		_, err := badClient.DialContext(dialCtx, "tcp", tlsListener.Addr().String())
 		if err == nil {
-			t.Fatal("expected FAILED_PRECONDITION error for unsupported preset, got nil")
+			t.Fatal("expected FAILED_PRECONDITION error for un-honorable client_hello dimension, got nil")
 		}
 		st, ok := status.FromError(err)
 		if !ok || st.Code() != codes.FailedPrecondition {

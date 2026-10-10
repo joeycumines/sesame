@@ -22,7 +22,7 @@ import {
 } from '../src/gen/sesame/v1alpha1/remotecontrol_pb';
 import {StatusSchema} from '../src/gen/google/rpc/status_pb';
 import {
-  FingerprintPreset,
+  ClientHelloSpecSchema,
   TLSOptionsSchema,
   TLSVersion,
 } from '../src/gen/sesame/tls/v1alpha1/tls_pb';
@@ -224,10 +224,9 @@ describe('sesame-endpoint E2E Suite', () => {
   });
 
   it('fails closed on cipher_suites instead of silently using defaults', async () => {
-    // cipher_suites overrides preset defaults per the schema, but the
-    // standard runtime has no verified IANA-ID to OpenSSL-name map.
-    // Negotiating with defaults while reporting success would be a
-    // silent security-policy downgrade, so the request must be rejected.
+    // cipher_suites in client_hello cannot be honored by the builtin
+    // engine. Negotiating with defaults while reporting success would be
+    // a silent security-policy downgrade, so the request must be rejected.
     const reqStream = new RequestStream();
     reqStream.push(
       create(NetConnRequestSchema, {
@@ -241,7 +240,9 @@ describe('sesame-endpoint E2E Suite', () => {
             tls: create(TLSOptionsSchema, {
               serverName: 'localhost',
               insecureSkipVerify: true,
-              cipherSuites: [0x1301],
+              clientHello: create(ClientHelloSpecSchema, {
+                cipherSuites: [0x1301],
+              }),
             }),
           }),
         },
@@ -257,6 +258,7 @@ describe('sesame-endpoint E2E Suite', () => {
       expect(err).toBeInstanceOf(ConnectError);
       expect((err as ConnectError).code).toBe(Code.FailedPrecondition);
       expect((err as ConnectError).message).toContain('cipher_suites');
+      expect((err as ConnectError).message).toContain('builtin engine');
     } finally {
       reqStream.close();
     }
@@ -305,7 +307,7 @@ describe('sesame-endpoint E2E Suite', () => {
     expect(conn.tls).toBeDefined();
     expect(conn.tls?.negotiatedProtocol).toBe('test-proto');
     expect(conn.tls?.serverName).toBe('localhost');
-    expect(conn.tls?.appliedPreset).toBe(FingerprintPreset.RUNTIME_DEFAULT);
+    expect(conn.tls?.appliedClientHello).toBeUndefined();
 
     // 2. Encrypted echo response
     const second = await iterator.next();
@@ -359,7 +361,54 @@ describe('sesame-endpoint E2E Suite', () => {
     reqStream.close();
   });
 
-  it('fails closed on unsupported fingerprint preset', async () => {
+  it('accepts a default/empty clientHello spec and echoes it', async () => {
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${tlsEchoPort}`,
+            }),
+            tls: create(TLSOptionsSchema, {
+              serverName: 'localhost',
+              insecureSkipVerify: true,
+              clientHello: create(ClientHelloSpecSchema, {}),
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+    const first = await iterator.next();
+    expect(first.done).toBe(false);
+    expect(first.value.data.case).toBe('conn');
+    const conn = first.value.data.value;
+    expect(conn.tls).toBeDefined();
+    // An empty/default spec is echoed verbatim.
+    expect(conn.tls?.appliedClientHello).toBeDefined();
+    // Capabilities must be present with all booleans false.
+    expect(conn.capabilities?.clientHelloCapabilities).toBeDefined();
+    const caps = conn.capabilities!.clientHelloCapabilities!;
+    expect(caps.customCipherSuites).toBe(false);
+    expect(caps.customSupportedGroups).toBe(false);
+    expect(caps.customSignatureAlgorithms).toBe(false);
+    expect(caps.customExtensionOrder).toBe(false);
+    expect(caps.rawExtensions).toBe(false);
+    expect(caps.greaseValues).toBe(false);
+    expect(caps.sessionIdLength).toBe(false);
+    expect(caps.paddingControl).toBe(false);
+    expect(caps.legacyVersionControl).toBe(false);
+    expect(caps.compressionMethods).toBe(false);
+
+    reqStream.close();
+  });
+
+  it('fails closed on non-default clientHello dimension', async () => {
     const reqStream = new RequestStream();
 
     reqStream.push(
@@ -373,8 +422,10 @@ describe('sesame-endpoint E2E Suite', () => {
             }),
             tls: create(TLSOptionsSchema, {
               serverName: 'localhost',
-              fingerprintPreset: FingerprintPreset.CHROME_120,
               insecureSkipVerify: true,
+              clientHello: create(ClientHelloSpecSchema, {
+                signatureAlgorithms: [0x0403],
+              }),
             }),
           }),
         },
@@ -391,7 +442,7 @@ describe('sesame-endpoint E2E Suite', () => {
       expect(err).toBeInstanceOf(ConnectError);
       expect((err as ConnectError).code).toBe(Code.FailedPrecondition);
       expect((err as ConnectError).message).toContain(
-        'not supported by standard runtime',
+        'signature_algorithms',
       );
     }
 

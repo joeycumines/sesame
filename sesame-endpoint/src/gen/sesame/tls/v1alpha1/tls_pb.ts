@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sesame/tls/v1alpha1/tls.proto.
  */
 export const file_sesame_tls_v1alpha1_tls: GenFile = /*@__PURE__*/
-  fileDesc("Ch1zZXNhbWUvdGxzL3YxYWxwaGExL3Rscy5wcm90bxITc2VzYW1lLnRscy52MWFscGhhMSKHAwoKVExTT3B0aW9ucxITCgtzZXJ2ZXJfbmFtZRgBIAEoCRIWCg5hbHBuX3Byb3RvY29scxgCIAMoCRI0CgttaW5fdmVyc2lvbhgDIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhI0CgttYXhfdmVyc2lvbhgEIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhJCChJmaW5nZXJwcmludF9wcmVzZXQYBSABKA4yJi5zZXNhbWUudGxzLnYxYWxwaGExLkZpbmdlcnByaW50UHJlc2V0EhUKDWNpcGhlcl9zdWl0ZXMYBiADKAUSHAoUaW5zZWN1cmVfc2tpcF92ZXJpZnkYByABKAgSFwoPY2FfY2VydGlmaWNhdGVzGAggASgMEhoKEmNsaWVudF9jZXJ0aWZpY2F0ZRgJIAEoDBIaChJjbGllbnRfcHJpdmF0ZV9rZXkYCiABKAwSFgoOc2Vzc2lvbl90aWNrZXQYCyABKAwihQIKElRMU0hhbmRzaGFrZVJlc3VsdBIbChNuZWdvdGlhdGVkX3Byb3RvY29sGAEgASgJEhQKDGNpcGhlcl9zdWl0ZRgCIAEoBRI0Cgt0bHNfdmVyc2lvbhgDIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhITCgtzZXJ2ZXJfbmFtZRgEIAEoCRIZChFwZWVyX2NlcnRpZmljYXRlcxgFIAMoDBIWCg5zZXNzaW9uX3RpY2tldBgGIAEoDBI+Cg5hcHBsaWVkX3ByZXNldBgHIAEoDjImLnNlc2FtZS50bHMudjFhbHBoYTEuRmluZ2VycHJpbnRQcmVzZXQqXQoKVExTVmVyc2lvbhIbChdUTFNfVkVSU0lPTl9VTlNQRUNJRklFRBAAEgsKB1RMU18xXzAQARILCgdUTFNfMV8xEAISCwoHVExTXzFfMhADEgsKB1RMU18xXzMQBCqNAgoRRmluZ2VycHJpbnRQcmVzZXQSIgoeRklOR0VSUFJJTlRfUFJFU0VUX1VOU1BFQ0lGSUVEEAASDwoLQ0hST01FX0FVVE8QARIOCgpDSFJPTUVfMTIwEAISDgoKQ0hST01FXzEyNBADEg4KCkNIUk9NRV8xMzEQBBIQCgxGSVJFRk9YX0FVVE8QChIPCgtGSVJFRk9YXzEyMBALEg8KC1NBRkFSSV9BVVRPEBQSDQoJU0FGQVJJXzE2EBUSDQoJU0FGQVJJXzE3EBYSDAoISU9TX0FVVE8QHhIKCgZJT1NfMTYQHxISCg5BTkRST0lEX09LSFRUUBAjEhMKD1JVTlRJTUVfREVGQVVMVBAoQiZaJGdpdGh1Yi5jb20vam9leWN1bWluZXMvc2VzYW1lL3JjL3Rsc2IGcHJvdG8z");
+  fileDesc("Ch1zZXNhbWUvdGxzL3YxYWxwaGExL3Rscy5wcm90bxITc2VzYW1lLnRscy52MWFscGhhMSKXAwoKVExTT3B0aW9ucxITCgtzZXJ2ZXJfbmFtZRgBIAEoCRIWCg5hbHBuX3Byb3RvY29scxgCIAMoCRI0CgttaW5fdmVyc2lvbhgDIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhI0CgttYXhfdmVyc2lvbhgEIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhIcChRpbnNlY3VyZV9za2lwX3ZlcmlmeRgHIAEoCBIXCg9jYV9jZXJ0aWZpY2F0ZXMYCCABKAwSGgoSY2xpZW50X2NlcnRpZmljYXRlGAkgASgMEhoKEmNsaWVudF9wcml2YXRlX2tleRgKIAEoDBIWCg5zZXNzaW9uX3RpY2tldBgLIAEoDBI6CgxjbGllbnRfaGVsbG8YDCABKAsyJC5zZXNhbWUudGxzLnYxYWxwaGExLkNsaWVudEhlbGxvU3BlY0oECAUQBkoECAYQB1ISZmluZ2VycHJpbnRfcHJlc2V0Ug1jaXBoZXJfc3VpdGVzIp8CChJUTFNIYW5kc2hha2VSZXN1bHQSGwoTbmVnb3RpYXRlZF9wcm90b2NvbBgBIAEoCRIUCgxjaXBoZXJfc3VpdGUYAiABKAUSNAoLdGxzX3ZlcnNpb24YAyABKA4yHy5zZXNhbWUudGxzLnYxYWxwaGExLlRMU1ZlcnNpb24SEwoLc2VydmVyX25hbWUYBCABKAkSGQoRcGVlcl9jZXJ0aWZpY2F0ZXMYBSADKAwSFgoOc2Vzc2lvbl90aWNrZXQYBiABKAwSQgoUYXBwbGllZF9jbGllbnRfaGVsbG8YCCABKAsyJC5zZXNhbWUudGxzLnYxYWxwaGExLkNsaWVudEhlbGxvU3BlY0oECAcQCFIOYXBwbGllZF9wcmVzZXQipQIKD0NsaWVudEhlbGxvU3BlYxIVCg1jaXBoZXJfc3VpdGVzGAEgAygFEhgKEHN1cHBvcnRlZF9ncm91cHMYAiADKAUSHAoUc2lnbmF0dXJlX2FsZ29yaXRobXMYAyADKAUSPQoKZXh0ZW5zaW9ucxgEIAMoCzIpLnNlc2FtZS50bHMudjFhbHBoYTEuQ2xpZW50SGVsbG9FeHRlbnNpb24SGwoTY29tcHJlc3Npb25fbWV0aG9kcxgFIAMoBRIZChFzZXNzaW9uX2lkX2xlbmd0aBgGIAEoBRI3Cg5sZWdhY3lfdmVyc2lvbhgHIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhITCgtwYWRfdG9fc2l6ZRgIIAEoBSJzChRDbGllbnRIZWxsb0V4dGVuc2lvbhIMCgR0eXBlGAEgASgFEjYKBGF1dG8YAiABKAsyJi5zZXNhbWUudGxzLnYxYWxwaGExLkF1dG9FeHRlbnNpb25Cb2R5SAASDQoDcmF3GAMgASgMSABCBgoEYm9keSITChFBdXRvRXh0ZW5zaW9uQm9keSK9AgoXQ2xpZW50SGVsbG9DYXBhYmlsaXRpZXMSHAoUY3VzdG9tX2NpcGhlcl9zdWl0ZXMYASABKAgSHwoXY3VzdG9tX3N1cHBvcnRlZF9ncm91cHMYAiABKAgSIwobY3VzdG9tX3NpZ25hdHVyZV9hbGdvcml0aG1zGAMgASgIEh4KFmN1c3RvbV9leHRlbnNpb25fb3JkZXIYBCABKAgSFgoOcmF3X2V4dGVuc2lvbnMYBSABKAgSFQoNZ3JlYXNlX3ZhbHVlcxgGIAEoCBIZChFzZXNzaW9uX2lkX2xlbmd0aBgHIAEoCBIXCg9wYWRkaW5nX2NvbnRyb2wYCCABKAgSHgoWbGVnYWN5X3ZlcnNpb25fY29udHJvbBgJIAEoCBIbChNjb21wcmVzc2lvbl9tZXRob2RzGAogASgIKl0KClRMU1ZlcnNpb24SGwoXVExTX1ZFUlNJT05fVU5TUEVDSUZJRUQQABILCgdUTFNfMV8wEAESCwoHVExTXzFfMRACEgsKB1RMU18xXzIQAxILCgdUTFNfMV8zEARCJlokZ2l0aHViLmNvbS9qb2V5Y3VtaW5lcy9zZXNhbWUvcmMvdGxzYgZwcm90bzM");
 
 /**
  * TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint
@@ -54,28 +54,6 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
    * @generated from field: sesame.tls.v1alpha1.TLSVersion max_version = 4;
    */
   maxVersion: TLSVersion;
-
-  /**
-   * Impersonation profile preset for client cryptographic emulation.
-   * If set to anything other than RUNTIME_DEFAULT, the Server MUST fail
-   * closed (FAILED_PRECONDITION) if it cannot satisfy it.
-   *
-   * @generated from field: sesame.tls.v1alpha1.FingerprintPreset fingerprint_preset = 5;
-   */
-  fingerprintPreset: FingerprintPreset;
-
-  /**
-   * Explicit cipher suite identifiers (IANA values, e.g. 0x1301). If
-   * non-empty, overrides preset defaults.
-   *
-   * Support is OPTIONAL: a server that cannot apply an explicit suite list
-   * exactly MUST fail closed with FAILED_PRECONDITION rather than silently
-   * negotiating with its own defaults. Values outside the IANA range
-   * [0, 65535] MUST be rejected with INVALID_ARGUMENT.
-   *
-   * @generated from field: repeated int32 cipher_suites = 6;
-   */
-  cipherSuites: number[];
 
   /**
    * Disables remote certificate verification.
@@ -127,6 +105,22 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
    * @generated from field: bytes session_ticket = 11;
    */
   sessionTicket: Uint8Array;
+
+  /**
+   * Decomposed, wire-level ClientHello specification (OPTIONAL).
+   *
+   * If ABSENT, the engine performs its default handshake (the prior
+   * runtime-default behaviour).
+   *
+   * If PRESENT, it is AUTHORITATIVE: the engine MUST honour every requested
+   * dimension exactly, or fail closed with FAILED_PRECONDITION before the
+   * handshake. Clients MUST additionally verify
+   * TLSHandshakeResult.applied_client_hello against this request and abort
+   * on mismatch (fail closed).
+   *
+   * @generated from field: sesame.tls.v1alpha1.ClientHelloSpec client_hello = 12;
+   */
+  clientHello?: ClientHelloSpec | undefined;
 };
 
 /**
@@ -192,14 +186,14 @@ export type TLSHandshakeResult = Message<"sesame.tls.v1alpha1.TLSHandshakeResult
   sessionTicket: Uint8Array;
 
   /**
-   * The actual fingerprint preset enforced by the server.
-   * The Client MUST verify that applied_preset matches the requested
-   * preset, and MUST abort on a mismatch or on a value it does not
-   * recognize.
+   * Best-faith echo of the ClientHelloSpec the engine actually applied.
+   * Present when the client requested a client_hello spec. The Client MUST
+   * diff this against its request and MUST abort on any mismatch (fail
+   * closed).
    *
-   * @generated from field: sesame.tls.v1alpha1.FingerprintPreset applied_preset = 7;
+   * @generated from field: sesame.tls.v1alpha1.ClientHelloSpec applied_client_hello = 8;
    */
-  appliedPreset: FingerprintPreset;
+  appliedClientHello?: ClientHelloSpec | undefined;
 };
 
 /**
@@ -208,6 +202,248 @@ export type TLSHandshakeResult = Message<"sesame.tls.v1alpha1.TLSHandshakeResult
  */
 export const TLSHandshakeResultSchema: GenMessage<TLSHandshakeResult> = /*@__PURE__*/
   messageDesc(file_sesame_tls_v1alpha1_tls, 1);
+
+/**
+ * ClientHelloSpec decomposes every independently-configurable dimension of a
+ * TLS ClientHello into explicit, ORDER-SENSITIVE, wire-level fields. There
+ * are no presets and no modes: every field maps to a real ClientHello knob,
+ * and arbitrary registry identifiers are permitted in every list, including
+ * the GREASE range (0x?a?a), so GREASE placement is expressed as data, not
+ * policy.
+ *
+ * Field-presence semantics: a ClientHelloSpec is only ever interpreted as a
+ * whole (see TLSOptions.client_hello). Within it, empty repeated fields and
+ * absent optional scalars select the ENGINE DEFAULT for that dimension;
+ * non-empty repeated fields and present scalars are AUTHORITATIVE and MUST
+ * be applied exactly or rejected with FAILED_PRECONDITION. Engines MUST echo
+ * the applied spec verbatim in TLSHandshakeResult.applied_client_hello.
+ *
+ * @generated from message sesame.tls.v1alpha1.ClientHelloSpec
+ */
+export type ClientHelloSpec = Message<"sesame.tls.v1alpha1.ClientHelloSpec"> & {
+  /**
+   * Ordered cipher suite identifiers (IANA TLS Cipher Suite registry values,
+   * e.g. 0x1301). GREASE values may be interleaved. Determines the wire
+   * order of the cipher_suites field for all protocol versions. Empty means
+   * the engine's default list and order. Values outside [0, 65535] MUST be
+   * rejected with INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated int32 cipher_suites = 1;
+   */
+  cipherSuites: number[];
+
+  /**
+   * Ordered supported groups (IANA NamedGroup registry values, e.g. 29 for
+   * X25519), emitted as the supported_groups(10) extension and driving
+   * TLS 1.3 key_share selection. Empty means the engine's default list and
+   * order. Values outside [0, 65535] MUST be rejected with INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated int32 supported_groups = 2;
+   */
+  supportedGroups: number[];
+
+  /**
+   * Ordered signature algorithms (IANA SignatureScheme registry values,
+   * e.g. 0x0403 for ecdsa_secp256r1_sha256), emitted as the
+   * signature_algorithms(13) extension. Empty means the engine's default
+   * list and order. Values outside [0, 65535] MUST be rejected with
+   * INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated int32 signature_algorithms = 3;
+   */
+  signatureAlgorithms: number[];
+
+  /**
+   * Ordered extension list: defines BOTH membership and wire order of
+   * ClientHello extensions. Each entry is engine-derived (auto) or raw
+   * bytes sent verbatim. Empty means the engine's default extension set
+   * and order (a BoringSSL-based engine's default matches the ClientHello
+   * layout of Bun and opencode).
+   *
+   * @generated from field: repeated sesame.tls.v1alpha1.ClientHelloExtension extensions = 4;
+   */
+  extensions: ClientHelloExtension[];
+
+  /**
+   * Legacy compression methods (TLS<=1.2). Empty means [0] (null
+   * compression). Values outside [0, 255] MUST be rejected with
+   * INVALID_ARGUMENT.
+   *
+   * @generated from field: repeated int32 compression_methods = 5;
+   */
+  compressionMethods: number[];
+
+  /**
+   * Length of the session_id field in bytes.
+   *   -1 = omit the session_id field entirely (some legacy clients)
+   *    0 = engine default (BoringSSL default = 32 random bytes, matching
+   *        Chrome, Bun, and opencode)
+   *  1..32 = explicit length of random session_id bytes
+   * Values outside [-1, 32] MUST be rejected with INVALID_ARGUMENT.
+   *
+   * @generated from field: int32 session_id_length = 6;
+   */
+  sessionIdLength: number;
+
+  /**
+   * Version carried in the ClientHello record layer and legacy_version
+   * fields. Distinct from min_version/max_version negotiation bounds.
+   * TLS_VERSION_UNSPECIFIED means the engine's default.
+   *
+   * @generated from field: sesame.tls.v1alpha1.TLSVersion legacy_version = 7;
+   */
+  legacyVersion: TLSVersion;
+
+  /**
+   * Target total size of the ClientHello handshake message in bytes; the
+   * engine pads to this size via the padding(21) extension. 0 disables
+   * padding. Negative values MUST be rejected with INVALID_ARGUMENT.
+   *
+   * @generated from field: int32 pad_to_size = 8;
+   */
+  padToSize: number;
+};
+
+/**
+ * Describes the message sesame.tls.v1alpha1.ClientHelloSpec.
+ * Use `create(ClientHelloSpecSchema)` to create a new message.
+ */
+export const ClientHelloSpecSchema: GenMessage<ClientHelloSpec> = /*@__PURE__*/
+  messageDesc(file_sesame_tls_v1alpha1_tls, 2);
+
+/**
+ * ClientHelloExtension is one entry in ClientHelloSpec.extensions.
+ *
+ * @generated from message sesame.tls.v1alpha1.ClientHelloExtension
+ */
+export type ClientHelloExtension = Message<"sesame.tls.v1alpha1.ClientHelloExtension"> & {
+  /**
+   * IANA ExtensionType value. GREASE-range values (0x?a?a) are permitted.
+   * Values outside [0, 65535] MUST be rejected with INVALID_ARGUMENT.
+   *
+   * @generated from field: int32 type = 1;
+   */
+  type: number;
+
+  /**
+   * @generated from oneof sesame.tls.v1alpha1.ClientHelloExtension.body
+   */
+  body: {
+    /**
+     * Engine derives the body from connection parameters and spec fields:
+     * server_name(0) from TLSOptions.server_name, alpn(16) from
+     * TLSOptions.alpn_protocols, supported_groups(10) and
+     * signature_algorithms(13) from the spec lists, supported_versions(43),
+     * key_share(51), and session_ticket(35) from TLSOptions and engine
+     * state. An auto entry for a type the engine cannot derive MUST fail
+     * closed with FAILED_PRECONDITION.
+     *
+     * @generated from field: sesame.tls.v1alpha1.AutoExtensionBody auto = 2;
+     */
+    value: AutoExtensionBody;
+    case: "auto";
+  } | {
+    /**
+     * Raw body bytes, sent verbatim. Engines MUST NOT inspect or alter
+     * them.
+     *
+     * @generated from field: bytes raw = 3;
+     */
+    value: Uint8Array;
+    case: "raw";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message sesame.tls.v1alpha1.ClientHelloExtension.
+ * Use `create(ClientHelloExtensionSchema)` to create a new message.
+ */
+export const ClientHelloExtensionSchema: GenMessage<ClientHelloExtension> = /*@__PURE__*/
+  messageDesc(file_sesame_tls_v1alpha1_tls, 3);
+
+/**
+ * AutoExtensionBody marks an extension body as engine-derived. It is an
+ * (empty) message rather than a bare marker so derivation parameters can be
+ * added later without a schema break.
+ *
+ * @generated from message sesame.tls.v1alpha1.AutoExtensionBody
+ */
+export type AutoExtensionBody = Message<"sesame.tls.v1alpha1.AutoExtensionBody"> & {
+};
+
+/**
+ * Describes the message sesame.tls.v1alpha1.AutoExtensionBody.
+ * Use `create(AutoExtensionBodySchema)` to create a new message.
+ */
+export const AutoExtensionBodySchema: GenMessage<AutoExtensionBody> = /*@__PURE__*/
+  messageDesc(file_sesame_tls_v1alpha1_tls, 4);
+
+/**
+ * ClientHelloCapabilities advertises which ClientHelloSpec dimensions an
+ * engine can honour. Advisory pre-dial hint only: per-request fail-closed
+ * checks and TLSHandshakeResult.applied_client_hello verification remain
+ * authoritative.
+ *
+ * @generated from message sesame.tls.v1alpha1.ClientHelloCapabilities
+ */
+export type ClientHelloCapabilities = Message<"sesame.tls.v1alpha1.ClientHelloCapabilities"> & {
+  /**
+   * @generated from field: bool custom_cipher_suites = 1;
+   */
+  customCipherSuites: boolean;
+
+  /**
+   * @generated from field: bool custom_supported_groups = 2;
+   */
+  customSupportedGroups: boolean;
+
+  /**
+   * @generated from field: bool custom_signature_algorithms = 3;
+   */
+  customSignatureAlgorithms: boolean;
+
+  /**
+   * @generated from field: bool custom_extension_order = 4;
+   */
+  customExtensionOrder: boolean;
+
+  /**
+   * @generated from field: bool raw_extensions = 5;
+   */
+  rawExtensions: boolean;
+
+  /**
+   * @generated from field: bool grease_values = 6;
+   */
+  greaseValues: boolean;
+
+  /**
+   * @generated from field: bool session_id_length = 7;
+   */
+  sessionIdLength: boolean;
+
+  /**
+   * @generated from field: bool padding_control = 8;
+   */
+  paddingControl: boolean;
+
+  /**
+   * @generated from field: bool legacy_version_control = 9;
+   */
+  legacyVersionControl: boolean;
+
+  /**
+   * @generated from field: bool compression_methods = 10;
+   */
+  compressionMethods: boolean;
+};
+
+/**
+ * Describes the message sesame.tls.v1alpha1.ClientHelloCapabilities.
+ * Use `create(ClientHelloCapabilitiesSchema)` to create a new message.
+ */
+export const ClientHelloCapabilitiesSchema: GenMessage<ClientHelloCapabilities> = /*@__PURE__*/
+  messageDesc(file_sesame_tls_v1alpha1_tls, 5);
 
 /**
  * TLSVersion identifies a TLS protocol version.
@@ -253,103 +489,4 @@ export enum TLSVersion {
  */
 export const TLSVersionSchema: GenEnum<TLSVersion> = /*@__PURE__*/
   enumDesc(file_sesame_tls_v1alpha1_tls, 0);
-
-/**
- * FingerprintPreset specifies well-known client cryptographic signatures.
- *
- * Open enum: new values will be added over time; implementations MUST
- * tolerate values they do not recognize (fail closed where a specific
- * preset was requested, per TLSOptions.fingerprint_preset).
- *
- * @generated from enum sesame.tls.v1alpha1.FingerprintPreset
- */
-export enum FingerprintPreset {
-  /**
-   * Default value. Means "no impersonation requested".
-   *
-   * @generated from enum value: FINGERPRINT_PRESET_UNSPECIFIED = 0;
-   */
-  FINGERPRINT_PRESET_UNSPECIFIED = 0,
-
-  /**
-   * Chromium-based presets
-   *
-   * @generated from enum value: CHROME_AUTO = 1;
-   */
-  CHROME_AUTO = 1,
-
-  /**
-   * @generated from enum value: CHROME_120 = 2;
-   */
-  CHROME_120 = 2,
-
-  /**
-   * @generated from enum value: CHROME_124 = 3;
-   */
-  CHROME_124 = 3,
-
-  /**
-   * @generated from enum value: CHROME_131 = 4;
-   */
-  CHROME_131 = 4,
-
-  /**
-   * Firefox-based presets
-   *
-   * @generated from enum value: FIREFOX_AUTO = 10;
-   */
-  FIREFOX_AUTO = 10,
-
-  /**
-   * @generated from enum value: FIREFOX_120 = 11;
-   */
-  FIREFOX_120 = 11,
-
-  /**
-   * Safari / WebKit presets
-   *
-   * @generated from enum value: SAFARI_AUTO = 20;
-   */
-  SAFARI_AUTO = 20,
-
-  /**
-   * @generated from enum value: SAFARI_16 = 21;
-   */
-  SAFARI_16 = 21,
-
-  /**
-   * @generated from enum value: SAFARI_17 = 22;
-   */
-  SAFARI_17 = 22,
-
-  /**
-   * Mobile client presets
-   *
-   * @generated from enum value: IOS_AUTO = 30;
-   */
-  IOS_AUTO = 30,
-
-  /**
-   * @generated from enum value: IOS_16 = 31;
-   */
-  IOS_16 = 31,
-
-  /**
-   * @generated from enum value: ANDROID_OKHTTP = 35;
-   */
-  ANDROID_OKHTTP = 35,
-
-  /**
-   * Standard runtime default (Go crypto/tls or Bun BoringSSL)
-   *
-   * @generated from enum value: RUNTIME_DEFAULT = 40;
-   */
-  RUNTIME_DEFAULT = 40,
-}
-
-/**
- * Describes the enum sesame.tls.v1alpha1.FingerprintPreset.
- */
-export const FingerprintPresetSchema: GenEnum<FingerprintPreset> = /*@__PURE__*/
-  enumDesc(file_sesame_tls_v1alpha1_tls, 1);
 

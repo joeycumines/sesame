@@ -27,19 +27,11 @@ message TLSOptions {
   // means the implementation's default maximum applies.
   TLSVersion max_version = 4;
 
-  // Impersonation profile preset for client cryptographic emulation.
-  // If set to anything other than RUNTIME_DEFAULT, the Server MUST fail
-  // closed (FAILED_PRECONDITION) if it cannot satisfy it.
-  FingerprintPreset fingerprint_preset = 5;
-
-  // Explicit cipher suite identifiers (IANA values, e.g. 0x1301). If
-  // non-empty, overrides preset defaults.
-  //
-  // Support is OPTIONAL: a server that cannot apply an explicit suite list
-  // exactly MUST fail closed with FAILED_PRECONDITION rather than silently
-  // negotiating with its own defaults. Values outside the IANA range
-  // [0, 65535] MUST be rejected with INVALID_ARGUMENT.
-  repeated int32 cipher_suites = 6;
+  // Fields 5 (fingerprint_preset) and 6 (cipher_suites) were removed when
+  // impersonation moved to the decomposed, wire-level client_hello spec.
+  // Cipher suites now live in ClientHelloSpec.cipher_suites.
+  reserved 5, 6;
+  reserved "fingerprint_preset", "cipher_suites";
 
   // Disables remote certificate verification.
   //
@@ -71,6 +63,18 @@ message TLSOptions {
   // Sensitive: implementations MUST NOT include this material in logs,
   // errors, or diagnostics.
   bytes session_ticket = 11;
+
+  // Decomposed, wire-level ClientHello specification (OPTIONAL).
+  //
+  // If ABSENT, the engine performs its default handshake (the prior
+  // runtime-default behaviour).
+  //
+  // If PRESENT, it is AUTHORITATIVE: the engine MUST honour every requested
+  // dimension exactly, or fail closed with FAILED_PRECONDITION before the
+  // handshake. Clients MUST additionally verify
+  // TLSHandshakeResult.applied_client_hello against this request and abort
+  // on mismatch (fail closed).
+  ClientHelloSpec client_hello = 12;
 }
 
 // TLSHandshakeResult communicates negotiated TLS session state back to the
@@ -100,11 +104,14 @@ message TLSHandshakeResult {
   // errors, or diagnostics.
   bytes session_ticket = 6;
 
-  // The actual fingerprint preset enforced by the server.
-  // The Client MUST verify that applied_preset matches the requested
-  // preset, and MUST abort on a mismatch or on a value it does not
-  // recognize.
-  FingerprintPreset applied_preset = 7;
+  reserved 7;
+  reserved "applied_preset";
+
+  // Best-faith echo of the ClientHelloSpec the engine actually applied.
+  // Present when the client requested a client_hello spec. The Client MUST
+  // diff this against its request and MUST abort on any mismatch (fail
+  // closed).
+  ClientHelloSpec applied_client_hello = 8;
 }
 
 // TLSVersion identifies a TLS protocol version.
@@ -122,35 +129,111 @@ enum TLSVersion {
   TLS_1_3 = 4;
 }
 
-// FingerprintPreset specifies well-known client cryptographic signatures.
+// ClientHelloSpec decomposes every independently-configurable dimension of a
+// TLS ClientHello into explicit, ORDER-SENSITIVE, wire-level fields. There
+// are no presets and no modes: every field maps to a real ClientHello knob,
+// and arbitrary registry identifiers are permitted in every list, including
+// the GREASE range (0x?a?a), so GREASE placement is expressed as data, not
+// policy.
 //
-// Open enum: new values will be added over time; implementations MUST
-// tolerate values they do not recognize (fail closed where a specific
-// preset was requested, per TLSOptions.fingerprint_preset).
-enum FingerprintPreset {
-  // Default value. Means "no impersonation requested".
-  FINGERPRINT_PRESET_UNSPECIFIED = 0;
+// Field-presence semantics: a ClientHelloSpec is only ever interpreted as a
+// whole (see TLSOptions.client_hello). Within it, empty repeated fields and
+// absent optional scalars select the ENGINE DEFAULT for that dimension;
+// non-empty repeated fields and present scalars are AUTHORITATIVE and MUST
+// be applied exactly or rejected with FAILED_PRECONDITION. Engines MUST echo
+// the applied spec verbatim in TLSHandshakeResult.applied_client_hello.
+message ClientHelloSpec {
+  // Ordered cipher suite identifiers (IANA TLS Cipher Suite registry values,
+  // e.g. 0x1301). GREASE values may be interleaved. Determines the wire
+  // order of the cipher_suites field for all protocol versions. Empty means
+  // the engine's default list and order. Values outside [0, 65535] MUST be
+  // rejected with INVALID_ARGUMENT.
+  repeated int32 cipher_suites = 1;
 
-  // Chromium-based presets
-  CHROME_AUTO = 1;
-  CHROME_120 = 2;
-  CHROME_124 = 3;
-  CHROME_131 = 4;
+  // Ordered supported groups (IANA NamedGroup registry values, e.g. 29 for
+  // X25519), emitted as the supported_groups(10) extension and driving
+  // TLS 1.3 key_share selection. Empty means the engine's default list and
+  // order. Values outside [0, 65535] MUST be rejected with INVALID_ARGUMENT.
+  repeated int32 supported_groups = 2;
 
-  // Firefox-based presets
-  FIREFOX_AUTO = 10;
-  FIREFOX_120 = 11;
+  // Ordered signature algorithms (IANA SignatureScheme registry values,
+  // e.g. 0x0403 for ecdsa_secp256r1_sha256), emitted as the
+  // signature_algorithms(13) extension. Empty means the engine's default
+  // list and order. Values outside [0, 65535] MUST be rejected with
+  // INVALID_ARGUMENT.
+  repeated int32 signature_algorithms = 3;
 
-  // Safari / WebKit presets
-  SAFARI_AUTO = 20;
-  SAFARI_16 = 21;
-  SAFARI_17 = 22;
+  // Ordered extension list: defines BOTH membership and wire order of
+  // ClientHello extensions. Each entry is engine-derived (auto) or raw
+  // bytes sent verbatim. Empty means the engine's default extension set
+  // and order (a BoringSSL-based engine's default matches the ClientHello
+  // layout of Bun and opencode).
+  repeated ClientHelloExtension extensions = 4;
 
-  // Mobile client presets
-  IOS_AUTO = 30;
-  IOS_16 = 31;
-  ANDROID_OKHTTP = 35;
+  // Legacy compression methods (TLS<=1.2). Empty means [0] (null
+  // compression). Values outside [0, 255] MUST be rejected with
+  // INVALID_ARGUMENT.
+  repeated int32 compression_methods = 5;
 
-  // Standard runtime default (Go crypto/tls or Bun BoringSSL)
-  RUNTIME_DEFAULT = 40;
+  // Length of the session_id field in bytes.
+  //   -1 = omit the session_id field entirely (some legacy clients)
+  //    0 = engine default (BoringSSL default = 32 random bytes, matching
+  //        Chrome, Bun, and opencode)
+  //  1..32 = explicit length of random session_id bytes
+  // Values outside [-1, 32] MUST be rejected with INVALID_ARGUMENT.
+  int32 session_id_length = 6;
+
+  // Version carried in the ClientHello record layer and legacy_version
+  // fields. Distinct from min_version/max_version negotiation bounds.
+  // TLS_VERSION_UNSPECIFIED means the engine's default.
+  TLSVersion legacy_version = 7;
+
+  // Target total size of the ClientHello handshake message in bytes; the
+  // engine pads to this size via the padding(21) extension. 0 disables
+  // padding. Negative values MUST be rejected with INVALID_ARGUMENT.
+  int32 pad_to_size = 8;
+}
+
+// ClientHelloExtension is one entry in ClientHelloSpec.extensions.
+message ClientHelloExtension {
+  // IANA ExtensionType value. GREASE-range values (0x?a?a) are permitted.
+  // Values outside [0, 65535] MUST be rejected with INVALID_ARGUMENT.
+  int32 type = 1;
+
+  oneof body {
+    // Engine derives the body from connection parameters and spec fields:
+    // server_name(0) from TLSOptions.server_name, alpn(16) from
+    // TLSOptions.alpn_protocols, supported_groups(10) and
+    // signature_algorithms(13) from the spec lists, supported_versions(43),
+    // key_share(51), and session_ticket(35) from TLSOptions and engine
+    // state. An auto entry for a type the engine cannot derive MUST fail
+    // closed with FAILED_PRECONDITION.
+    AutoExtensionBody auto = 2;
+
+    // Raw body bytes, sent verbatim. Engines MUST NOT inspect or alter
+    // them.
+    bytes raw = 3;
+  }
+}
+
+// AutoExtensionBody marks an extension body as engine-derived. It is an
+// (empty) message rather than a bare marker so derivation parameters can be
+// added later without a schema break.
+message AutoExtensionBody {}
+
+// ClientHelloCapabilities advertises which ClientHelloSpec dimensions an
+// engine can honour. Advisory pre-dial hint only: per-request fail-closed
+// checks and TLSHandshakeResult.applied_client_hello verification remain
+// authoritative.
+message ClientHelloCapabilities {
+  bool custom_cipher_suites = 1;
+  bool custom_supported_groups = 2;
+  bool custom_signature_algorithms = 3;
+  bool custom_extension_order = 4;
+  bool raw_extensions = 5;
+  bool grease_values = 6;
+  bool session_id_length = 7;
+  bool padding_control = 8;
+  bool legacy_version_control = 9;
+  bool compression_methods = 10;
 }

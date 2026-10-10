@@ -720,7 +720,7 @@ func (x *NetConnResponse_Capabilities) Proto_ShallowCopy(v interface{}) {
 		x.SupportsOpportunisticTls = v.GetSupportsOpportunisticTls()
 		x.MaxChunkSize = v.GetMaxChunkSize()
 		x.InitialWindowSize = v.GetInitialWindowSize()
-		x.SupportedPresets = v.GetSupportedPresets()
+		x.ClientHelloCapabilities = v.GetClientHelloCapabilities()
 	default:
 		if v, ok := v.(interface{ GetSupportsFlowControl() bool }); ok {
 			x.SupportsFlowControl = v.GetSupportsFlowControl()
@@ -735,9 +735,9 @@ func (x *NetConnResponse_Capabilities) Proto_ShallowCopy(v interface{}) {
 			x.InitialWindowSize = v.GetInitialWindowSize()
 		}
 		if v, ok := v.(interface {
-			GetSupportedPresets() []tls.FingerprintPreset
+			GetClientHelloCapabilities() *tls.ClientHelloCapabilities
 		}); ok {
-			x.SupportedPresets = v.GetSupportedPresets()
+			x.ClientHelloCapabilities = v.GetClientHelloCapabilities()
 		}
 	}
 }
@@ -750,7 +750,7 @@ func (x *NetConnResponse_Capabilities) Proto_ShallowClone() (c *NetConnResponse_
 		c.SupportsOpportunisticTls = x.SupportsOpportunisticTls
 		c.MaxChunkSize = x.MaxChunkSize
 		c.InitialWindowSize = x.InitialWindowSize
-		c.SupportedPresets = x.SupportedPresets
+		c.ClientHelloCapabilities = x.ClientHelloCapabilities
 	}
 	return
 }

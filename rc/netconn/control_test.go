@@ -187,7 +187,7 @@ func TestClientServer_FailClosed_CleartextViolation(t *testing.T) {
 	}
 }
 
-func TestClientServer_FailClosed_PresetUnsupported(t *testing.T) {
+func TestClientServer_FailClosed_ClientHelloUnsupported(t *testing.T) {
 	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
 	if ccFactory == nil {
 		t.Skip("inprocgrpc factory unavailable")
@@ -208,12 +208,15 @@ func TestClientServer_FailClosed_PresetUnsupported(t *testing.T) {
 	})
 	defer gc.Close()
 
-	// Request an unsupported preset without configuring custom TLSProvider
+	// Request a ClientHello dimension the builtin engine cannot honor,
+	// without configuring a custom TLSProvider.
 	client := netconn.Client{
 		API: rc.NewRemoteControlClient(gc),
 		TLS: &sesametls.TLSOptions{
-			ServerName:        "secure.internal",
-			FingerprintPreset: sesametls.FingerprintPreset_CHROME_131,
+			ServerName: "secure.internal",
+			ClientHello: &sesametls.ClientHelloSpec{
+				SignatureAlgorithms: []int32{0x0403},
+			},
 		},
 	}
 
@@ -222,7 +225,7 @@ func TestClientServer_FailClosed_PresetUnsupported(t *testing.T) {
 
 	_, err := client.DialContext(ctx, "tcp", "secure.internal:443")
 	if err == nil {
-		t.Fatal("expected FAILED_PRECONDITION error for unsupported preset")
+		t.Fatal("expected FAILED_PRECONDITION error for un-honorable client_hello dimension")
 	}
 	st, ok := status.FromError(err)
 	if !ok || st.Code() != codes.FailedPrecondition {

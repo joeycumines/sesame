@@ -23,7 +23,7 @@ const {
   NetConnRequest_CapabilitiesSchema,
   TLSOptionsSchema,
   NetAddrSchema,
-  FingerprintPreset,
+  ClientHelloSpecSchema,
 } = require('../build/src/index.js');
 const { StatusSchema } = require('../build/src/gen/google/rpc/status_pb.js');
 
@@ -218,8 +218,8 @@ async function run() {
   assert.strictEqual(pong3.value.data.value.event.value.id, 777n);
   reqStream3.close();
 
-  // Test 6: Fail-Closed Unsupported Preset under Node.js
-  console.log('6. Testing Fail-Closed Preset rejection under Node.js...');
+  // Test 6: Fail-Closed non-default ClientHello dimension under Node.js
+  console.log('6. Testing Fail-Closed ClientHello rejection under Node.js...');
   const reqStream4 = new RequestStream();
   reqStream4.push(create(NetConnRequestSchema, {
     data: {
@@ -228,8 +228,10 @@ async function run() {
         address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tlsPort}` }),
         tls: create(TLSOptionsSchema, {
           serverName: 'localhost',
-          fingerprintPreset: FingerprintPreset.CHROME_120,
           insecureSkipVerify: true,
+          clientHello: create(ClientHelloSpecSchema, {
+            signatureAlgorithms: [0x0403],
+          }),
         }),
       }),
     },
@@ -242,6 +244,7 @@ async function run() {
   } catch (err) {
     assert.ok(err instanceof ConnectError);
     assert.strictEqual(err.code, Code.FailedPrecondition);
+    assert.ok(err.message.includes('signature_algorithms'));
   }
   reqStream4.close();
 

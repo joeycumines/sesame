@@ -83,99 +83,6 @@ func (TLSVersion) EnumDescriptor() ([]byte, []int) {
 	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{0}
 }
 
-// FingerprintPreset specifies well-known client cryptographic signatures.
-//
-// Open enum: new values will be added over time; implementations MUST
-// tolerate values they do not recognize (fail closed where a specific
-// preset was requested, per TLSOptions.fingerprint_preset).
-type FingerprintPreset int32
-
-const (
-	// Default value. Means "no impersonation requested".
-	FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED FingerprintPreset = 0
-	// Chromium-based presets
-	FingerprintPreset_CHROME_AUTO FingerprintPreset = 1
-	FingerprintPreset_CHROME_120  FingerprintPreset = 2
-	FingerprintPreset_CHROME_124  FingerprintPreset = 3
-	FingerprintPreset_CHROME_131  FingerprintPreset = 4
-	// Firefox-based presets
-	FingerprintPreset_FIREFOX_AUTO FingerprintPreset = 10
-	FingerprintPreset_FIREFOX_120  FingerprintPreset = 11
-	// Safari / WebKit presets
-	FingerprintPreset_SAFARI_AUTO FingerprintPreset = 20
-	FingerprintPreset_SAFARI_16   FingerprintPreset = 21
-	FingerprintPreset_SAFARI_17   FingerprintPreset = 22
-	// Mobile client presets
-	FingerprintPreset_IOS_AUTO       FingerprintPreset = 30
-	FingerprintPreset_IOS_16         FingerprintPreset = 31
-	FingerprintPreset_ANDROID_OKHTTP FingerprintPreset = 35
-	// Standard runtime default (Go crypto/tls or Bun BoringSSL)
-	FingerprintPreset_RUNTIME_DEFAULT FingerprintPreset = 40
-)
-
-// Enum value maps for FingerprintPreset.
-var (
-	FingerprintPreset_name = map[int32]string{
-		0:  "FINGERPRINT_PRESET_UNSPECIFIED",
-		1:  "CHROME_AUTO",
-		2:  "CHROME_120",
-		3:  "CHROME_124",
-		4:  "CHROME_131",
-		10: "FIREFOX_AUTO",
-		11: "FIREFOX_120",
-		20: "SAFARI_AUTO",
-		21: "SAFARI_16",
-		22: "SAFARI_17",
-		30: "IOS_AUTO",
-		31: "IOS_16",
-		35: "ANDROID_OKHTTP",
-		40: "RUNTIME_DEFAULT",
-	}
-	FingerprintPreset_value = map[string]int32{
-		"FINGERPRINT_PRESET_UNSPECIFIED": 0,
-		"CHROME_AUTO":                    1,
-		"CHROME_120":                     2,
-		"CHROME_124":                     3,
-		"CHROME_131":                     4,
-		"FIREFOX_AUTO":                   10,
-		"FIREFOX_120":                    11,
-		"SAFARI_AUTO":                    20,
-		"SAFARI_16":                      21,
-		"SAFARI_17":                      22,
-		"IOS_AUTO":                       30,
-		"IOS_16":                         31,
-		"ANDROID_OKHTTP":                 35,
-		"RUNTIME_DEFAULT":                40,
-	}
-)
-
-func (x FingerprintPreset) Enum() *FingerprintPreset {
-	p := new(FingerprintPreset)
-	*p = x
-	return p
-}
-
-func (x FingerprintPreset) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (FingerprintPreset) Descriptor() protoreflect.EnumDescriptor {
-	return file_sesame_tls_v1alpha1_tls_proto_enumTypes[1].Descriptor()
-}
-
-func (FingerprintPreset) Type() protoreflect.EnumType {
-	return &file_sesame_tls_v1alpha1_tls_proto_enumTypes[1]
-}
-
-func (x FingerprintPreset) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use FingerprintPreset.Descriptor instead.
-func (FingerprintPreset) EnumDescriptor() ([]byte, []int) {
-	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{1}
-}
-
 // TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint
 // emulation. It is used both at Dial time (Dial.tls) and for in-stream
 // opportunistic upgrades (Control.upgrade_tls).
@@ -196,18 +103,6 @@ type TLSOptions struct {
 	// Maximum TLS protocol version acceptable. TLS_VERSION_UNSPECIFIED (0)
 	// means the implementation's default maximum applies.
 	MaxVersion TLSVersion `protobuf:"varint,4,opt,name=max_version,json=maxVersion,proto3,enum=sesame.tls.v1alpha1.TLSVersion" json:"max_version,omitempty"`
-	// Impersonation profile preset for client cryptographic emulation.
-	// If set to anything other than RUNTIME_DEFAULT, the Server MUST fail
-	// closed (FAILED_PRECONDITION) if it cannot satisfy it.
-	FingerprintPreset FingerprintPreset `protobuf:"varint,5,opt,name=fingerprint_preset,json=fingerprintPreset,proto3,enum=sesame.tls.v1alpha1.FingerprintPreset" json:"fingerprint_preset,omitempty"`
-	// Explicit cipher suite identifiers (IANA values, e.g. 0x1301). If
-	// non-empty, overrides preset defaults.
-	//
-	// Support is OPTIONAL: a server that cannot apply an explicit suite list
-	// exactly MUST fail closed with FAILED_PRECONDITION rather than silently
-	// negotiating with its own defaults. Values outside the IANA range
-	// [0, 65535] MUST be rejected with INVALID_ARGUMENT.
-	CipherSuites []int32 `protobuf:"varint,6,rep,packed,name=cipher_suites,json=cipherSuites,proto3" json:"cipher_suites,omitempty"`
 	// Disables remote certificate verification.
 	//
 	// Sensitive security control: clients SHOULD require explicit user
@@ -234,6 +129,17 @@ type TLSOptions struct {
 	// Sensitive: implementations MUST NOT include this material in logs,
 	// errors, or diagnostics.
 	SessionTicket []byte `protobuf:"bytes,11,opt,name=session_ticket,json=sessionTicket,proto3" json:"session_ticket,omitempty"`
+	// Decomposed, wire-level ClientHello specification (OPTIONAL).
+	//
+	// If ABSENT, the engine performs its default handshake (the prior
+	// runtime-default behaviour).
+	//
+	// If PRESENT, it is AUTHORITATIVE: the engine MUST honour every requested
+	// dimension exactly, or fail closed with FAILED_PRECONDITION before the
+	// handshake. Clients MUST additionally verify
+	// TLSHandshakeResult.applied_client_hello against this request and abort
+	// on mismatch (fail closed).
+	ClientHello   *ClientHelloSpec `protobuf:"bytes,12,opt,name=client_hello,json=clientHello,proto3" json:"client_hello,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -296,20 +202,6 @@ func (x *TLSOptions) GetMaxVersion() TLSVersion {
 	return TLSVersion_TLS_VERSION_UNSPECIFIED
 }
 
-func (x *TLSOptions) GetFingerprintPreset() FingerprintPreset {
-	if x != nil {
-		return x.FingerprintPreset
-	}
-	return FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED
-}
-
-func (x *TLSOptions) GetCipherSuites() []int32 {
-	if x != nil {
-		return x.CipherSuites
-	}
-	return nil
-}
-
 func (x *TLSOptions) GetInsecureSkipVerify() bool {
 	if x != nil {
 		return x.InsecureSkipVerify
@@ -345,6 +237,13 @@ func (x *TLSOptions) GetSessionTicket() []byte {
 	return nil
 }
 
+func (x *TLSOptions) GetClientHello() *ClientHelloSpec {
+	if x != nil {
+		return x.ClientHello
+	}
+	return nil
+}
+
 // TLSHandshakeResult communicates negotiated TLS session state back to the
 // Client. The Client MUST inspect it before generating Layer 7 payloads.
 type TLSHandshakeResult struct {
@@ -367,13 +266,13 @@ type TLSHandshakeResult struct {
 	// Sensitive: implementations MUST NOT include this material in logs,
 	// errors, or diagnostics.
 	SessionTicket []byte `protobuf:"bytes,6,opt,name=session_ticket,json=sessionTicket,proto3" json:"session_ticket,omitempty"`
-	// The actual fingerprint preset enforced by the server.
-	// The Client MUST verify that applied_preset matches the requested
-	// preset, and MUST abort on a mismatch or on a value it does not
-	// recognize.
-	AppliedPreset FingerprintPreset `protobuf:"varint,7,opt,name=applied_preset,json=appliedPreset,proto3,enum=sesame.tls.v1alpha1.FingerprintPreset" json:"applied_preset,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Best-faith echo of the ClientHelloSpec the engine actually applied.
+	// Present when the client requested a client_hello spec. The Client MUST
+	// diff this against its request and MUST abort on any mismatch (fail
+	// closed).
+	AppliedClientHello *ClientHelloSpec `protobuf:"bytes,8,opt,name=applied_client_hello,json=appliedClientHello,proto3" json:"applied_client_hello,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *TLSHandshakeResult) Reset() {
@@ -448,18 +347,426 @@ func (x *TLSHandshakeResult) GetSessionTicket() []byte {
 	return nil
 }
 
-func (x *TLSHandshakeResult) GetAppliedPreset() FingerprintPreset {
+func (x *TLSHandshakeResult) GetAppliedClientHello() *ClientHelloSpec {
 	if x != nil {
-		return x.AppliedPreset
+		return x.AppliedClientHello
 	}
-	return FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED
+	return nil
+}
+
+// ClientHelloSpec decomposes every independently-configurable dimension of a
+// TLS ClientHello into explicit, ORDER-SENSITIVE, wire-level fields. There
+// are no presets and no modes: every field maps to a real ClientHello knob,
+// and arbitrary registry identifiers are permitted in every list, including
+// the GREASE range (0x?a?a), so GREASE placement is expressed as data, not
+// policy.
+//
+// Field-presence semantics: a ClientHelloSpec is only ever interpreted as a
+// whole (see TLSOptions.client_hello). Within it, empty repeated fields and
+// absent optional scalars select the ENGINE DEFAULT for that dimension;
+// non-empty repeated fields and present scalars are AUTHORITATIVE and MUST
+// be applied exactly or rejected with FAILED_PRECONDITION. Engines MUST echo
+// the applied spec verbatim in TLSHandshakeResult.applied_client_hello.
+type ClientHelloSpec struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Ordered cipher suite identifiers (IANA TLS Cipher Suite registry values,
+	// e.g. 0x1301). GREASE values may be interleaved. Determines the wire
+	// order of the cipher_suites field for all protocol versions. Empty means
+	// the engine's default list and order. Values outside [0, 65535] MUST be
+	// rejected with INVALID_ARGUMENT.
+	CipherSuites []int32 `protobuf:"varint,1,rep,packed,name=cipher_suites,json=cipherSuites,proto3" json:"cipher_suites,omitempty"`
+	// Ordered supported groups (IANA NamedGroup registry values, e.g. 29 for
+	// X25519), emitted as the supported_groups(10) extension and driving
+	// TLS 1.3 key_share selection. Empty means the engine's default list and
+	// order. Values outside [0, 65535] MUST be rejected with INVALID_ARGUMENT.
+	SupportedGroups []int32 `protobuf:"varint,2,rep,packed,name=supported_groups,json=supportedGroups,proto3" json:"supported_groups,omitempty"`
+	// Ordered signature algorithms (IANA SignatureScheme registry values,
+	// e.g. 0x0403 for ecdsa_secp256r1_sha256), emitted as the
+	// signature_algorithms(13) extension. Empty means the engine's default
+	// list and order. Values outside [0, 65535] MUST be rejected with
+	// INVALID_ARGUMENT.
+	SignatureAlgorithms []int32 `protobuf:"varint,3,rep,packed,name=signature_algorithms,json=signatureAlgorithms,proto3" json:"signature_algorithms,omitempty"`
+	// Ordered extension list: defines BOTH membership and wire order of
+	// ClientHello extensions. Each entry is engine-derived (auto) or raw
+	// bytes sent verbatim. Empty means the engine's default extension set
+	// and order (a BoringSSL-based engine's default matches the ClientHello
+	// layout of Bun and opencode).
+	Extensions []*ClientHelloExtension `protobuf:"bytes,4,rep,name=extensions,proto3" json:"extensions,omitempty"`
+	// Legacy compression methods (TLS<=1.2). Empty means [0] (null
+	// compression). Values outside [0, 255] MUST be rejected with
+	// INVALID_ARGUMENT.
+	CompressionMethods []int32 `protobuf:"varint,5,rep,packed,name=compression_methods,json=compressionMethods,proto3" json:"compression_methods,omitempty"`
+	// Length of the session_id field in bytes.
+	//   -1 = omit the session_id field entirely (some legacy clients)
+	//    0 = engine default (BoringSSL default = 32 random bytes, matching
+	//        Chrome, Bun, and opencode)
+	//  1..32 = explicit length of random session_id bytes
+	// Values outside [-1, 32] MUST be rejected with INVALID_ARGUMENT.
+	SessionIdLength int32 `protobuf:"varint,6,opt,name=session_id_length,json=sessionIdLength,proto3" json:"session_id_length,omitempty"`
+	// Version carried in the ClientHello record layer and legacy_version
+	// fields. Distinct from min_version/max_version negotiation bounds.
+	// TLS_VERSION_UNSPECIFIED means the engine's default.
+	LegacyVersion TLSVersion `protobuf:"varint,7,opt,name=legacy_version,json=legacyVersion,proto3,enum=sesame.tls.v1alpha1.TLSVersion" json:"legacy_version,omitempty"`
+	// Target total size of the ClientHello handshake message in bytes; the
+	// engine pads to this size via the padding(21) extension. 0 disables
+	// padding. Negative values MUST be rejected with INVALID_ARGUMENT.
+	PadToSize     int32 `protobuf:"varint,8,opt,name=pad_to_size,json=padToSize,proto3" json:"pad_to_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientHelloSpec) Reset() {
+	*x = ClientHelloSpec{}
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientHelloSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientHelloSpec) ProtoMessage() {}
+
+func (x *ClientHelloSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientHelloSpec.ProtoReflect.Descriptor instead.
+func (*ClientHelloSpec) Descriptor() ([]byte, []int) {
+	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ClientHelloSpec) GetCipherSuites() []int32 {
+	if x != nil {
+		return x.CipherSuites
+	}
+	return nil
+}
+
+func (x *ClientHelloSpec) GetSupportedGroups() []int32 {
+	if x != nil {
+		return x.SupportedGroups
+	}
+	return nil
+}
+
+func (x *ClientHelloSpec) GetSignatureAlgorithms() []int32 {
+	if x != nil {
+		return x.SignatureAlgorithms
+	}
+	return nil
+}
+
+func (x *ClientHelloSpec) GetExtensions() []*ClientHelloExtension {
+	if x != nil {
+		return x.Extensions
+	}
+	return nil
+}
+
+func (x *ClientHelloSpec) GetCompressionMethods() []int32 {
+	if x != nil {
+		return x.CompressionMethods
+	}
+	return nil
+}
+
+func (x *ClientHelloSpec) GetSessionIdLength() int32 {
+	if x != nil {
+		return x.SessionIdLength
+	}
+	return 0
+}
+
+func (x *ClientHelloSpec) GetLegacyVersion() TLSVersion {
+	if x != nil {
+		return x.LegacyVersion
+	}
+	return TLSVersion_TLS_VERSION_UNSPECIFIED
+}
+
+func (x *ClientHelloSpec) GetPadToSize() int32 {
+	if x != nil {
+		return x.PadToSize
+	}
+	return 0
+}
+
+// ClientHelloExtension is one entry in ClientHelloSpec.extensions.
+type ClientHelloExtension struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// IANA ExtensionType value. GREASE-range values (0x?a?a) are permitted.
+	// Values outside [0, 65535] MUST be rejected with INVALID_ARGUMENT.
+	Type int32 `protobuf:"varint,1,opt,name=type,proto3" json:"type,omitempty"`
+	// Types that are valid to be assigned to Body:
+	//
+	//	*ClientHelloExtension_Auto
+	//	*ClientHelloExtension_Raw
+	Body          isClientHelloExtension_Body `protobuf_oneof:"body"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientHelloExtension) Reset() {
+	*x = ClientHelloExtension{}
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientHelloExtension) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientHelloExtension) ProtoMessage() {}
+
+func (x *ClientHelloExtension) ProtoReflect() protoreflect.Message {
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientHelloExtension.ProtoReflect.Descriptor instead.
+func (*ClientHelloExtension) Descriptor() ([]byte, []int) {
+	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ClientHelloExtension) GetType() int32 {
+	if x != nil {
+		return x.Type
+	}
+	return 0
+}
+
+func (x *ClientHelloExtension) GetBody() isClientHelloExtension_Body {
+	if x != nil {
+		return x.Body
+	}
+	return nil
+}
+
+func (x *ClientHelloExtension) GetAuto() *AutoExtensionBody {
+	if x != nil {
+		if x, ok := x.Body.(*ClientHelloExtension_Auto); ok {
+			return x.Auto
+		}
+	}
+	return nil
+}
+
+func (x *ClientHelloExtension) GetRaw() []byte {
+	if x != nil {
+		if x, ok := x.Body.(*ClientHelloExtension_Raw); ok {
+			return x.Raw
+		}
+	}
+	return nil
+}
+
+type isClientHelloExtension_Body interface {
+	isClientHelloExtension_Body()
+}
+
+type ClientHelloExtension_Auto struct {
+	// Engine derives the body from connection parameters and spec fields:
+	// server_name(0) from TLSOptions.server_name, alpn(16) from
+	// TLSOptions.alpn_protocols, supported_groups(10) and
+	// signature_algorithms(13) from the spec lists, supported_versions(43),
+	// key_share(51), and session_ticket(35) from TLSOptions and engine
+	// state. An auto entry for a type the engine cannot derive MUST fail
+	// closed with FAILED_PRECONDITION.
+	Auto *AutoExtensionBody `protobuf:"bytes,2,opt,name=auto,proto3,oneof"`
+}
+
+type ClientHelloExtension_Raw struct {
+	// Raw body bytes, sent verbatim. Engines MUST NOT inspect or alter
+	// them.
+	Raw []byte `protobuf:"bytes,3,opt,name=raw,proto3,oneof"`
+}
+
+func (*ClientHelloExtension_Auto) isClientHelloExtension_Body() {}
+
+func (*ClientHelloExtension_Raw) isClientHelloExtension_Body() {}
+
+// AutoExtensionBody marks an extension body as engine-derived. It is an
+// (empty) message rather than a bare marker so derivation parameters can be
+// added later without a schema break.
+type AutoExtensionBody struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AutoExtensionBody) Reset() {
+	*x = AutoExtensionBody{}
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AutoExtensionBody) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AutoExtensionBody) ProtoMessage() {}
+
+func (x *AutoExtensionBody) ProtoReflect() protoreflect.Message {
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AutoExtensionBody.ProtoReflect.Descriptor instead.
+func (*AutoExtensionBody) Descriptor() ([]byte, []int) {
+	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{4}
+}
+
+// ClientHelloCapabilities advertises which ClientHelloSpec dimensions an
+// engine can honour. Advisory pre-dial hint only: per-request fail-closed
+// checks and TLSHandshakeResult.applied_client_hello verification remain
+// authoritative.
+type ClientHelloCapabilities struct {
+	state                     protoimpl.MessageState `protogen:"open.v1"`
+	CustomCipherSuites        bool                   `protobuf:"varint,1,opt,name=custom_cipher_suites,json=customCipherSuites,proto3" json:"custom_cipher_suites,omitempty"`
+	CustomSupportedGroups     bool                   `protobuf:"varint,2,opt,name=custom_supported_groups,json=customSupportedGroups,proto3" json:"custom_supported_groups,omitempty"`
+	CustomSignatureAlgorithms bool                   `protobuf:"varint,3,opt,name=custom_signature_algorithms,json=customSignatureAlgorithms,proto3" json:"custom_signature_algorithms,omitempty"`
+	CustomExtensionOrder      bool                   `protobuf:"varint,4,opt,name=custom_extension_order,json=customExtensionOrder,proto3" json:"custom_extension_order,omitempty"`
+	RawExtensions             bool                   `protobuf:"varint,5,opt,name=raw_extensions,json=rawExtensions,proto3" json:"raw_extensions,omitempty"`
+	GreaseValues              bool                   `protobuf:"varint,6,opt,name=grease_values,json=greaseValues,proto3" json:"grease_values,omitempty"`
+	SessionIdLength           bool                   `protobuf:"varint,7,opt,name=session_id_length,json=sessionIdLength,proto3" json:"session_id_length,omitempty"`
+	PaddingControl            bool                   `protobuf:"varint,8,opt,name=padding_control,json=paddingControl,proto3" json:"padding_control,omitempty"`
+	LegacyVersionControl      bool                   `protobuf:"varint,9,opt,name=legacy_version_control,json=legacyVersionControl,proto3" json:"legacy_version_control,omitempty"`
+	CompressionMethods        bool                   `protobuf:"varint,10,opt,name=compression_methods,json=compressionMethods,proto3" json:"compression_methods,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *ClientHelloCapabilities) Reset() {
+	*x = ClientHelloCapabilities{}
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientHelloCapabilities) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientHelloCapabilities) ProtoMessage() {}
+
+func (x *ClientHelloCapabilities) ProtoReflect() protoreflect.Message {
+	mi := &file_sesame_tls_v1alpha1_tls_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientHelloCapabilities.ProtoReflect.Descriptor instead.
+func (*ClientHelloCapabilities) Descriptor() ([]byte, []int) {
+	return file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ClientHelloCapabilities) GetCustomCipherSuites() bool {
+	if x != nil {
+		return x.CustomCipherSuites
+	}
+	return false
+}
+
+func (x *ClientHelloCapabilities) GetCustomSupportedGroups() bool {
+	if x != nil {
+		return x.CustomSupportedGroups
+	}
+	return false
+}
+
+func (x *ClientHelloCapabilities) GetCustomSignatureAlgorithms() bool {
+	if x != nil {
+		return x.CustomSignatureAlgorithms
+	}
+	return false
+}
+
+func (x *ClientHelloCapabilities) GetCustomExtensionOrder() bool {
+	if x != nil {
+		return x.CustomExtensionOrder
+	}
+	return false
+}
+
+func (x *ClientHelloCapabilities) GetRawExtensions() bool {
+	if x != nil {
+		return x.RawExtensions
+	}
+	return false
+}
+
+func (x *ClientHelloCapabilities) GetGreaseValues() bool {
+	if x != nil {
+		return x.GreaseValues
+	}
+	return false
+}
+
+func (x *ClientHelloCapabilities) GetSessionIdLength() bool {
+	if x != nil {
+		return x.SessionIdLength
+	}
+	return false
+}
+
+func (x *ClientHelloCapabilities) GetPaddingControl() bool {
+	if x != nil {
+		return x.PaddingControl
+	}
+	return false
+}
+
+func (x *ClientHelloCapabilities) GetLegacyVersionControl() bool {
+	if x != nil {
+		return x.LegacyVersionControl
+	}
+	return false
+}
+
+func (x *ClientHelloCapabilities) GetCompressionMethods() bool {
+	if x != nil {
+		return x.CompressionMethods
+	}
+	return false
 }
 
 var File_sesame_tls_v1alpha1_tls_proto protoreflect.FileDescriptor
 
 const file_sesame_tls_v1alpha1_tls_proto_rawDesc = "" +
 	"\n" +
-	"\x1dsesame/tls/v1alpha1/tls.proto\x12\x13sesame.tls.v1alpha1\"\xb3\x04\n" +
+	"\x1dsesame/tls/v1alpha1/tls.proto\x12\x13sesame.tls.v1alpha1\"\xaf\x04\n" +
 	"\n" +
 	"TLSOptions\x12\x1f\n" +
 	"\vserver_name\x18\x01 \x01(\tR\n" +
@@ -468,15 +775,14 @@ const file_sesame_tls_v1alpha1_tls_proto_rawDesc = "" +
 	"\vmin_version\x18\x03 \x01(\x0e2\x1f.sesame.tls.v1alpha1.TLSVersionR\n" +
 	"minVersion\x12@\n" +
 	"\vmax_version\x18\x04 \x01(\x0e2\x1f.sesame.tls.v1alpha1.TLSVersionR\n" +
-	"maxVersion\x12U\n" +
-	"\x12fingerprint_preset\x18\x05 \x01(\x0e2&.sesame.tls.v1alpha1.FingerprintPresetR\x11fingerprintPreset\x12#\n" +
-	"\rcipher_suites\x18\x06 \x03(\x05R\fcipherSuites\x120\n" +
+	"maxVersion\x120\n" +
 	"\x14insecure_skip_verify\x18\a \x01(\bR\x12insecureSkipVerify\x12'\n" +
 	"\x0fca_certificates\x18\b \x01(\fR\x0ecaCertificates\x12-\n" +
 	"\x12client_certificate\x18\t \x01(\fR\x11clientCertificate\x12,\n" +
 	"\x12client_private_key\x18\n" +
 	" \x01(\fR\x10clientPrivateKey\x12%\n" +
-	"\x0esession_ticket\x18\v \x01(\fR\rsessionTicket\"\xee\x02\n" +
+	"\x0esession_ticket\x18\v \x01(\fR\rsessionTicket\x12G\n" +
+	"\fclient_hello\x18\f \x01(\v2$.sesame.tls.v1alpha1.ClientHelloSpecR\vclientHelloJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\x12fingerprint_presetR\rcipher_suites\"\x8d\x03\n" +
 	"\x12TLSHandshakeResult\x12/\n" +
 	"\x13negotiated_protocol\x18\x01 \x01(\tR\x12negotiatedProtocol\x12!\n" +
 	"\fcipher_suite\x18\x02 \x01(\x05R\vcipherSuite\x12@\n" +
@@ -485,35 +791,44 @@ const file_sesame_tls_v1alpha1_tls_proto_rawDesc = "" +
 	"\vserver_name\x18\x04 \x01(\tR\n" +
 	"serverName\x12+\n" +
 	"\x11peer_certificates\x18\x05 \x03(\fR\x10peerCertificates\x12%\n" +
-	"\x0esession_ticket\x18\x06 \x01(\fR\rsessionTicket\x12M\n" +
-	"\x0eapplied_preset\x18\a \x01(\x0e2&.sesame.tls.v1alpha1.FingerprintPresetR\rappliedPreset*]\n" +
+	"\x0esession_ticket\x18\x06 \x01(\fR\rsessionTicket\x12V\n" +
+	"\x14applied_client_hello\x18\b \x01(\v2$.sesame.tls.v1alpha1.ClientHelloSpecR\x12appliedClientHelloJ\x04\b\a\x10\bR\x0eapplied_preset\"\xa4\x03\n" +
+	"\x0fClientHelloSpec\x12#\n" +
+	"\rcipher_suites\x18\x01 \x03(\x05R\fcipherSuites\x12)\n" +
+	"\x10supported_groups\x18\x02 \x03(\x05R\x0fsupportedGroups\x121\n" +
+	"\x14signature_algorithms\x18\x03 \x03(\x05R\x13signatureAlgorithms\x12I\n" +
+	"\n" +
+	"extensions\x18\x04 \x03(\v2).sesame.tls.v1alpha1.ClientHelloExtensionR\n" +
+	"extensions\x12/\n" +
+	"\x13compression_methods\x18\x05 \x03(\x05R\x12compressionMethods\x12*\n" +
+	"\x11session_id_length\x18\x06 \x01(\x05R\x0fsessionIdLength\x12F\n" +
+	"\x0elegacy_version\x18\a \x01(\x0e2\x1f.sesame.tls.v1alpha1.TLSVersionR\rlegacyVersion\x12\x1e\n" +
+	"\vpad_to_size\x18\b \x01(\x05R\tpadToSize\"\x84\x01\n" +
+	"\x14ClientHelloExtension\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\x05R\x04type\x12<\n" +
+	"\x04auto\x18\x02 \x01(\v2&.sesame.tls.v1alpha1.AutoExtensionBodyH\x00R\x04auto\x12\x12\n" +
+	"\x03raw\x18\x03 \x01(\fH\x00R\x03rawB\x06\n" +
+	"\x04body\"\x13\n" +
+	"\x11AutoExtensionBody\"\x81\x04\n" +
+	"\x17ClientHelloCapabilities\x120\n" +
+	"\x14custom_cipher_suites\x18\x01 \x01(\bR\x12customCipherSuites\x126\n" +
+	"\x17custom_supported_groups\x18\x02 \x01(\bR\x15customSupportedGroups\x12>\n" +
+	"\x1bcustom_signature_algorithms\x18\x03 \x01(\bR\x19customSignatureAlgorithms\x124\n" +
+	"\x16custom_extension_order\x18\x04 \x01(\bR\x14customExtensionOrder\x12%\n" +
+	"\x0eraw_extensions\x18\x05 \x01(\bR\rrawExtensions\x12#\n" +
+	"\rgrease_values\x18\x06 \x01(\bR\fgreaseValues\x12*\n" +
+	"\x11session_id_length\x18\a \x01(\bR\x0fsessionIdLength\x12'\n" +
+	"\x0fpadding_control\x18\b \x01(\bR\x0epaddingControl\x124\n" +
+	"\x16legacy_version_control\x18\t \x01(\bR\x14legacyVersionControl\x12/\n" +
+	"\x13compression_methods\x18\n" +
+	" \x01(\bR\x12compressionMethods*]\n" +
 	"\n" +
 	"TLSVersion\x12\x1b\n" +
 	"\x17TLS_VERSION_UNSPECIFIED\x10\x00\x12\v\n" +
 	"\aTLS_1_0\x10\x01\x12\v\n" +
 	"\aTLS_1_1\x10\x02\x12\v\n" +
 	"\aTLS_1_2\x10\x03\x12\v\n" +
-	"\aTLS_1_3\x10\x04*\x8d\x02\n" +
-	"\x11FingerprintPreset\x12\"\n" +
-	"\x1eFINGERPRINT_PRESET_UNSPECIFIED\x10\x00\x12\x0f\n" +
-	"\vCHROME_AUTO\x10\x01\x12\x0e\n" +
-	"\n" +
-	"CHROME_120\x10\x02\x12\x0e\n" +
-	"\n" +
-	"CHROME_124\x10\x03\x12\x0e\n" +
-	"\n" +
-	"CHROME_131\x10\x04\x12\x10\n" +
-	"\fFIREFOX_AUTO\x10\n" +
-	"\x12\x0f\n" +
-	"\vFIREFOX_120\x10\v\x12\x0f\n" +
-	"\vSAFARI_AUTO\x10\x14\x12\r\n" +
-	"\tSAFARI_16\x10\x15\x12\r\n" +
-	"\tSAFARI_17\x10\x16\x12\f\n" +
-	"\bIOS_AUTO\x10\x1e\x12\n" +
-	"\n" +
-	"\x06IOS_16\x10\x1f\x12\x12\n" +
-	"\x0eANDROID_OKHTTP\x10#\x12\x13\n" +
-	"\x0fRUNTIME_DEFAULT\x10(B&Z$github.com/joeycumines/sesame/rc/tlsb\x06proto3"
+	"\aTLS_1_3\x10\x04B&Z$github.com/joeycumines/sesame/rc/tlsb\x06proto3"
 
 var (
 	file_sesame_tls_v1alpha1_tls_proto_rawDescOnce sync.Once
@@ -527,25 +842,31 @@ func file_sesame_tls_v1alpha1_tls_proto_rawDescGZIP() []byte {
 	return file_sesame_tls_v1alpha1_tls_proto_rawDescData
 }
 
-var file_sesame_tls_v1alpha1_tls_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_sesame_tls_v1alpha1_tls_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_sesame_tls_v1alpha1_tls_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_sesame_tls_v1alpha1_tls_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_sesame_tls_v1alpha1_tls_proto_goTypes = []any{
-	(TLSVersion)(0),            // 0: sesame.tls.v1alpha1.TLSVersion
-	(FingerprintPreset)(0),     // 1: sesame.tls.v1alpha1.FingerprintPreset
-	(*TLSOptions)(nil),         // 2: sesame.tls.v1alpha1.TLSOptions
-	(*TLSHandshakeResult)(nil), // 3: sesame.tls.v1alpha1.TLSHandshakeResult
+	(TLSVersion)(0),                 // 0: sesame.tls.v1alpha1.TLSVersion
+	(*TLSOptions)(nil),              // 1: sesame.tls.v1alpha1.TLSOptions
+	(*TLSHandshakeResult)(nil),      // 2: sesame.tls.v1alpha1.TLSHandshakeResult
+	(*ClientHelloSpec)(nil),         // 3: sesame.tls.v1alpha1.ClientHelloSpec
+	(*ClientHelloExtension)(nil),    // 4: sesame.tls.v1alpha1.ClientHelloExtension
+	(*AutoExtensionBody)(nil),       // 5: sesame.tls.v1alpha1.AutoExtensionBody
+	(*ClientHelloCapabilities)(nil), // 6: sesame.tls.v1alpha1.ClientHelloCapabilities
 }
 var file_sesame_tls_v1alpha1_tls_proto_depIdxs = []int32{
 	0, // 0: sesame.tls.v1alpha1.TLSOptions.min_version:type_name -> sesame.tls.v1alpha1.TLSVersion
 	0, // 1: sesame.tls.v1alpha1.TLSOptions.max_version:type_name -> sesame.tls.v1alpha1.TLSVersion
-	1, // 2: sesame.tls.v1alpha1.TLSOptions.fingerprint_preset:type_name -> sesame.tls.v1alpha1.FingerprintPreset
+	3, // 2: sesame.tls.v1alpha1.TLSOptions.client_hello:type_name -> sesame.tls.v1alpha1.ClientHelloSpec
 	0, // 3: sesame.tls.v1alpha1.TLSHandshakeResult.tls_version:type_name -> sesame.tls.v1alpha1.TLSVersion
-	1, // 4: sesame.tls.v1alpha1.TLSHandshakeResult.applied_preset:type_name -> sesame.tls.v1alpha1.FingerprintPreset
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	3, // 4: sesame.tls.v1alpha1.TLSHandshakeResult.applied_client_hello:type_name -> sesame.tls.v1alpha1.ClientHelloSpec
+	4, // 5: sesame.tls.v1alpha1.ClientHelloSpec.extensions:type_name -> sesame.tls.v1alpha1.ClientHelloExtension
+	0, // 6: sesame.tls.v1alpha1.ClientHelloSpec.legacy_version:type_name -> sesame.tls.v1alpha1.TLSVersion
+	5, // 7: sesame.tls.v1alpha1.ClientHelloExtension.auto:type_name -> sesame.tls.v1alpha1.AutoExtensionBody
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_sesame_tls_v1alpha1_tls_proto_init() }
@@ -553,13 +874,17 @@ func file_sesame_tls_v1alpha1_tls_proto_init() {
 	if File_sesame_tls_v1alpha1_tls_proto != nil {
 		return
 	}
+	file_sesame_tls_v1alpha1_tls_proto_msgTypes[3].OneofWrappers = []any{
+		(*ClientHelloExtension_Auto)(nil),
+		(*ClientHelloExtension_Raw)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sesame_tls_v1alpha1_tls_proto_rawDesc), len(file_sesame_tls_v1alpha1_tls_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   2,
+			NumEnums:      1,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

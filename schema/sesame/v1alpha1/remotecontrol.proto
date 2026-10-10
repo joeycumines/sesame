@@ -341,10 +341,13 @@ message NetConnResponse {
     // zero window.
     int32 initial_window_size = 5;
 
-    // Fingerprint presets the server can satisfy, advisory: a pre-dial
-    // hint only. The server MUST still fail closed per-request on a
-    // preset it cannot apply, and clients MUST verify
-    // TLSHandshakeResult.applied_preset regardless.
-    repeated .sesame.tls.v1alpha1.FingerprintPreset supported_presets = 6;
+    reserved 6;
+    reserved "supported_presets";
+
+    // Decomposed ClientHello capabilities the active TLS engine can
+    // honour, advisory: a pre-dial hint only. The server MUST still fail
+    // closed per-request on any dimension it cannot apply, and clients
+    // MUST verify TLSHandshakeResult.applied_client_hello regardless.
+    .sesame.tls.v1alpha1.ClientHelloCapabilities client_hello_capabilities = 7;
   }
 }

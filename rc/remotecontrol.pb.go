@@ -1103,13 +1103,13 @@ type NetConnResponse_Capabilities struct {
 	// bytes, in bytes. 0 means the implementation default (65535), not a
 	// zero window.
 	InitialWindowSize int32 `protobuf:"varint,5,opt,name=initial_window_size,json=initialWindowSize,proto3" json:"initial_window_size,omitempty"`
-	// Fingerprint presets the server can satisfy, advisory: a pre-dial
-	// hint only. The server MUST still fail closed per-request on a
-	// preset it cannot apply, and clients MUST verify
-	// TLSHandshakeResult.applied_preset regardless.
-	SupportedPresets []tls.FingerprintPreset `protobuf:"varint,6,rep,packed,name=supported_presets,json=supportedPresets,proto3,enum=sesame.tls.v1alpha1.FingerprintPreset" json:"supported_presets,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Decomposed ClientHello capabilities the active TLS engine can
+	// honour, advisory: a pre-dial hint only. The server MUST still fail
+	// closed per-request on any dimension it cannot apply, and clients
+	// MUST verify TLSHandshakeResult.applied_client_hello regardless.
+	ClientHelloCapabilities *tls.ClientHelloCapabilities `protobuf:"bytes,7,opt,name=client_hello_capabilities,json=clientHelloCapabilities,proto3" json:"client_hello_capabilities,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *NetConnResponse_Capabilities) Reset() {
@@ -1170,9 +1170,9 @@ func (x *NetConnResponse_Capabilities) GetInitialWindowSize() int32 {
 	return 0
 }
 
-func (x *NetConnResponse_Capabilities) GetSupportedPresets() []tls.FingerprintPreset {
+func (x *NetConnResponse_Capabilities) GetClientHelloCapabilities() *tls.ClientHelloCapabilities {
 	if x != nil {
-		return x.SupportedPresets
+		return x.ClientHelloCapabilities
 	}
 	return nil
 }
@@ -1511,7 +1511,7 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x12.\n" +
 	"\x13initial_window_size\x18\x03 \x01(\x05R\x11initialWindowSize\x12$\n" +
 	"\x0emax_chunk_size\x18\x04 \x01(\x05R\fmaxChunkSizeB\x06\n" +
-	"\x04data\"\xbe\x0e\n" +
+	"\x04data\"\xec\x0e\n" +
 	"\x0fNetConnResponse\x12;\n" +
 	"\x04conn\x18\x01 \x01(\v2%.sesame.v1alpha1.NetConnResponse.ConnH\x00R\x04conn\x12\x16\n" +
 	"\x05bytes\x18\x02 \x01(\fH\x00R\x05bytes\x12D\n" +
@@ -1548,13 +1548,13 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x0ebytes_received\x18\x02 \x01(\x03R\rbytesReceived\x12\x1d\n" +
 	"\n" +
 	"rtt_millis\x18\x03 \x01(\x05R\trttMillisB\a\n" +
-	"\x05event\x1a\xc9\x02\n" +
+	"\x05event\x1a\xf7\x02\n" +
 	"\fCapabilities\x122\n" +
 	"\x15supports_flow_control\x18\x01 \x01(\bR\x13supportsFlowControl\x12<\n" +
 	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x12$\n" +
 	"\x0emax_chunk_size\x18\x04 \x01(\x05R\fmaxChunkSize\x12.\n" +
-	"\x13initial_window_size\x18\x05 \x01(\x05R\x11initialWindowSize\x12S\n" +
-	"\x11supported_presets\x18\x06 \x03(\x0e2&.sesame.tls.v1alpha1.FingerprintPresetR\x10supportedPresetsJ\x04\b\x03\x10\x04R\x16supports_impersonationB\x06\n" +
+	"\x13initial_window_size\x18\x05 \x01(\x05R\x11initialWindowSize\x12h\n" +
+	"\x19client_hello_capabilities\x18\a \x01(\v2,.sesame.tls.v1alpha1.ClientHelloCapabilitiesR\x17clientHelloCapabilitiesJ\x04\b\x03\x10\x04J\x04\b\x06\x10\aR\x16supports_impersonationR\x11supported_presetsB\x06\n" +
 	"\x04data2c\n" +
 	"\rRemoteControl\x12R\n" +
 	"\aNetConn\x12\x1f.sesame.v1alpha1.NetConnRequest\x1a .sesame.v1alpha1.NetConnResponse\"\x00(\x010\x01B\"Z github.com/joeycumines/sesame/rcb\x06proto3"
@@ -1600,7 +1600,7 @@ var file_sesame_v1alpha1_remotecontrol_proto_goTypes = []any{
 	(*status.Status)(nil),                            // 24: google.rpc.Status
 	(*tls.TLSHandshakeResult)(nil),                   // 25: sesame.tls.v1alpha1.TLSHandshakeResult
 	(*proxy.ProxyResult)(nil),                        // 26: sesame.proxy.v1alpha1.ProxyResult
-	(tls.FingerprintPreset)(0),                       // 27: sesame.tls.v1alpha1.FingerprintPreset
+	(*tls.ClientHelloCapabilities)(nil),              // 27: sesame.tls.v1alpha1.ClientHelloCapabilities
 }
 var file_sesame_v1alpha1_remotecontrol_proto_depIdxs = []int32{
 	2,  // 0: sesame.v1alpha1.NetConnRequest.dial:type_name -> sesame.v1alpha1.NetConnRequest.Dial
@@ -1634,7 +1634,7 @@ var file_sesame_v1alpha1_remotecontrol_proto_depIdxs = []int32{
 	17, // 28: sesame.v1alpha1.NetConnResponse.Control.pong:type_name -> sesame.v1alpha1.NetConnResponse.Control.Pong
 	18, // 29: sesame.v1alpha1.NetConnResponse.Control.metrics:type_name -> sesame.v1alpha1.NetConnResponse.Control.Metrics
 	23, // 30: sesame.v1alpha1.NetConnResponse.Control.custom:type_name -> google.protobuf.Any
-	27, // 31: sesame.v1alpha1.NetConnResponse.Capabilities.supported_presets:type_name -> sesame.tls.v1alpha1.FingerprintPreset
+	27, // 31: sesame.v1alpha1.NetConnResponse.Capabilities.client_hello_capabilities:type_name -> sesame.tls.v1alpha1.ClientHelloCapabilities
 	25, // 32: sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded.result:type_name -> sesame.tls.v1alpha1.TLSHandshakeResult
 	24, // 33: sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed.error:type_name -> google.rpc.Status
 	0,  // 34: sesame.v1alpha1.RemoteControl.NetConn:input_type -> sesame.v1alpha1.NetConnRequest

@@ -8,12 +8,18 @@ exclusively through CLI arguments and `SESAME_ENDPOINT_*` environment variables.
 bun run start --help
 ```
 
-TLS fingerprint presets are fail-closed. This runtime applies only
-`RUNTIME_DEFAULT`; `--supported-presets` (or `SESAME_ENDPOINT_SUPPORTED_PRESETS`)
-declares what the server advertises, and rejects at startup any list naming a
-preset the runtime cannot honour. A dial requesting a preset outside the
-advertised set is refused with `FAILED_PRECONDITION`. Serving real browser
-fingerprints requires a custom `TLSProvider`.
+Upstream TLS impersonation is expressed as a decomposed, wire-level
+`ClientHelloSpec` (`TLSOptions.client_hello` in
+`../schema/sesame/tls/v1alpha1/tls.proto`) — there are no presets and no
+modes. If the field is absent, the engine performs its default handshake;
+if present, the engine MUST honour every requested dimension exactly or
+fail closed with `FAILED_PRECONDITION` before the handshake, and the
+applied spec is echoed back in `TLSHandshakeResult.applied_client_hello`
+for client-side verification. The builtin `node:tls` engine advertises
+all-false `ClientHelloCapabilities` (see `Capabilities.client_hello_capabilities`)
+and rejects any non-default spec dimension; full-fidelity impersonation
+(e.g. opencode/Bun) is provided by plugging a custom `TLSProvider` into
+`createRemoteControlService`.
 
 To install dependencies:
 

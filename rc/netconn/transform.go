@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"net/http"
 	"time"
@@ -118,19 +117,6 @@ func BuildTLSConfig(opts *sesametls.TLSOptions, defaultServerName string) (*cryp
 		cfg.MaxVersion = v
 	}
 
-	if len(opts.GetCipherSuites()) > 0 {
-		cfg.CipherSuites = make([]uint16, len(opts.GetCipherSuites()))
-		for i, cs := range opts.GetCipherSuites() {
-			// cipher_suites carries IANA identifiers: a negative value or
-			// one that does not fit uint16 must be rejected, not silently
-			// truncated to an unintended suite.
-			if cs < 0 || cs > math.MaxUint16 {
-				return nil, status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: invalid cipher suite: %d", cs)
-			}
-			cfg.CipherSuites[i] = uint16(cs)
-		}
-	}
-
 	// A version floor above its ceiling can never negotiate; reject it at
 	// request validation time rather than surfacing an opaque handshake
 	// failure. Unspecified (0) means "runtime default" and never conflicts.
@@ -158,13 +144,13 @@ func BuildTLSConfig(opts *sesametls.TLSOptions, defaultServerName string) (*cryp
 }
 
 // ExtractTLSHandshakeResult extracts session metadata from a completed TLS connection.
-func ExtractTLSHandshakeResult(state cryptotls.ConnectionState, appliedPreset sesametls.FingerprintPreset) *sesametls.TLSHandshakeResult {
+func ExtractTLSHandshakeResult(state cryptotls.ConnectionState, appliedSpec *sesametls.ClientHelloSpec) *sesametls.TLSHandshakeResult {
 	res := &sesametls.TLSHandshakeResult{
 		NegotiatedProtocol: state.NegotiatedProtocol,
 		CipherSuite:        int32(state.CipherSuite),
 		TlsVersion:         TLSVersionToProto(state.Version),
 		ServerName:         state.ServerName,
-		AppliedPreset:      appliedPreset,
+		AppliedClientHello: appliedSpec,
 	}
 
 	if len(state.PeerCertificates) > 0 {
@@ -189,25 +175,35 @@ func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.
 		return nil, nil, status.Error(codes.InvalidArgument, "sesame/rc/netconn: min_version exceeds max_version")
 	}
 
-	preset := opts.GetFingerprintPreset()
-	if preset != sesametls.FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED &&
-		preset != sesametls.FingerprintPreset_RUNTIME_DEFAULT {
-		if provider == nil {
-			// Server MUST return FAILED_PRECONDITION if it cannot satisfy requested preset
-			return nil, nil, status.Errorf(codes.FailedPrecondition,
-				"sesame/rc/netconn: requested fingerprint preset %v is not supported by standard runtime; custom TLSProvider required",
-				preset)
+	// ClientHelloSpec validation applies to every provider path.
+	if spec := opts.GetClientHello(); spec != nil {
+		if err := ValidateClientHelloSpec(spec); err != nil {
+			return nil, nil, err
 		}
-		return provider.Handshake(ctx, rawConn, opts)
 	}
 
 	if provider != nil {
 		return provider.Handshake(ctx, rawConn, opts)
 	}
 
+	// Standard crypto/tls engine path.
 	cfg, err := BuildTLSConfig(opts, defaultServerName)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Apply the ClientHelloSpec if present, fail closed on unsupported dimensions.
+	var appliedSpec *sesametls.ClientHelloSpec
+	if spec := opts.GetClientHello(); spec != nil {
+		// Determine effective max version for cipher/group filtering logic.
+		effectiveMax := cfg.MaxVersion
+		if effectiveMax == 0 {
+			effectiveMax = cryptotls.VersionTLS13 // Go default max
+		}
+		if err := ApplyGoClientHelloSpec(spec, cfg, effectiveMax); err != nil {
+			return nil, nil, err
+		}
+		appliedSpec = spec // Echo verbatim: we validated we can honor it exactly.
 	}
 
 	tlsConn := cryptotls.Client(rawConn, cfg)
@@ -215,7 +211,7 @@ func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.
 		return nil, nil, status.Errorf(codes.Unavailable, "sesame/rc/netconn: TLS handshake failed: %v", err)
 	}
 
-	result := ExtractTLSHandshakeResult(tlsConn.ConnectionState(), sesametls.FingerprintPreset_RUNTIME_DEFAULT)
+	result := ExtractTLSHandshakeResult(tlsConn.ConnectionState(), appliedSpec)
 	return tlsConn, result, nil
 }
 

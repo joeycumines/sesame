@@ -15,13 +15,12 @@ func (x *TLSOptions) Proto_ShallowCopy(v interface{}) {
 		x.AlpnProtocols = v.GetAlpnProtocols()
 		x.MinVersion = v.GetMinVersion()
 		x.MaxVersion = v.GetMaxVersion()
-		x.FingerprintPreset = v.GetFingerprintPreset()
-		x.CipherSuites = v.GetCipherSuites()
 		x.InsecureSkipVerify = v.GetInsecureSkipVerify()
 		x.CaCertificates = v.GetCaCertificates()
 		x.ClientCertificate = v.GetClientCertificate()
 		x.ClientPrivateKey = v.GetClientPrivateKey()
 		x.SessionTicket = v.GetSessionTicket()
+		x.ClientHello = v.GetClientHello()
 	default:
 		if v, ok := v.(interface{ GetServerName() string }); ok {
 			x.ServerName = v.GetServerName()
@@ -34,12 +33,6 @@ func (x *TLSOptions) Proto_ShallowCopy(v interface{}) {
 		}
 		if v, ok := v.(interface{ GetMaxVersion() TLSVersion }); ok {
 			x.MaxVersion = v.GetMaxVersion()
-		}
-		if v, ok := v.(interface{ GetFingerprintPreset() FingerprintPreset }); ok {
-			x.FingerprintPreset = v.GetFingerprintPreset()
-		}
-		if v, ok := v.(interface{ GetCipherSuites() []rune }); ok {
-			x.CipherSuites = v.GetCipherSuites()
 		}
 		if v, ok := v.(interface{ GetInsecureSkipVerify() bool }); ok {
 			x.InsecureSkipVerify = v.GetInsecureSkipVerify()
@@ -56,6 +49,9 @@ func (x *TLSOptions) Proto_ShallowCopy(v interface{}) {
 		if v, ok := v.(interface{ GetSessionTicket() []byte }); ok {
 			x.SessionTicket = v.GetSessionTicket()
 		}
+		if v, ok := v.(interface{ GetClientHello() *ClientHelloSpec }); ok {
+			x.ClientHello = v.GetClientHello()
+		}
 	}
 }
 
@@ -67,13 +63,12 @@ func (x *TLSOptions) Proto_ShallowClone() (c *TLSOptions) {
 		c.AlpnProtocols = x.AlpnProtocols
 		c.MinVersion = x.MinVersion
 		c.MaxVersion = x.MaxVersion
-		c.FingerprintPreset = x.FingerprintPreset
-		c.CipherSuites = x.CipherSuites
 		c.InsecureSkipVerify = x.InsecureSkipVerify
 		c.CaCertificates = x.CaCertificates
 		c.ClientCertificate = x.ClientCertificate
 		c.ClientPrivateKey = x.ClientPrivateKey
 		c.SessionTicket = x.SessionTicket
+		c.ClientHello = x.ClientHello
 	}
 	return
 }
@@ -92,7 +87,7 @@ func (x *TLSHandshakeResult) Proto_ShallowCopy(v interface{}) {
 		x.ServerName = v.GetServerName()
 		x.PeerCertificates = v.GetPeerCertificates()
 		x.SessionTicket = v.GetSessionTicket()
-		x.AppliedPreset = v.GetAppliedPreset()
+		x.AppliedClientHello = v.GetAppliedClientHello()
 	default:
 		if v, ok := v.(interface{ GetNegotiatedProtocol() string }); ok {
 			x.NegotiatedProtocol = v.GetNegotiatedProtocol()
@@ -112,8 +107,8 @@ func (x *TLSHandshakeResult) Proto_ShallowCopy(v interface{}) {
 		if v, ok := v.(interface{ GetSessionTicket() []byte }); ok {
 			x.SessionTicket = v.GetSessionTicket()
 		}
-		if v, ok := v.(interface{ GetAppliedPreset() FingerprintPreset }); ok {
-			x.AppliedPreset = v.GetAppliedPreset()
+		if v, ok := v.(interface{ GetAppliedClientHello() *ClientHelloSpec }); ok {
+			x.AppliedClientHello = v.GetAppliedClientHello()
 		}
 	}
 }
@@ -128,7 +123,203 @@ func (x *TLSHandshakeResult) Proto_ShallowClone() (c *TLSHandshakeResult) {
 		c.ServerName = x.ServerName
 		c.PeerCertificates = x.PeerCertificates
 		c.SessionTicket = x.SessionTicket
-		c.AppliedPreset = x.AppliedPreset
+		c.AppliedClientHello = x.AppliedClientHello
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *ClientHelloSpec) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ClientHelloSpec:
+		x.CipherSuites = v.GetCipherSuites()
+		x.SupportedGroups = v.GetSupportedGroups()
+		x.SignatureAlgorithms = v.GetSignatureAlgorithms()
+		x.Extensions = v.GetExtensions()
+		x.CompressionMethods = v.GetCompressionMethods()
+		x.SessionIdLength = v.GetSessionIdLength()
+		x.LegacyVersion = v.GetLegacyVersion()
+		x.PadToSize = v.GetPadToSize()
+	default:
+		if v, ok := v.(interface{ GetCipherSuites() []rune }); ok {
+			x.CipherSuites = v.GetCipherSuites()
+		}
+		if v, ok := v.(interface{ GetSupportedGroups() []rune }); ok {
+			x.SupportedGroups = v.GetSupportedGroups()
+		}
+		if v, ok := v.(interface{ GetSignatureAlgorithms() []rune }); ok {
+			x.SignatureAlgorithms = v.GetSignatureAlgorithms()
+		}
+		if v, ok := v.(interface {
+			GetExtensions() []*ClientHelloExtension
+		}); ok {
+			x.Extensions = v.GetExtensions()
+		}
+		if v, ok := v.(interface{ GetCompressionMethods() []rune }); ok {
+			x.CompressionMethods = v.GetCompressionMethods()
+		}
+		if v, ok := v.(interface{ GetSessionIdLength() rune }); ok {
+			x.SessionIdLength = v.GetSessionIdLength()
+		}
+		if v, ok := v.(interface{ GetLegacyVersion() TLSVersion }); ok {
+			x.LegacyVersion = v.GetLegacyVersion()
+		}
+		if v, ok := v.(interface{ GetPadToSize() rune }); ok {
+			x.PadToSize = v.GetPadToSize()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *ClientHelloSpec) Proto_ShallowClone() (c *ClientHelloSpec) {
+	if x != nil {
+		c = new(ClientHelloSpec)
+		c.CipherSuites = x.CipherSuites
+		c.SupportedGroups = x.SupportedGroups
+		c.SignatureAlgorithms = x.SignatureAlgorithms
+		c.Extensions = x.Extensions
+		c.CompressionMethods = x.CompressionMethods
+		c.SessionIdLength = x.SessionIdLength
+		c.LegacyVersion = x.LegacyVersion
+		c.PadToSize = x.PadToSize
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *ClientHelloExtension) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ClientHelloExtension:
+		x.Type = v.GetType()
+		x.Body = v.GetBody()
+	default:
+		if v, ok := v.(interface{ GetType() rune }); ok {
+			x.Type = v.GetType()
+		}
+		if v, ok := v.(interface {
+			GetBody() isClientHelloExtension_Body
+		}); ok {
+			x.Body = v.GetBody()
+		} else {
+			func() {
+				if v, ok := v.(interface{ GetAuto() *AutoExtensionBody }); ok {
+					var defaultValue *AutoExtensionBody
+					if v := v.GetAuto(); v != defaultValue {
+						x.Body = &ClientHelloExtension_Auto{Auto: v}
+						return
+					}
+				}
+				if v, ok := v.(interface{ GetRaw() []byte }); ok {
+					if v := v.GetRaw(); v != nil {
+						x.Body = &ClientHelloExtension_Raw{Raw: v}
+						return
+					}
+				}
+			}()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *ClientHelloExtension) Proto_ShallowClone() (c *ClientHelloExtension) {
+	if x != nil {
+		c = new(ClientHelloExtension)
+		c.Type = x.Type
+		c.Body = x.Body
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *AutoExtensionBody) Proto_ShallowCopy(v interface{}) {
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *AutoExtensionBody) Proto_ShallowClone() (c *AutoExtensionBody) {
+	if x != nil {
+		c = new(AutoExtensionBody)
+	}
+	return
+}
+
+// Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
+// Note that v is of an arbitrary type, which may implement any number of the
+// field getters, which are defined as any methods of the same signature as those
+// generated for the receiver type, with a name starting with Get.
+// WARNING: Optional fields may be ignored, if v is not the receiver type.
+func (x *ClientHelloCapabilities) Proto_ShallowCopy(v interface{}) {
+	switch v := v.(type) {
+	case *ClientHelloCapabilities:
+		x.CustomCipherSuites = v.GetCustomCipherSuites()
+		x.CustomSupportedGroups = v.GetCustomSupportedGroups()
+		x.CustomSignatureAlgorithms = v.GetCustomSignatureAlgorithms()
+		x.CustomExtensionOrder = v.GetCustomExtensionOrder()
+		x.RawExtensions = v.GetRawExtensions()
+		x.GreaseValues = v.GetGreaseValues()
+		x.SessionIdLength = v.GetSessionIdLength()
+		x.PaddingControl = v.GetPaddingControl()
+		x.LegacyVersionControl = v.GetLegacyVersionControl()
+		x.CompressionMethods = v.GetCompressionMethods()
+	default:
+		if v, ok := v.(interface{ GetCustomCipherSuites() bool }); ok {
+			x.CustomCipherSuites = v.GetCustomCipherSuites()
+		}
+		if v, ok := v.(interface{ GetCustomSupportedGroups() bool }); ok {
+			x.CustomSupportedGroups = v.GetCustomSupportedGroups()
+		}
+		if v, ok := v.(interface{ GetCustomSignatureAlgorithms() bool }); ok {
+			x.CustomSignatureAlgorithms = v.GetCustomSignatureAlgorithms()
+		}
+		if v, ok := v.(interface{ GetCustomExtensionOrder() bool }); ok {
+			x.CustomExtensionOrder = v.GetCustomExtensionOrder()
+		}
+		if v, ok := v.(interface{ GetRawExtensions() bool }); ok {
+			x.RawExtensions = v.GetRawExtensions()
+		}
+		if v, ok := v.(interface{ GetGreaseValues() bool }); ok {
+			x.GreaseValues = v.GetGreaseValues()
+		}
+		if v, ok := v.(interface{ GetSessionIdLength() bool }); ok {
+			x.SessionIdLength = v.GetSessionIdLength()
+		}
+		if v, ok := v.(interface{ GetPaddingControl() bool }); ok {
+			x.PaddingControl = v.GetPaddingControl()
+		}
+		if v, ok := v.(interface{ GetLegacyVersionControl() bool }); ok {
+			x.LegacyVersionControl = v.GetLegacyVersionControl()
+		}
+		if v, ok := v.(interface{ GetCompressionMethods() bool }); ok {
+			x.CompressionMethods = v.GetCompressionMethods()
+		}
+	}
+}
+
+// Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
+func (x *ClientHelloCapabilities) Proto_ShallowClone() (c *ClientHelloCapabilities) {
+	if x != nil {
+		c = new(ClientHelloCapabilities)
+		c.CustomCipherSuites = x.CustomCipherSuites
+		c.CustomSupportedGroups = x.CustomSupportedGroups
+		c.CustomSignatureAlgorithms = x.CustomSignatureAlgorithms
+		c.CustomExtensionOrder = x.CustomExtensionOrder
+		c.RawExtensions = x.RawExtensions
+		c.GreaseValues = x.GreaseValues
+		c.SessionIdLength = x.SessionIdLength
+		c.PaddingControl = x.PaddingControl
+		c.LegacyVersionControl = x.LegacyVersionControl
+		c.CompressionMethods = x.CompressionMethods
 	}
 	return
 }

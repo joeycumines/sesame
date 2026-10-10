@@ -1,6 +1,5 @@
 import {describe, expect, it} from 'bun:test';
 import {parseConfig, formatHelp} from '../src/config';
-import {FingerprintPreset} from '../src/gen/sesame/tls/v1alpha1/tls_pb';
 
 describe('config parser', () => {
   it('returns default configuration when no args or env are given', () => {
@@ -16,7 +15,6 @@ describe('config parser', () => {
     expect(cfg.enableOpportunisticTls).toBe(true);
     expect(cfg.enableFlowControl).toBe(true);
     expect(cfg.allowedNetworks).toEqual(['tcp', 'tcp4', 'tcp6']);
-    expect(cfg.supportedPresets).toEqual([FingerprintPreset.RUNTIME_DEFAULT]);
     expect(cfg.secrets.tlsCert).toBeUndefined();
     expect(cfg.secrets.proxyPassword).toBeUndefined();
   });
@@ -105,10 +103,10 @@ describe('config parser', () => {
       'Invalid initialWindowSize',
     );
     expect(() => parseConfig(['--supported-presets', 'NOT_A_PRESET'])).toThrow(
-      'Unknown fingerprint preset',
+      'Unknown CLI argument',
     );
     expect(() => parseConfig(['--supported-presets', 'CHROME_120'])).toThrow(
-      'requires a custom TLSProvider',
+      'Unknown CLI argument',
     );
     expect(() => parseConfig(['--unknown-flag'])).toThrow(
       'Unknown CLI argument',

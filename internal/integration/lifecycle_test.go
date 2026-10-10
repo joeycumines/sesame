@@ -527,7 +527,7 @@ func TestLifecycle_InStream_PingPong(t *testing.T) {
 func TestLifecycle_FailClosed_Security(t *testing.T) {
 	skipUnlessIntegration(t)
 
-	t.Run("Server rejects unsupported preset with FailedPrecondition", func(t *testing.T) {
+	t.Run("Server rejects un-honorable client_hello with FailedPrecondition", func(t *testing.T) {
 		clientPipe, serverPipe := net.Pipe()
 		defer clientPipe.Close()
 		defer serverPipe.Close()
@@ -546,7 +546,9 @@ func TestLifecycle_FailClosed_Security(t *testing.T) {
 		client := netconn.Client{
 			API: rc.NewRemoteControlClient(gc),
 			TLS: &sesametls.TLSOptions{
-				FingerprintPreset: sesametls.FingerprintPreset_CHROME_131,
+				ClientHello: &sesametls.ClientHelloSpec{
+					SignatureAlgorithms: []int32{0x0403},
+				},
 			},
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -554,7 +556,7 @@ func TestLifecycle_FailClosed_Security(t *testing.T) {
 
 		_, err := client.DialContext(ctx, "tcp", "target:443")
 		if err == nil {
-			t.Fatal("expected error for unsupported preset, got nil")
+			t.Fatal("expected error for un-honorable client_hello dimension, got nil")
 		}
 		stat, _ := status.FromError(err)
 		if stat.Code() != codes.FailedPrecondition {

@@ -108,13 +108,9 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 		if conn.res.GetTls() == nil {
 			return nil, fmt.Errorf("sesame/rc/netconn: security violation: server returned cleartext connection when TLS was requested")
 		}
-		preset := x.TLS.GetFingerprintPreset()
-		if preset != sesametls.FingerprintPreset_FINGERPRINT_PRESET_UNSPECIFIED &&
-			preset != sesametls.FingerprintPreset_RUNTIME_DEFAULT {
-			if conn.res.GetTls().GetAppliedPreset() != preset {
-				return nil, fmt.Errorf("sesame/rc/netconn: security violation: requested fingerprint preset %v but server applied %v",
-					preset, conn.res.GetTls().GetAppliedPreset())
-			}
+		// Verify applied_client_hello matches the requested spec.
+		if err := VerifyAppliedClientHello(x.TLS.GetClientHello(), conn.res.GetTls().GetAppliedClientHello()); err != nil {
+			return nil, err
 		}
 	}
 
