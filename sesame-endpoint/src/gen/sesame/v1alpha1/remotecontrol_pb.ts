@@ -507,6 +507,10 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
     /**
      * Upstream write-side closure (TCP FIN or TLS close_notify). The
      * client receives no further bytes; the stream terminates.
+     * Emitted (in place of a bare stream end) only when the client
+     * advertised capabilities with supports_flow_control or
+     * supports_opportunistic_tls; a legacy client that sent no
+     * capabilities receives the plain stream end without this event.
      *
      * @generated from field: sesame.v1alpha1.NetConnResponse.Control.HalfClose half_close = 4;
      */
@@ -797,7 +801,11 @@ export const RemoteControl: GenService<{
    *   messages inline, so request bytes ordered after upgrade_tls are post-upgrade payload. On failure the server
    *   MUST emit tls_upgrade_failed and terminate the stream; it MUST NOT continue in cleartext. A client that
    *   receives tls_upgraded or tls_upgrade_failed with no upgrade pending MUST fail closed (tear the connection
-   *   down), as the TLS state can no longer be known.
+   *   down), as the TLS state can no longer be known. While an upgrade is pending the client MUST keep granting
+   *   window credit (window_update) for server -> client bytes, or bound the upgrade with a deadline or
+   *   cancellation: the server's upgrade pause waits for its relaying reader, which may be blocked on the
+   *   outbound window, so a client that both exhausts that window and stops refilling it can stall the upgrade
+   *   until its own deadline or cancellation fires.
    * - Flow control: activates only when BOTH peers advertise supports_flow_control. Each peer's
    *   capabilities.initial_window_size is the receive window it grants the peer for data flowing toward it, and a
    *   window_update travels opposite to the data it credits. Advertised chunk and window sizes MUST NOT exceed the

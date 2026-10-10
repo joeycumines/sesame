@@ -1048,6 +1048,10 @@ type NetConnResponse_Control_WindowUpdate_ struct {
 type NetConnResponse_Control_HalfClose_ struct {
 	// Upstream write-side closure (TCP FIN or TLS close_notify). The
 	// client receives no further bytes; the stream terminates.
+	// Emitted (in place of a bare stream end) only when the client
+	// advertised capabilities with supports_flow_control or
+	// supports_opportunistic_tls; a legacy client that sent no
+	// capabilities receives the plain stream end without this event.
 	HalfClose *NetConnResponse_Control_HalfClose `protobuf:"bytes,4,opt,name=half_close,json=halfClose,proto3,oneof"`
 }
 

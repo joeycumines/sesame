@@ -150,6 +150,11 @@ type ProxyHop struct {
 	// precedence over username/password when set.
 	// Sensitive: implementations MUST NOT include this value in logs, errors,
 	// or diagnostics.
+	// The value is interpolated verbatim into the raw proxy handshake
+	// request, so it MUST NOT contain carriage return, line feed, or any
+	// other control byte; implementations MUST reject such values with
+	// INVALID_ARGUMENT. Hop addresses and the tunnel target follow the
+	// same rule wherever they are interpolated into a handshake.
 	AuthHeader    string `protobuf:"bytes,5,opt,name=auth_header,json=authHeader,proto3" json:"auth_header,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
