@@ -2,29 +2,34 @@
 const assert = require('node:assert');
 const net = require('node:net');
 const tls = require('node:tls');
+const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { create } = require('@bufbuild/protobuf');
 const { createGrpcTransport } = require('@connectrpc/connect-node');
 const { createClient, Code, ConnectError } = require('@connectrpc/connect');
 
-const {
-  parseConfig,
-  formatHelp,
-  createEndpointServer,
-  FlowController,
-  RemoteControl,
-  NetConnRequestSchema,
-  NetConnRequest_DialSchema,
-  NetConnRequest_ControlSchema,
-  NetConnRequest_Control_UpgradeTLSSchema,
-  NetConnRequest_Control_ResetSchema,
-  NetConnRequest_Control_PingSchema,
-  NetConnRequest_CapabilitiesSchema,
-  TLSOptionsSchema,
-  NetAddrSchema,
-  ClientHelloSpecSchema,
-} = require('../build/src/index.js');
+  const {
+    parseConfig,
+    formatHelp,
+    createEndpointServer,
+    FlowController,
+    RemoteControl,
+    NetConnRequestSchema,
+    NetConnRequest_DialSchema,
+    NetConnRequest_ControlSchema,
+    NetConnRequest_Control_UpgradeTLSSchema,
+    NetConnRequest_Control_ResetSchema,
+    NetConnRequest_Control_HalfCloseSchema,
+    NetConnRequest_Control_PingSchema,
+    NetConnRequest_CapabilitiesSchema,
+    TLSOptionsSchema,
+    NetAddrSchema,
+    ClientHelloSpecSchema,
+    ProxyOptionsSchema,
+    ProxyHopSchema,
+    ProxyHop_Type,
+  } = require('../build/src/index.js');
 const { StatusSchema } = require('../build/src/gen/google/rpc/status_pb.js');
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
@@ -393,6 +398,340 @@ async function run() {
   }
   assert.ok(upstreamFullyClosed, 'upstream socket must be fully closed on request EOF');
   await new Promise(r => silentUpstream.close(() => r()));
+
+  // Byte-level SOCKS5 mock (RFC 1928): a greeting -> (auth) -> connect
+  // state machine that records every frame the client sent and, on
+  // success, pipes to the real target the client asked for. The
+  // tunnel state is entered at CONNECT-parse time and the pipe to the
+  // upstream attaches immediately (net buffers writes to a connecting
+  // socket), because the endpoint writes tunnel payload the instant
+  // the handshake resolves.
+  function makeSocks5Mock(opts = {}) {
+    const frames = [];
+    const server = net.createServer(raw => {
+      let stage = 'greeting';
+      let buf = Buffer.alloc(0);
+      const frame = {greeting: Buffer.alloc(0), auth: null, connect: null};
+      frames.push(frame);
+      let upstream = null;
+
+      const dialUpstream = connect => {
+        const atyp = connect[3];
+        let host;
+        let addrOff;
+        let addrLen;
+        if (atyp === 0x01) {
+          host = `${connect[4]}.${connect[5]}.${connect[6]}.${connect[7]}`;
+          addrOff = 4;
+          addrLen = 4;
+        } else {
+          const domainLen = connect[4];
+          host = connect.subarray(5, 5 + domainLen).toString('utf-8');
+          addrOff = 5 + domainLen;
+          addrLen = 0;
+        }
+        const port =
+          (connect[addrOff + addrLen] << 8) | connect[addrOff + addrLen + 1];
+        upstream = net.connect(port, host, () => {
+          upstream.pipe(raw);
+        });
+        raw.pipe(upstream);
+        upstream.on('error', () => raw.destroy());
+      };
+
+      raw.on('data', chunk => {
+        if (stage === 'tunnel') {
+          // raw -> upstream is handled by the pipe.
+          return;
+        }
+        buf = Buffer.concat([buf, chunk]);
+
+        if (stage === 'greeting') {
+          if (buf.length < 2) return;
+          const nMethods = buf[1];
+          if (buf.length < 2 + nMethods) return;
+          frame.greeting = buf.subarray(0, 2 + nMethods);
+          buf = buf.subarray(2 + nMethods);
+          raw.write(Buffer.from([0x05, opts.requireAuth ? 0x02 : 0x00]));
+          stage = opts.requireAuth ? 'auth' : 'connect';
+        }
+
+        if (stage === 'auth') {
+          if (buf.length < 2) return;
+          const uLen = buf[1];
+          if (buf.length < 2 + uLen + 1) return;
+          const pLen = buf[2 + uLen];
+          if (buf.length < 2 + uLen + 1 + pLen) return;
+          frame.auth = buf.subarray(0, 2 + uLen + 1 + pLen);
+          buf = buf.subarray(2 + uLen + 1 + pLen);
+          if (opts.authReject) {
+            raw.write(Buffer.from([0x01, 0x01]));
+            raw.destroy();
+            return;
+          }
+          raw.write(Buffer.from([0x01, 0x00]));
+          stage = 'connect';
+        }
+
+        if (stage === 'connect') {
+          if (buf.length < 5) return;
+          const atyp = buf[3];
+          let addrLen = 0;
+          if (atyp === 0x01) addrLen = 4;
+          else if (atyp === 0x04) addrLen = 16;
+          else if (atyp === 0x03) addrLen = 1 + buf[4];
+          else {
+            raw.destroy();
+            return;
+          }
+          const total = 4 + addrLen + 2;
+          if (buf.length < total) return;
+          frame.connect = buf.subarray(0, total);
+          buf = buf.subarray(total);
+
+          stage = 'tunnel';
+          raw.write(Buffer.concat([
+            Buffer.from([
+              0x05,
+              opts.connectRep ?? 0x00,
+              0x00,
+              0x01,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+            ]),
+            opts.coalesceWithReply ?? Buffer.alloc(0),
+          ]));
+          if ((opts.connectRep ?? 0x00) !== 0x00) {
+            raw.destroy();
+            return;
+          }
+          if (!opts.noUpstream) {
+            dialUpstream(frame.connect);
+          }
+        }
+      });
+
+      raw.on('close', () => upstream && upstream.destroy());
+      raw.on('error', () => upstream && upstream.destroy());
+    });
+    return {server, frames: () => frames};
+  }
+
+  // Reads responses until a bytes payload arrives, skipping flow-control
+  // windowUpdate events (control-mode connections interleave them).
+  async function nextBytes(it) {
+    for (;;) {
+      const resp = await it.next();
+      if (resp.done) {
+        throw new Error('response stream ended before expected bytes');
+      }
+      if (resp.value.data.case === 'bytes') {
+        return resp.value.data.value;
+      }
+    }
+  }
+
+  const proxyDial = (reqStream, target, hop) => {
+    reqStream.push(create(NetConnRequestSchema, {
+      data: {
+        case: 'dial',
+        value: create(NetConnRequest_DialSchema, {
+          address: create(NetAddrSchema, {network: 'tcp', address: target}),
+          proxy: create(ProxyOptionsSchema, {hops: [hop]}),
+        }),
+      },
+    }));
+  };
+
+  // Test 10: SOCKS5 traversal with the framing bytes verified
+  console.log('10. Testing SOCKS5 proxy traversal under Node.js...');
+  const socksMock = makeSocks5Mock();
+  await new Promise(r => socksMock.server.listen(0, '127.0.0.1', r));
+  const socksPort = socksMock.server.address().port;
+  try {
+    const reqStream10 = new RequestStream();
+    proxyDial(reqStream10, `localhost:${tcpPort}`, create(ProxyHopSchema, {
+      type: ProxyHop_Type.SOCKS5,
+      address: create(NetAddrSchema, {network: 'tcp', address: `127.0.0.1:${socksPort}`}),
+    }));
+    reqStream10.push(create(NetConnRequestSchema, {
+      data: {case: 'bytes', value: Buffer.from('NODE SOCKS5 TRAVERSAL')},
+    }));
+
+    const resp10 = client.netConn(reqStream10);
+    const it10 = resp10[Symbol.asyncIterator]();
+    const conn10 = await it10.next();
+    assert.strictEqual(conn10.value.data.case, 'conn');
+    assert.strictEqual(conn10.value.data.value.proxy.traversedHops.length, 1);
+    const echo10 = await it10.next();
+    assert.strictEqual(echo10.value.data.case, 'bytes');
+    assert.strictEqual(Buffer.from(echo10.value.data.value).toString('utf-8'), 'NODE SOCKS5 TRAVERSAL');
+
+    // The framing is the thing under test: exact greeting and
+    // domain-typed CONNECT bytes.
+    const frame = socksMock.frames().at(-1);
+    assert.ok(Buffer.compare(frame.greeting, Buffer.from([0x05, 0x01, 0x00])) === 0,
+      `greeting = ${frame.greeting.toString('hex')}`);
+    assert.strictEqual(frame.auth, null);
+    const wantConnect = Buffer.concat([
+      Buffer.from([0x05, 0x01, 0x00, 0x03, 'localhost'.length]),
+      Buffer.from('localhost', 'utf-8'),
+      Buffer.from([tcpPort >> 8, tcpPort & 0xff]),
+    ]);
+    assert.ok(Buffer.compare(frame.connect, wantConnect) === 0,
+      `connect = ${frame.connect.toString('hex')}`);
+    reqStream10.close();
+  } finally {
+    await new Promise(r => socksMock.server.close(() => r()));
+  }
+
+  // Test 11: early tunnel bytes coalesced with the SOCKS5 connect reply
+  console.log('11. Testing SOCKS5 coalesced connect-reply bytes under Node.js...');
+  const earlyPayload = Buffer.from('SOCKS-EARLY');
+  const coalesceMock = makeSocks5Mock({coalesceWithReply: earlyPayload, noUpstream: true});
+  await new Promise(r => coalesceMock.server.listen(0, '127.0.0.1', r));
+  const coalescePort = coalesceMock.server.address().port;
+  try {
+    const reqStream11 = new RequestStream();
+    proxyDial(reqStream11, `localhost:${tcpPort}`, create(ProxyHopSchema, {
+      type: ProxyHop_Type.SOCKS5,
+      address: create(NetAddrSchema, {network: 'tcp', address: `127.0.0.1:${coalescePort}`}),
+    }));
+
+    const resp11 = client.netConn(reqStream11);
+    const it11 = resp11[Symbol.asyncIterator]();
+    const conn11 = await it11.next();
+    assert.strictEqual(conn11.value.data.case, 'conn');
+    const early11 = await it11.next();
+    assert.strictEqual(early11.value.data.case, 'bytes');
+    assert.ok(Buffer.compare(Buffer.from(early11.value.data.value), earlyPayload) === 0,
+      'coalesced early tunnel bytes must arrive in order');
+    reqStream11.close();
+  } finally {
+    await new Promise(r => coalesceMock.server.close(() => r()));
+  }
+
+  // Test 12: HTTP CONNECT traversal
+  console.log('12. Testing HTTP CONNECT proxy traversal under Node.js...');
+  const httpProxy = http.createServer();
+  httpProxy.on('connect', (req, clientSocket, head) => {
+    const parts = (req.url || '').split(':');
+    const targetHost = parts[0] || '127.0.0.1';
+    const targetPort = parseInt(parts[1], 10) || 80;
+    const serverSocket = net.connect(targetPort, targetHost, () => {
+      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head.length > 0) {
+        serverSocket.write(head);
+      }
+      serverSocket.pipe(clientSocket);
+      clientSocket.pipe(serverSocket);
+    });
+    serverSocket.on('error', () => clientSocket.destroy());
+    clientSocket.on('error', () => serverSocket.destroy());
+  });
+  await new Promise(r => httpProxy.listen(0, '127.0.0.1', r));
+  const httpProxyPort = httpProxy.address().port;
+  try {
+    const reqStream12 = new RequestStream();
+    proxyDial(reqStream12, `127.0.0.1:${tcpPort}`, create(ProxyHopSchema, {
+      type: ProxyHop_Type.HTTP_CONNECT,
+      address: create(NetAddrSchema, {network: 'tcp', address: `127.0.0.1:${httpProxyPort}`}),
+    }));
+    reqStream12.push(create(NetConnRequestSchema, {
+      data: {case: 'bytes', value: Buffer.from('NODE HTTP CONNECT TRAVERSAL')},
+    }));
+
+    const resp12 = client.netConn(reqStream12);
+    const it12 = resp12[Symbol.asyncIterator]();
+    const conn12 = await it12.next();
+    assert.strictEqual(conn12.value.data.case, 'conn');
+    assert.strictEqual(conn12.value.data.value.proxy.traversedHops.length, 1);
+    const echo12 = await it12.next();
+    assert.strictEqual(echo12.value.data.case, 'bytes');
+    assert.strictEqual(Buffer.from(echo12.value.data.value).toString('utf-8'), 'NODE HTTP CONNECT TRAVERSAL');
+    reqStream12.close();
+  } finally {
+    await new Promise(r => httpProxy.close(() => r()));
+  }
+
+  // Test 13: halfClose delivers a real FIN and the relay continues
+  console.log('13. Testing client halfClose under Node.js...');
+  let sawFin = false;
+  const halfCloseUpstream = net.createServer(rawSocket => {
+    rawSocket.on('data', chunk => {
+      rawSocket.write(chunk);
+    });
+    rawSocket.on('end', () => {
+      sawFin = true;
+      rawSocket.end('FINAL');
+    });
+  });
+  await new Promise(r => halfCloseUpstream.listen(0, '127.0.0.1', r));
+  const halfClosePort = halfCloseUpstream.address().port;
+  try {
+    const reqStream13 = new RequestStream();
+    reqStream13.push(create(NetConnRequestSchema, {
+      data: {
+        case: 'dial',
+        value: create(NetConnRequest_DialSchema, {
+          address: create(NetAddrSchema, {network: 'tcp', address: `127.0.0.1:${halfClosePort}`}),
+          capabilities: create(NetConnRequest_CapabilitiesSchema, {
+            supportsOpportunisticTls: true,
+            supportsFlowControl: true,
+          }),
+        }),
+      },
+    }));
+
+    const resp13 = client.netConn(reqStream13);
+    const it13 = resp13[Symbol.asyncIterator]();
+    const conn13 = await it13.next();
+    assert.strictEqual(conn13.value.data.case, 'conn');
+
+    // Echo roundtrip proves the tunnel before the half-close.
+    reqStream13.push(create(NetConnRequestSchema, {
+      data: {case: 'bytes', value: Buffer.from('PING')},
+    }));
+    const echo13 = await nextBytes(it13);
+    assert.strictEqual(Buffer.from(echo13).toString('utf-8'), 'PING');
+
+    // Client-initiated write-side close: the upstream must see a FIN,
+    // keep the relay running for the post-FIN marker, and then end
+    // cleanly via the halfClose event.
+    reqStream13.push(create(NetConnRequestSchema, {
+      data: {
+        case: 'control',
+        value: create(NetConnRequest_ControlSchema, {
+          action: {
+            case: 'halfClose',
+            value: create(NetConnRequest_Control_HalfCloseSchema, {}),
+          },
+        }),
+      },
+    }));
+
+    const final13 = await nextBytes(it13);
+    assert.strictEqual(Buffer.from(final13).toString('utf-8'), 'FINAL');
+
+    let sawHalfCloseEvent = false;
+    for (;;) {
+      const resp = await it13.next();
+      if (resp.done) break;
+      if (resp.value.data.case === 'control' &&
+          resp.value.data.value.event.case === 'halfClose') {
+        sawHalfCloseEvent = true;
+      }
+    }
+    assert.ok(sawHalfCloseEvent, 'expected the halfClose control event before stream end');
+    assert.ok(sawFin, 'upstream must have observed the FIN');
+    reqStream13.close();
+  } finally {
+    await new Promise(r => halfCloseUpstream.close(() => r()));
+  }
 
   console.log('All Node.js runtime tests passed cleanly!');
   process.exit(0);
