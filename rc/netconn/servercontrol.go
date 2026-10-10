@@ -50,7 +50,7 @@ type (
 		inboundFC  *FlowController
 
 		pauseReq     chan struct{}
-		resumeNotify chan net.Conn
+		resumeNotify chan struct{}
 
 		// pausePending is set before handleUpgradeTLS arms the past read
 		// deadline, so the reader can tell an upgrade-induced timeout from
@@ -214,7 +214,7 @@ func RunServerDemux(
 		activeConn:        conn,
 		pauseReq:          make(chan struct{}, 1),
 		pausedAck:         make(chan struct{}, 1),
-		resumeNotify:      make(chan net.Conn, 1),
+		resumeNotify:      make(chan struct{}, 1),
 		done:              make(chan struct{}),
 	}
 
@@ -280,10 +280,10 @@ func RunServerDemux(
 					return
 				case <-s.done:
 					return
-				case newConn := <-s.resumeNotify:
-					s.connMu.Lock()
-					s.activeConn = newConn
-					s.connMu.Unlock()
+				case <-s.resumeNotify:
+					// The upgrade handler swapped the active conn
+					// before signalling; it is re-read at the top of
+					// the loop.
 				}
 			default:
 			}
@@ -649,7 +649,15 @@ func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesamet
 		return sendErr
 	}
 
-	// 4. Resume reader with upgraded connection
-	s.resumeNotify <- upgradedConn
+	// 4. Swap in the upgraded conn BEFORE signalling the reader to
+	// resume. The swap must be linearized ahead of the resume signal:
+	// a control action processed by the demux loop in the window
+	// between the signal and a reader-side swap could otherwise act
+	// on the stale pre-upgrade conn - e.g. a half_close FINning the
+	// wrong connection while the tunnel lives on the upgraded one.
+	s.connMu.Lock()
+	s.activeConn = upgradedConn
+	s.connMu.Unlock()
+	s.resumeNotify <- struct{}{}
 	return nil
 }
