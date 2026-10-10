@@ -108,19 +108,19 @@ type TLSOptions struct {
 	// Sensitive security control: clients SHOULD require explicit user
 	// opt-in before setting this, and servers SHOULD treat a request
 	// carrying it as a policy decision the caller owns.
-	InsecureSkipVerify bool `protobuf:"varint,7,opt,name=insecure_skip_verify,json=insecureSkipVerify,proto3" json:"insecure_skip_verify,omitempty"`
+	InsecureSkipVerify bool `protobuf:"varint,5,opt,name=insecure_skip_verify,json=insecureSkipVerify,proto3" json:"insecure_skip_verify,omitempty"`
 	// Custom Root Certificate Authority certificates in PEM format.
 	// Sensitive: implementations MUST NOT include this material in logs,
 	// errors, or diagnostics.
-	CaCertificates []byte `protobuf:"bytes,8,opt,name=ca_certificates,json=caCertificates,proto3" json:"ca_certificates,omitempty"`
+	CaCertificates []byte `protobuf:"bytes,6,opt,name=ca_certificates,json=caCertificates,proto3" json:"ca_certificates,omitempty"`
 	// Client certificate chain in PEM format (for mutual TLS / mTLS).
 	// Sensitive: implementations MUST NOT include this material in logs,
 	// errors, or diagnostics.
-	ClientCertificate []byte `protobuf:"bytes,9,opt,name=client_certificate,json=clientCertificate,proto3" json:"client_certificate,omitempty"`
+	ClientCertificate []byte `protobuf:"bytes,7,opt,name=client_certificate,json=clientCertificate,proto3" json:"client_certificate,omitempty"`
 	// Client private key in PEM format (for mutual TLS / mTLS).
 	// Sensitive: implementations MUST NOT include this material in logs,
 	// errors, or diagnostics.
-	ClientPrivateKey []byte `protobuf:"bytes,10,opt,name=client_private_key,json=clientPrivateKey,proto3" json:"client_private_key,omitempty"`
+	ClientPrivateKey []byte `protobuf:"bytes,8,opt,name=client_private_key,json=clientPrivateKey,proto3" json:"client_private_key,omitempty"`
 	// TLS 1.3 session resumption ticket or pre-shared key, as previously
 	// issued by the peer (see TLSHandshakeResult.session_ticket).
 	//
@@ -128,7 +128,7 @@ type TLSOptions struct {
 	// MUST ignore this field and perform a full handshake.
 	// Sensitive: implementations MUST NOT include this material in logs,
 	// errors, or diagnostics.
-	SessionTicket []byte `protobuf:"bytes,11,opt,name=session_ticket,json=sessionTicket,proto3" json:"session_ticket,omitempty"`
+	SessionTicket []byte `protobuf:"bytes,9,opt,name=session_ticket,json=sessionTicket,proto3" json:"session_ticket,omitempty"`
 	// Decomposed, wire-level ClientHello specification (OPTIONAL).
 	//
 	// If ABSENT, the engine performs its default handshake (the prior
@@ -139,7 +139,7 @@ type TLSOptions struct {
 	// handshake. Clients MUST additionally verify
 	// TLSHandshakeResult.applied_client_hello against this request and abort
 	// on mismatch (fail closed).
-	ClientHello   *ClientHelloSpec `protobuf:"bytes,12,opt,name=client_hello,json=clientHello,proto3" json:"client_hello,omitempty"`
+	ClientHello   *ClientHelloSpec `protobuf:"bytes,10,opt,name=client_hello,json=clientHello,proto3" json:"client_hello,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -270,7 +270,7 @@ type TLSHandshakeResult struct {
 	// Present when the client requested a client_hello spec. The Client MUST
 	// diff this against its request and MUST abort on any mismatch (fail
 	// closed).
-	AppliedClientHello *ClientHelloSpec `protobuf:"bytes,8,opt,name=applied_client_hello,json=appliedClientHello,proto3" json:"applied_client_hello,omitempty"`
+	AppliedClientHello *ClientHelloSpec `protobuf:"bytes,7,opt,name=applied_client_hello,json=appliedClientHello,proto3" json:"applied_client_hello,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -766,7 +766,7 @@ var File_sesame_tls_v1alpha1_tls_proto protoreflect.FileDescriptor
 
 const file_sesame_tls_v1alpha1_tls_proto_rawDesc = "" +
 	"\n" +
-	"\x1dsesame/tls/v1alpha1/tls.proto\x12\x13sesame.tls.v1alpha1\"\xaf\x04\n" +
+	"\x1dsesame/tls/v1alpha1/tls.proto\x12\x13sesame.tls.v1alpha1\"\x80\x04\n" +
 	"\n" +
 	"TLSOptions\x12\x1f\n" +
 	"\vserver_name\x18\x01 \x01(\tR\n" +
@@ -776,13 +776,13 @@ const file_sesame_tls_v1alpha1_tls_proto_rawDesc = "" +
 	"minVersion\x12@\n" +
 	"\vmax_version\x18\x04 \x01(\x0e2\x1f.sesame.tls.v1alpha1.TLSVersionR\n" +
 	"maxVersion\x120\n" +
-	"\x14insecure_skip_verify\x18\a \x01(\bR\x12insecureSkipVerify\x12'\n" +
-	"\x0fca_certificates\x18\b \x01(\fR\x0ecaCertificates\x12-\n" +
-	"\x12client_certificate\x18\t \x01(\fR\x11clientCertificate\x12,\n" +
-	"\x12client_private_key\x18\n" +
-	" \x01(\fR\x10clientPrivateKey\x12%\n" +
-	"\x0esession_ticket\x18\v \x01(\fR\rsessionTicket\x12G\n" +
-	"\fclient_hello\x18\f \x01(\v2$.sesame.tls.v1alpha1.ClientHelloSpecR\vclientHelloJ\x04\b\x05\x10\x06J\x04\b\x06\x10\aR\x12fingerprint_presetR\rcipher_suites\"\x8d\x03\n" +
+	"\x14insecure_skip_verify\x18\x05 \x01(\bR\x12insecureSkipVerify\x12'\n" +
+	"\x0fca_certificates\x18\x06 \x01(\fR\x0ecaCertificates\x12-\n" +
+	"\x12client_certificate\x18\a \x01(\fR\x11clientCertificate\x12,\n" +
+	"\x12client_private_key\x18\b \x01(\fR\x10clientPrivateKey\x12%\n" +
+	"\x0esession_ticket\x18\t \x01(\fR\rsessionTicket\x12G\n" +
+	"\fclient_hello\x18\n" +
+	" \x01(\v2$.sesame.tls.v1alpha1.ClientHelloSpecR\vclientHello\"\xf7\x02\n" +
 	"\x12TLSHandshakeResult\x12/\n" +
 	"\x13negotiated_protocol\x18\x01 \x01(\tR\x12negotiatedProtocol\x12!\n" +
 	"\fcipher_suite\x18\x02 \x01(\x05R\vcipherSuite\x12@\n" +
@@ -792,7 +792,7 @@ const file_sesame_tls_v1alpha1_tls_proto_rawDesc = "" +
 	"serverName\x12+\n" +
 	"\x11peer_certificates\x18\x05 \x03(\fR\x10peerCertificates\x12%\n" +
 	"\x0esession_ticket\x18\x06 \x01(\fR\rsessionTicket\x12V\n" +
-	"\x14applied_client_hello\x18\b \x01(\v2$.sesame.tls.v1alpha1.ClientHelloSpecR\x12appliedClientHelloJ\x04\b\a\x10\bR\x0eapplied_preset\"\xa4\x03\n" +
+	"\x14applied_client_hello\x18\a \x01(\v2$.sesame.tls.v1alpha1.ClientHelloSpecR\x12appliedClientHello\"\xa4\x03\n" +
 	"\x0fClientHelloSpec\x12#\n" +
 	"\rcipher_suites\x18\x01 \x03(\x05R\fcipherSuites\x12)\n" +
 	"\x10supported_groups\x18\x02 \x03(\x05R\x0fsupportedGroups\x121\n" +

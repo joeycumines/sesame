@@ -27,33 +27,27 @@ message TLSOptions {
   // means the implementation's default maximum applies.
   TLSVersion max_version = 4;
 
-  // Fields 5 (fingerprint_preset) and 6 (cipher_suites) were removed when
-  // impersonation moved to the decomposed, wire-level client_hello spec.
-  // Cipher suites now live in ClientHelloSpec.cipher_suites.
-  reserved 5, 6;
-  reserved "fingerprint_preset", "cipher_suites";
-
   // Disables remote certificate verification.
   //
   // Sensitive security control: clients SHOULD require explicit user
   // opt-in before setting this, and servers SHOULD treat a request
   // carrying it as a policy decision the caller owns.
-  bool insecure_skip_verify = 7;
+  bool insecure_skip_verify = 5;
 
   // Custom Root Certificate Authority certificates in PEM format.
   // Sensitive: implementations MUST NOT include this material in logs,
   // errors, or diagnostics.
-  bytes ca_certificates = 8;
+  bytes ca_certificates = 6;
 
   // Client certificate chain in PEM format (for mutual TLS / mTLS).
   // Sensitive: implementations MUST NOT include this material in logs,
   // errors, or diagnostics.
-  bytes client_certificate = 9;
+  bytes client_certificate = 7;
 
   // Client private key in PEM format (for mutual TLS / mTLS).
   // Sensitive: implementations MUST NOT include this material in logs,
   // errors, or diagnostics.
-  bytes client_private_key = 10;
+  bytes client_private_key = 8;
 
   // TLS 1.3 session resumption ticket or pre-shared key, as previously
   // issued by the peer (see TLSHandshakeResult.session_ticket).
@@ -62,7 +56,7 @@ message TLSOptions {
   // MUST ignore this field and perform a full handshake.
   // Sensitive: implementations MUST NOT include this material in logs,
   // errors, or diagnostics.
-  bytes session_ticket = 11;
+  bytes session_ticket = 9;
 
   // Decomposed, wire-level ClientHello specification (OPTIONAL).
   //
@@ -74,7 +68,7 @@ message TLSOptions {
   // handshake. Clients MUST additionally verify
   // TLSHandshakeResult.applied_client_hello against this request and abort
   // on mismatch (fail closed).
-  ClientHelloSpec client_hello = 12;
+  ClientHelloSpec client_hello = 10;
 }
 
 // TLSHandshakeResult communicates negotiated TLS session state back to the
@@ -104,14 +98,11 @@ message TLSHandshakeResult {
   // errors, or diagnostics.
   bytes session_ticket = 6;
 
-  reserved 7;
-  reserved "applied_preset";
-
   // Best-faith echo of the ClientHelloSpec the engine actually applied.
   // Present when the client requested a client_hello spec. The Client MUST
   // diff this against its request and MUST abort on any mismatch (fail
   // closed).
-  ClientHelloSpec applied_client_hello = 8;
+  ClientHelloSpec applied_client_hello = 7;
 }
 
 // TLSVersion identifies a TLS protocol version.

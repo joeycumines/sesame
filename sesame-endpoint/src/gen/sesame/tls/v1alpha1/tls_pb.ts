@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sesame/tls/v1alpha1/tls.proto.
  */
 export const file_sesame_tls_v1alpha1_tls: GenFile = /*@__PURE__*/
-  fileDesc("Ch1zZXNhbWUvdGxzL3YxYWxwaGExL3Rscy5wcm90bxITc2VzYW1lLnRscy52MWFscGhhMSKXAwoKVExTT3B0aW9ucxITCgtzZXJ2ZXJfbmFtZRgBIAEoCRIWCg5hbHBuX3Byb3RvY29scxgCIAMoCRI0CgttaW5fdmVyc2lvbhgDIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhI0CgttYXhfdmVyc2lvbhgEIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhIcChRpbnNlY3VyZV9za2lwX3ZlcmlmeRgHIAEoCBIXCg9jYV9jZXJ0aWZpY2F0ZXMYCCABKAwSGgoSY2xpZW50X2NlcnRpZmljYXRlGAkgASgMEhoKEmNsaWVudF9wcml2YXRlX2tleRgKIAEoDBIWCg5zZXNzaW9uX3RpY2tldBgLIAEoDBI6CgxjbGllbnRfaGVsbG8YDCABKAsyJC5zZXNhbWUudGxzLnYxYWxwaGExLkNsaWVudEhlbGxvU3BlY0oECAUQBkoECAYQB1ISZmluZ2VycHJpbnRfcHJlc2V0Ug1jaXBoZXJfc3VpdGVzIp8CChJUTFNIYW5kc2hha2VSZXN1bHQSGwoTbmVnb3RpYXRlZF9wcm90b2NvbBgBIAEoCRIUCgxjaXBoZXJfc3VpdGUYAiABKAUSNAoLdGxzX3ZlcnNpb24YAyABKA4yHy5zZXNhbWUudGxzLnYxYWxwaGExLlRMU1ZlcnNpb24SEwoLc2VydmVyX25hbWUYBCABKAkSGQoRcGVlcl9jZXJ0aWZpY2F0ZXMYBSADKAwSFgoOc2Vzc2lvbl90aWNrZXQYBiABKAwSQgoUYXBwbGllZF9jbGllbnRfaGVsbG8YCCABKAsyJC5zZXNhbWUudGxzLnYxYWxwaGExLkNsaWVudEhlbGxvU3BlY0oECAcQCFIOYXBwbGllZF9wcmVzZXQipQIKD0NsaWVudEhlbGxvU3BlYxIVCg1jaXBoZXJfc3VpdGVzGAEgAygFEhgKEHN1cHBvcnRlZF9ncm91cHMYAiADKAUSHAoUc2lnbmF0dXJlX2FsZ29yaXRobXMYAyADKAUSPQoKZXh0ZW5zaW9ucxgEIAMoCzIpLnNlc2FtZS50bHMudjFhbHBoYTEuQ2xpZW50SGVsbG9FeHRlbnNpb24SGwoTY29tcHJlc3Npb25fbWV0aG9kcxgFIAMoBRIZChFzZXNzaW9uX2lkX2xlbmd0aBgGIAEoBRI3Cg5sZWdhY3lfdmVyc2lvbhgHIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhITCgtwYWRfdG9fc2l6ZRgIIAEoBSJzChRDbGllbnRIZWxsb0V4dGVuc2lvbhIMCgR0eXBlGAEgASgFEjYKBGF1dG8YAiABKAsyJi5zZXNhbWUudGxzLnYxYWxwaGExLkF1dG9FeHRlbnNpb25Cb2R5SAASDQoDcmF3GAMgASgMSABCBgoEYm9keSITChFBdXRvRXh0ZW5zaW9uQm9keSK9AgoXQ2xpZW50SGVsbG9DYXBhYmlsaXRpZXMSHAoUY3VzdG9tX2NpcGhlcl9zdWl0ZXMYASABKAgSHwoXY3VzdG9tX3N1cHBvcnRlZF9ncm91cHMYAiABKAgSIwobY3VzdG9tX3NpZ25hdHVyZV9hbGdvcml0aG1zGAMgASgIEh4KFmN1c3RvbV9leHRlbnNpb25fb3JkZXIYBCABKAgSFgoOcmF3X2V4dGVuc2lvbnMYBSABKAgSFQoNZ3JlYXNlX3ZhbHVlcxgGIAEoCBIZChFzZXNzaW9uX2lkX2xlbmd0aBgHIAEoCBIXCg9wYWRkaW5nX2NvbnRyb2wYCCABKAgSHgoWbGVnYWN5X3ZlcnNpb25fY29udHJvbBgJIAEoCBIbChNjb21wcmVzc2lvbl9tZXRob2RzGAogASgIKl0KClRMU1ZlcnNpb24SGwoXVExTX1ZFUlNJT05fVU5TUEVDSUZJRUQQABILCgdUTFNfMV8wEAESCwoHVExTXzFfMRACEgsKB1RMU18xXzIQAxILCgdUTFNfMV8zEARCJlokZ2l0aHViLmNvbS9qb2V5Y3VtaW5lcy9zZXNhbWUvcmMvdGxzYgZwcm90bzM");
+  fileDesc("Ch1zZXNhbWUvdGxzL3YxYWxwaGExL3Rscy5wcm90bxITc2VzYW1lLnRscy52MWFscGhhMSLoAgoKVExTT3B0aW9ucxITCgtzZXJ2ZXJfbmFtZRgBIAEoCRIWCg5hbHBuX3Byb3RvY29scxgCIAMoCRI0CgttaW5fdmVyc2lvbhgDIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhI0CgttYXhfdmVyc2lvbhgEIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhIcChRpbnNlY3VyZV9za2lwX3ZlcmlmeRgFIAEoCBIXCg9jYV9jZXJ0aWZpY2F0ZXMYBiABKAwSGgoSY2xpZW50X2NlcnRpZmljYXRlGAcgASgMEhoKEmNsaWVudF9wcml2YXRlX2tleRgIIAEoDBIWCg5zZXNzaW9uX3RpY2tldBgJIAEoDBI6CgxjbGllbnRfaGVsbG8YCiABKAsyJC5zZXNhbWUudGxzLnYxYWxwaGExLkNsaWVudEhlbGxvU3BlYyKJAgoSVExTSGFuZHNoYWtlUmVzdWx0EhsKE25lZ290aWF0ZWRfcHJvdG9jb2wYASABKAkSFAoMY2lwaGVyX3N1aXRlGAIgASgFEjQKC3Rsc192ZXJzaW9uGAMgASgOMh8uc2VzYW1lLnRscy52MWFscGhhMS5UTFNWZXJzaW9uEhMKC3NlcnZlcl9uYW1lGAQgASgJEhkKEXBlZXJfY2VydGlmaWNhdGVzGAUgAygMEhYKDnNlc3Npb25fdGlja2V0GAYgASgMEkIKFGFwcGxpZWRfY2xpZW50X2hlbGxvGAcgASgLMiQuc2VzYW1lLnRscy52MWFscGhhMS5DbGllbnRIZWxsb1NwZWMipQIKD0NsaWVudEhlbGxvU3BlYxIVCg1jaXBoZXJfc3VpdGVzGAEgAygFEhgKEHN1cHBvcnRlZF9ncm91cHMYAiADKAUSHAoUc2lnbmF0dXJlX2FsZ29yaXRobXMYAyADKAUSPQoKZXh0ZW5zaW9ucxgEIAMoCzIpLnNlc2FtZS50bHMudjFhbHBoYTEuQ2xpZW50SGVsbG9FeHRlbnNpb24SGwoTY29tcHJlc3Npb25fbWV0aG9kcxgFIAMoBRIZChFzZXNzaW9uX2lkX2xlbmd0aBgGIAEoBRI3Cg5sZWdhY3lfdmVyc2lvbhgHIAEoDjIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTVmVyc2lvbhITCgtwYWRfdG9fc2l6ZRgIIAEoBSJzChRDbGllbnRIZWxsb0V4dGVuc2lvbhIMCgR0eXBlGAEgASgFEjYKBGF1dG8YAiABKAsyJi5zZXNhbWUudGxzLnYxYWxwaGExLkF1dG9FeHRlbnNpb25Cb2R5SAASDQoDcmF3GAMgASgMSABCBgoEYm9keSITChFBdXRvRXh0ZW5zaW9uQm9keSK9AgoXQ2xpZW50SGVsbG9DYXBhYmlsaXRpZXMSHAoUY3VzdG9tX2NpcGhlcl9zdWl0ZXMYASABKAgSHwoXY3VzdG9tX3N1cHBvcnRlZF9ncm91cHMYAiABKAgSIwobY3VzdG9tX3NpZ25hdHVyZV9hbGdvcml0aG1zGAMgASgIEh4KFmN1c3RvbV9leHRlbnNpb25fb3JkZXIYBCABKAgSFgoOcmF3X2V4dGVuc2lvbnMYBSABKAgSFQoNZ3JlYXNlX3ZhbHVlcxgGIAEoCBIZChFzZXNzaW9uX2lkX2xlbmd0aBgHIAEoCBIXCg9wYWRkaW5nX2NvbnRyb2wYCCABKAgSHgoWbGVnYWN5X3ZlcnNpb25fY29udHJvbBgJIAEoCBIbChNjb21wcmVzc2lvbl9tZXRob2RzGAogASgIKl0KClRMU1ZlcnNpb24SGwoXVExTX1ZFUlNJT05fVU5TUEVDSUZJRUQQABILCgdUTFNfMV8wEAESCwoHVExTXzFfMRACEgsKB1RMU18xXzIQAxILCgdUTFNfMV8zEARCJlokZ2l0aHViLmNvbS9qb2V5Y3VtaW5lcy9zZXNhbWUvcmMvdGxzYgZwcm90bzM");
 
 /**
  * TLSOptions specifies parameters for endpoint-terminated TLS and fingerprint
@@ -62,7 +62,7 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
    * opt-in before setting this, and servers SHOULD treat a request
    * carrying it as a policy decision the caller owns.
    *
-   * @generated from field: bool insecure_skip_verify = 7;
+   * @generated from field: bool insecure_skip_verify = 5;
    */
   insecureSkipVerify: boolean;
 
@@ -71,7 +71,7 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
    * Sensitive: implementations MUST NOT include this material in logs,
    * errors, or diagnostics.
    *
-   * @generated from field: bytes ca_certificates = 8;
+   * @generated from field: bytes ca_certificates = 6;
    */
   caCertificates: Uint8Array;
 
@@ -80,7 +80,7 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
    * Sensitive: implementations MUST NOT include this material in logs,
    * errors, or diagnostics.
    *
-   * @generated from field: bytes client_certificate = 9;
+   * @generated from field: bytes client_certificate = 7;
    */
   clientCertificate: Uint8Array;
 
@@ -89,7 +89,7 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
    * Sensitive: implementations MUST NOT include this material in logs,
    * errors, or diagnostics.
    *
-   * @generated from field: bytes client_private_key = 10;
+   * @generated from field: bytes client_private_key = 8;
    */
   clientPrivateKey: Uint8Array;
 
@@ -102,7 +102,7 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
    * Sensitive: implementations MUST NOT include this material in logs,
    * errors, or diagnostics.
    *
-   * @generated from field: bytes session_ticket = 11;
+   * @generated from field: bytes session_ticket = 9;
    */
   sessionTicket: Uint8Array;
 
@@ -118,7 +118,7 @@ export type TLSOptions = Message<"sesame.tls.v1alpha1.TLSOptions"> & {
    * TLSHandshakeResult.applied_client_hello against this request and abort
    * on mismatch (fail closed).
    *
-   * @generated from field: sesame.tls.v1alpha1.ClientHelloSpec client_hello = 12;
+   * @generated from field: sesame.tls.v1alpha1.ClientHelloSpec client_hello = 10;
    */
   clientHello?: ClientHelloSpec | undefined;
 };
@@ -191,7 +191,7 @@ export type TLSHandshakeResult = Message<"sesame.tls.v1alpha1.TLSHandshakeResult
    * diff this against its request and MUST abort on any mismatch (fail
    * closed).
    *
-   * @generated from field: sesame.tls.v1alpha1.ClientHelloSpec applied_client_hello = 8;
+   * @generated from field: sesame.tls.v1alpha1.ClientHelloSpec applied_client_hello = 7;
    */
   appliedClientHello?: ClientHelloSpec | undefined;
 };

@@ -327,27 +327,21 @@ message NetConnResponse {
     // The server accepts in-stream upgrade_tls commands.
     bool supports_opportunistic_tls = 2;
 
-    reserved 3;
-    reserved "supports_impersonation";
-
     // Maximum data chunk the server can receive, in bytes; the client
     // MUST NOT emit larger chunks. 0 means the implementation default
     // (32768). Advertised values MUST NOT exceed the stream's gRPC
     // per-message receive limit.
-    int32 max_chunk_size = 4;
+    int32 max_chunk_size = 3;
 
     // Receive window the server grants the client for client -> server
     // bytes, in bytes. 0 means the implementation default (65535), not a
     // zero window.
-    int32 initial_window_size = 5;
-
-    reserved 6;
-    reserved "supported_presets";
+    int32 initial_window_size = 4;
 
     // Decomposed ClientHello capabilities the active TLS engine can
     // honour, advisory: a pre-dial hint only. The server MUST still fail
     // closed per-request on any dimension it cannot apply, and clients
     // MUST verify TLSHandshakeResult.applied_client_hello regardless.
-    .sesame.tls.v1alpha1.ClientHelloCapabilities client_hello_capabilities = 7;
+    .sesame.tls.v1alpha1.ClientHelloCapabilities client_hello_capabilities = 5;
   }
 }

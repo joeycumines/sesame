@@ -1098,16 +1098,16 @@ type NetConnResponse_Capabilities struct {
 	// MUST NOT emit larger chunks. 0 means the implementation default
 	// (32768). Advertised values MUST NOT exceed the stream's gRPC
 	// per-message receive limit.
-	MaxChunkSize int32 `protobuf:"varint,4,opt,name=max_chunk_size,json=maxChunkSize,proto3" json:"max_chunk_size,omitempty"`
+	MaxChunkSize int32 `protobuf:"varint,3,opt,name=max_chunk_size,json=maxChunkSize,proto3" json:"max_chunk_size,omitempty"`
 	// Receive window the server grants the client for client -> server
 	// bytes, in bytes. 0 means the implementation default (65535), not a
 	// zero window.
-	InitialWindowSize int32 `protobuf:"varint,5,opt,name=initial_window_size,json=initialWindowSize,proto3" json:"initial_window_size,omitempty"`
+	InitialWindowSize int32 `protobuf:"varint,4,opt,name=initial_window_size,json=initialWindowSize,proto3" json:"initial_window_size,omitempty"`
 	// Decomposed ClientHello capabilities the active TLS engine can
 	// honour, advisory: a pre-dial hint only. The server MUST still fail
 	// closed per-request on any dimension it cannot apply, and clients
 	// MUST verify TLSHandshakeResult.applied_client_hello regardless.
-	ClientHelloCapabilities *tls.ClientHelloCapabilities `protobuf:"bytes,7,opt,name=client_hello_capabilities,json=clientHelloCapabilities,proto3" json:"client_hello_capabilities,omitempty"`
+	ClientHelloCapabilities *tls.ClientHelloCapabilities `protobuf:"bytes,5,opt,name=client_hello_capabilities,json=clientHelloCapabilities,proto3" json:"client_hello_capabilities,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -1511,7 +1511,7 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x12.\n" +
 	"\x13initial_window_size\x18\x03 \x01(\x05R\x11initialWindowSize\x12$\n" +
 	"\x0emax_chunk_size\x18\x04 \x01(\x05R\fmaxChunkSizeB\x06\n" +
-	"\x04data\"\xec\x0e\n" +
+	"\x04data\"\xb5\x0e\n" +
 	"\x0fNetConnResponse\x12;\n" +
 	"\x04conn\x18\x01 \x01(\v2%.sesame.v1alpha1.NetConnResponse.ConnH\x00R\x04conn\x12\x16\n" +
 	"\x05bytes\x18\x02 \x01(\fH\x00R\x05bytes\x12D\n" +
@@ -1548,13 +1548,13 @@ const file_sesame_v1alpha1_remotecontrol_proto_rawDesc = "" +
 	"\x0ebytes_received\x18\x02 \x01(\x03R\rbytesReceived\x12\x1d\n" +
 	"\n" +
 	"rtt_millis\x18\x03 \x01(\x05R\trttMillisB\a\n" +
-	"\x05event\x1a\xf7\x02\n" +
+	"\x05event\x1a\xc0\x02\n" +
 	"\fCapabilities\x122\n" +
 	"\x15supports_flow_control\x18\x01 \x01(\bR\x13supportsFlowControl\x12<\n" +
 	"\x1asupports_opportunistic_tls\x18\x02 \x01(\bR\x18supportsOpportunisticTls\x12$\n" +
-	"\x0emax_chunk_size\x18\x04 \x01(\x05R\fmaxChunkSize\x12.\n" +
-	"\x13initial_window_size\x18\x05 \x01(\x05R\x11initialWindowSize\x12h\n" +
-	"\x19client_hello_capabilities\x18\a \x01(\v2,.sesame.tls.v1alpha1.ClientHelloCapabilitiesR\x17clientHelloCapabilitiesJ\x04\b\x03\x10\x04J\x04\b\x06\x10\aR\x16supports_impersonationR\x11supported_presetsB\x06\n" +
+	"\x0emax_chunk_size\x18\x03 \x01(\x05R\fmaxChunkSize\x12.\n" +
+	"\x13initial_window_size\x18\x04 \x01(\x05R\x11initialWindowSize\x12h\n" +
+	"\x19client_hello_capabilities\x18\x05 \x01(\v2,.sesame.tls.v1alpha1.ClientHelloCapabilitiesR\x17clientHelloCapabilitiesB\x06\n" +
 	"\x04data2c\n" +
 	"\rRemoteControl\x12R\n" +
 	"\aNetConn\x12\x1f.sesame.v1alpha1.NetConnRequest\x1a .sesame.v1alpha1.NetConnResponse\"\x00(\x010\x01B\"Z github.com/joeycumines/sesame/rcb\x06proto3"
