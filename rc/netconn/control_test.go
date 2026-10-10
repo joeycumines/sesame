@@ -2338,10 +2338,10 @@ func TestClientControl_NegativeWindowUpdate_Poisons(t *testing.T) {
 	defer conn.Close()
 
 	// The poisoned connection must fail reads, not silently continue with
-	// a shrunken window. The specific violation surfaces to pending
-	// operations (abortPending) and the pipe's write side; the app's Read
-	// observes the teardown as a close error, per the established poison
-	// semantics shared with unsolicited-upgrade handling.
+	// a shrunken window. The app's Read must report the DESCRIPTIVE
+	// cause - the pipe prefers the read-end error, and poison carries
+	// its cause there instead of masking it behind io.ErrClosedPipe
+	// (previously only the write side and pending waiters saw it).
 	readErr := make(chan error, 1)
 	go func() {
 		buf := make([]byte, 16)
@@ -2353,6 +2353,9 @@ func TestClientControl_NegativeWindowUpdate_Poisons(t *testing.T) {
 	case err := <-readErr:
 		if err == nil {
 			t.Fatal("expected poisoned read to fail")
+		}
+		if !strings.Contains(err.Error(), "negative window_update credit_bytes") {
+			t.Fatalf("expected the poison cause on the app Read, got %v", err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for poisoned read to fail")

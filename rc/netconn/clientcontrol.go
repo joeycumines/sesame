@@ -359,19 +359,44 @@ func (c *clientControlConn) abortPending(err error) {
 // result). Mirrors Close()'s cleanup so every subsequent operation
 // fails instead of continuing in an unknowable state.
 func (c *clientControlConn) poison(err error) {
+	c.teardown(err, err)
+}
+
+// teardown is the single shared body of Close and poison: gated on the
+// closed flag exactly once, it cancels the RPC, closes both demux pipe
+// directions, closes the flow controllers, and delivers pendingErr to
+// in-flight waiters.
+//
+// writeErr selects the error application Reads surface: nil keeps the
+// pipe's clean defaults (io.EOF for a writer-side clean close,
+// io.ErrClosedPipe for a full close); non-nil carries the cause via the
+// pipe's read-end error slot, which the pipe prefers for Reads - a
+// plain Close() there would mask the cause behind io.ErrClosedPipe.
+func (c *clientControlConn) teardown(writeErr, pendingErr error) {
 	if c.closed.CompareAndSwap(false, true) {
 		if c.cancel != nil {
 			c.cancel()
 		}
-		_ = c.demuxRemote.Close()
-		_ = c.demuxLocalW.CloseWithError(err)
+		if writeErr != nil {
+			// Surface the cause on application Reads: the pipe
+			// returns the write-end error (werr) to readers, but only
+			// while the read-end error (rerr) is unset - closing
+			// demuxRemote stores the io.ErrClosedPipe sentinel and
+			// masks the cause. Closing the demux writer with the
+			// cause both stores it and closes the done channel
+			// blocked readers wait on.
+			_ = c.demuxLocalW.CloseWithError(writeErr)
+		} else {
+			_ = c.demuxRemote.Close()
+			_ = c.demuxLocalW.Close()
+		}
 		if c.outboundFC != nil {
 			c.outboundFC.Close()
 		}
 		if c.inboundFC != nil {
 			c.inboundFC.Close()
 		}
-		c.abortPending(err)
+		c.abortPending(pendingErr)
 	}
 }
 
@@ -458,20 +483,7 @@ func (c *clientControlConn) Write(b []byte) (int, error) {
 }
 
 func (c *clientControlConn) Close() error {
-	if c.closed.CompareAndSwap(false, true) {
-		if c.cancel != nil {
-			c.cancel()
-		}
-		_ = c.demuxRemote.Close()
-		_ = c.demuxLocalW.Close()
-		if c.outboundFC != nil {
-			c.outboundFC.Close()
-		}
-		if c.inboundFC != nil {
-			c.inboundFC.Close()
-		}
-		c.abortPending(io.ErrClosedPipe)
-	}
+	c.teardown(nil, io.ErrClosedPipe)
 	return nil
 }
 
