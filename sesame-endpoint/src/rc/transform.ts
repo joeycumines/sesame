@@ -605,9 +605,14 @@ function validateSocks5Targets(
     if (net.isIPv4(host) || net.isIPv6(host)) {
       continue;
     }
-    if (host.length > 255) {
+    // Count BYTES, not UTF-16 code units: the wire field carries an
+    // octet count, and a multibyte (IDN) domain can be under 256
+    // characters yet over 255 bytes - matching the Go reference's
+    // byte-based check.
+    const hostBytes = Buffer.byteLength(host, 'utf-8');
+    if (hostBytes > 255) {
       throw new ConnectError(
-        `sesame/rc/netconn: SOCKS5 target domain exceeds the RFC 1928 255-byte limit (${host.length} bytes)`,
+        `sesame/rc/netconn: SOCKS5 target domain exceeds the RFC 1928 255-byte limit (${hostBytes} bytes)`,
         Code.InvalidArgument,
       );
     }
@@ -990,6 +995,9 @@ function socks5Handshake(
         addrBuf = Buffer.concat([Buffer.from([0x04]), ipv6ToBytes(hp.host)]);
       } else {
         const domain = Buffer.from(hp.host, 'utf-8');
+        // The ATYP 0x03 length field carries an OCTET count: use the
+        // buffer's byte length, not the string's code-unit count
+        // (multibyte/IDN domains must not truncate the field).
         addrBuf = Buffer.concat([Buffer.from([0x03, domain.length]), domain]);
       }
 

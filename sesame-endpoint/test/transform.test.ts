@@ -170,6 +170,26 @@ describe('executeProxyHops control-byte rejection', () => {
     );
   });
 
+  it('counts bytes, not code units, for the SOCKS5 255-byte limit', async () => {
+    // A multibyte (IDN-style) domain of 200 characters is 400 UTF-8
+    // bytes: it fits the 255 limit only when (wrongly) counted in
+    // UTF-16 code units. Both stacks must reject on bytes.
+    const multibyte = 'é'.repeat(200) + ':443';
+    await expectInvalidArgument(
+      multibyte,
+      [
+        create(ProxyHopSchema, {
+          type: ProxyHop_Type.SOCKS5,
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: 'socks.internal:1080',
+          }),
+        }),
+      ],
+      '255-byte limit',
+    );
+  });
+
   it('lets the same oversized domain through an HTTP CONNECT hop', async () => {
     // HTTP CONNECT interpolates the target into a raw request line -
     // no length field - so the oversized domain must pass validation

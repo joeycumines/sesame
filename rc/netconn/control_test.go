@@ -1732,6 +1732,13 @@ func TestClientServer_UpgradeTLS_MismatchedResultPoisons(t *testing.T) {
 		retryResult, retryErr = conn.UpgradeTLS(retryCtx, &sesametls.TLSOptions{ServerName: "example.com"})
 	}()
 
+	// Let the retry register BEFORE the stale result can arrive -
+	// registration completes in microseconds once the goroutine runs;
+	// without this window the stale result can race the registration
+	// and take the (also fail-closed) unsolicited path instead, which
+	// asserts a different error message.
+	time.Sleep(100 * time.Millisecond)
+
 	// Let the server finish the FIRST upgrade: its TlsUpgraded carries
 	// the first call's id, which no longer matches the retry's.
 	provider.unblock()
