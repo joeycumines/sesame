@@ -572,8 +572,17 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 		}
 
 		if !open {
-			// don't need lock to read st.done; observing
-			// input channel close provides safe visibility
+			// The buffer is only ever closed by finishStream, which
+			// closes doneSignal immediately after. Waiting for it
+			// here makes the post-EOF contract structural: once
+			// RecvMsg has returned the stream's EOF/error, Trailer()
+			// and err() are already deterministic. Without the wait,
+			// a reader scheduled in the window between the two closes
+			// observed EOF and Trailer() returned nil (seen in the
+			// wild: grpchantesting trailer checks under race + load).
+			// Observing the channel close provides safe visibility of
+			// st.done.
+			<-st.doneSignal
 			return nil, true, st.done
 		}
 

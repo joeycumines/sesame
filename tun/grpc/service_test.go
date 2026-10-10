@@ -35,7 +35,13 @@ func TestTunnelServer(t *testing.T) {
 
 	var svr grpchantesting.TestServer
 
-	ready := make(chan struct{})
+	// Buffered: the server handler fires OnReverseTunnelConnect the
+	// moment the reverse tunnel is accepted, which can race ahead of
+	// the test goroutine reaching the <-ready receive below. With an
+	// unbuffered channel the non-blocking send in the callback was
+	// dropped in that window and the test waited forever (observed as
+	// a 25m hang of TestTunnelServer/reverse under race + load).
+	ready := make(chan struct{}, 1)
 	ts := TunnelServer{
 		OnReverseTunnelConnect: func(*Channel) {
 			// don't block; just make sure there's something in the channel

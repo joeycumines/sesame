@@ -2408,3 +2408,76 @@ func TestClientControl_NegativeServerCapabilities_FailDial(t *testing.T) {
 		})
 	}
 }
+
+// TestClientServer_LegacyClose_BoundedWhenUpstreamStalled pins the
+// default close policy of the legacy (capability-less) client conn.
+//
+// The legacy conn closes gracefully: CloseSend, then a drain that waits
+// for the response stream to end. The drain can only complete when the
+// server's relay finishes; the relay cannot finish while its upstream
+// write is blocked (an upstream nobody reads, closed only AFTER the
+// client's Close returns - exactly the ordering nettest's stop uses).
+// With an unbounded WaitRemote drain, Close hung forever in that
+// state; the default policy must bound the drain so Close returns.
+func TestClientServer_LegacyClose_BoundedWhenUpstreamStalled(t *testing.T) {
+	ccFactory := testutil.ClientConnFactories["inprocgrpc"]
+	if ccFactory == nil {
+		t.Skip("inprocgrpc factory unavailable")
+	}
+
+	// The upstream: a net.Pipe end nobody reads. The server's relay
+	// blocks on the first chunk written into it.
+	clientPipe, serverPipe := net.Pipe()
+	defer clientPipe.Close()
+	defer serverPipe.Close()
+
+	server := netconn.Server{
+		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			return &mockPipeDialer{conn: clientPipe}, nil
+		},
+	}
+
+	gc := ccFactory(func(h testutil.GRPCServer) {
+		rc.RegisterRemoteControlServer(h, &server)
+	})
+	defer gc.Close()
+
+	// No Capabilities: the legacy pipe path under test.
+	client := netconn.Client{API: rc.NewRemoteControlClient(gc)}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	conn, err := client.DialContext(ctx, "tcp", "pipe.internal:80")
+	if err != nil {
+		t.Fatalf("DialContext failed: %v", err)
+	}
+	defer conn.Close()
+
+	// One chunk is enough to stall the server's relay: the client pipe
+	// accepts it, the server relays it into the upstream and blocks
+	// (nobody reads serverPipe). Write from a goroutine so the test
+	// cannot wedge if the write parks on backpressure.
+	writeErr := make(chan error, 1)
+	go func() {
+		_, err := conn.Write(make([]byte, 1024))
+		writeErr <- err
+	}()
+
+	// Give the relay time to pick the chunk up and block on it. Close
+	// racing ahead of the relay is harmless: the relay blocks on the
+	// same write either way, and the drain cannot complete while it is
+	// blocked.
+	time.Sleep(200 * time.Millisecond)
+
+	closed := make(chan error, 1)
+	go func() { closed <- conn.Close() }()
+
+	select {
+	case <-closed:
+		// Bounded close: returned within the watchdog. The exact bound
+		// is the policy's, not this test's business.
+	case <-time.After(30 * time.Second):
+		t.Fatal("Close hung: the default close policy must bound the graceful drain when the peer's relay is stalled")
+	}
+}

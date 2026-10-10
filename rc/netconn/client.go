@@ -21,6 +21,12 @@ import (
 
 type (
 	// Client implements Dialer using rc.RemoteControlClient's NetConn method.
+	//
+	// ClosePolicy configures the legacy (capability-less) conn's close
+	// behavior. Unset, it defaults to a graceful close bounded by
+	// DefaultCloseDrainTimeout: drain buffered response data, then
+	// cancel. Control-mode conns (Capabilities set) cancel immediately
+	// on Close regardless of this field.
 	Client struct {
 		API          ClientAPI
 		Timeout      time.Duration
@@ -29,7 +35,6 @@ type (
 		Proxy        *sesameproxy.ProxyOptions
 		Capabilities *rc.NetConnRequest_Capabilities
 	}
-
 	// ClientAPI models a subset of rc.RemoteControlClient, as used by Client.
 	ClientAPI interface {
 		NetConn(ctx context.Context, opts ...grpc.CallOption) (rc.RemoteControl_NetConnClient, error)
@@ -63,6 +68,14 @@ var (
 	_ ConnTransformResult = (*netConn)(nil)
 	_                     = Client{API: rc.RemoteControlClient(nil)}
 )
+
+// DefaultCloseDrainTimeout bounds the legacy (capability-less) conn's
+// graceful close when Client.ClosePolicy is unset. The drain normally
+// completes as soon as the server's relay finishes; the bound only
+// fires when the relay cannot finish - e.g. the peer's socket is
+// unread and is closed only after this conn's Close returns - a state
+// in which an unbounded drain would hang Close forever.
+const DefaultCloseDrainTimeout = 5 * time.Second
 
 func (x *Client) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	var success bool
@@ -142,6 +155,10 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 	// encapsulates the remaining stages for legacy connections:
 	// 3. Any number of NetConnRequest.bytes and NetConnResponse.bytes
 	// 4. Termination
+	closePolicy := x.ClosePolicy
+	if closePolicy == nil {
+		closePolicy = streamutil.WaitRemoteTimeout(DefaultCloseDrainTimeout)
+	}
 	wp, err := ionet.WrapPipeGraceful(
 		streamutil.OptHalfCloser.Pipe(streamutil.Pipe{
 			Reader: &clientReader{ioReader: newStreamClientReader(stream)},
@@ -155,7 +172,7 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 			}),
 		}),
 		streamutil.OptHalfCloser.CloseGuard(func() bool { return ctx.Err() == nil }),
-		streamutil.OptHalfCloser.ClosePolicy(x.ClosePolicy),
+		streamutil.OptHalfCloser.ClosePolicy(closePolicy),
 	)
 	if err != nil {
 		return nil, err

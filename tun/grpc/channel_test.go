@@ -524,3 +524,76 @@ func Test_concurrentCancelAndFinish(t *testing.T) {
 		cc.Close()
 	}
 }
+
+// Test_readMsgLocked_trailerVisibleAtEOF pins the post-EOF contract:
+// once RecvMsg observes the stream end (buffer close), the stream's
+// terminal state must already be observable - a caller that reads to
+// EOF and immediately calls Trailer() must see the trailers, not a
+// nil MD.
+//
+// Regression for a race (flaky grpchantesting trailer checks under
+// race + load, e.g. TestTunnelServer/forward/*/success reporting
+// "wrong trailers echoed back ... instead was []"): finishStream
+// closes the buffer before doneSignal, so a reader scheduled between
+// the two closes returned EOF while Trailer() still took its
+// not-yet-closed default branch and returned nil.
+func Test_readMsgLocked_trailerVisibleAtEOF(t *testing.T) {
+	chCtx, chCancel := context.WithCancel(context.Background())
+	defer chCancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := &Channel{ctx: chCtx, streams: make(map[uint64]*tunnelClientStream)}
+	trailer := metadata.MD{"4foo4": []string{"7bar7"}}
+	st := &tunnelClientStream{
+		ctx:            ctx,
+		cncl:           cancel,
+		ch:             ch,
+		streamID:       1,
+		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		headerSignal:   make(chan struct{}),
+		doneSignal:     make(chan struct{}),
+		isServerStream: true,
+	}
+
+	// A reader parked on the open, empty buffer.
+	type result struct {
+		ok  bool
+		err error
+	}
+	read := make(chan result, 1)
+	go func() {
+		_, ok, err := st.readMsg()
+		read <- result{ok, err}
+	}()
+
+	// Simulate finishStream having applied the terminal state but not
+	// yet having closed doneSignal - the buggy window, exaggerated.
+	st.ingestMu.Lock()
+	st.trailer = trailer
+	st.done = io.EOF
+	close(st.buffer)
+	st.ingestMu.Unlock()
+
+	// The reader must NOT observe EOF while doneSignal is still open.
+	select {
+	case r := <-read:
+		t.Fatalf("readMsg returned (ok=%v err=%v) before doneSignal closed: EOF was observable ahead of the terminal state", r.ok, r.err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Completing the terminal sequence unblocks the reader...
+	close(st.doneSignal)
+	select {
+	case r := <-read:
+		if !r.ok || r.err != io.EOF {
+			t.Fatalf("expected ok=true io.EOF, got ok=%v err=%v", r.ok, r.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("readMsg did not return after doneSignal closed")
+	}
+
+	// ...and the trailers are visible immediately, with no further
+	// synchronization step for the caller to race.
+	if v := st.Trailer()["4foo4"]; len(v) != 1 || v[0] != "7bar7" {
+		t.Fatalf("trailers not visible at EOF: got %v", st.Trailer())
+	}
+}
