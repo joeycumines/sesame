@@ -322,6 +322,15 @@ function ianaCipherSuite(tlsSocket: tls.TLSSocket): number {
 
 export const MAX_PROXY_HOPS = 8;
 
+// Fallback bound for TLS handshakes when no request deadline applies,
+// mirroring the Go reference's handshakeFallbackTimeout (30s) and the
+// same rationale as the proxy-handshake bounds: a peer that accepts
+// TCP but never answers the ClientHello must not hang the handshake.
+// The dial-time handshake instead uses the request's dial timeout
+// (establishment semantics); in-stream upgrades have no live dial
+// timeout to inherit and take this fixed operational fallback.
+export const HANDSHAKE_FALLBACK_TIMEOUT_MS = 30_000;
+
 export async function executeTLSHandshake(
   socket: net.Socket,
   opts: TLSOptions,

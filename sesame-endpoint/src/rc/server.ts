@@ -30,6 +30,7 @@ import {
   createNetAddrFromSocket,
   executeProxyHops,
   executeTLSHandshake,
+  HANDSHAKE_FALLBACK_TIMEOUT_MS,
   parseHostPort,
   TLSProvider,
   validateClientHelloSpec,
@@ -562,7 +563,10 @@ export function createRemoteControlService(
             config.secrets,
             tlsProvider,
             abortSignal,
-            effectiveDialTimeoutMs,
+            // In-stream upgrades have no live dial timeout to inherit;
+            // bound them by the shared fallback, matching the Go
+            // reference's 30s handshakeFallbackTimeout.
+            HANDSHAKE_FALLBACK_TIMEOUT_MS,
           );
           activeSocket = tlsSocket;
           pausedForUpgrade = false;
