@@ -212,6 +212,16 @@ export function parseConfig(
   if (!allowedNetworks || allowedNetworks.length === 0) {
     throw new Error('Allowed networks must not be empty');
   }
+  // An empty entry (e.g. a trailing comma or a blank flag value) can never
+  // match a well-formed dial request network, so it would silently narrow
+  // policy; reject it so the operator's intent is explicit.
+  for (const n of allowedNetworks) {
+    if (n.length === 0) {
+      throw new Error(
+        'Allowed networks must not contain empty entries (check for stray commas)',
+      );
+    }
+  }
 
   const secrets: ServerSecrets = {
     tlsCert: env.SESAME_ENDPOINT_TLS_CERT,

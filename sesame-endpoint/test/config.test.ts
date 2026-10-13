@@ -142,6 +142,33 @@ describe('config parser', () => {
     );
   });
 
+  it('rejects empty allowedNetworks entries from flag and env', () => {
+    // An empty entry (blank value, stray comma) can never match a
+    // well-formed dial request network and would silently narrow
+    // policy; the parser rejects it so the operator's intent is
+    // explicit.
+    expect(() => parseConfig(['--allowed-networks', ''])).toThrow(
+      'Allowed networks must not contain empty entries',
+    );
+    expect(() => parseConfig(['--allowed-networks', 'tcp,,tcp6'])).toThrow(
+      'Allowed networks must not contain empty entries',
+    );
+    expect(() => parseConfig(['--allowed-networks', 'tcp, '])).toThrow(
+      'Allowed networks must not contain empty entries',
+    );
+    expect(() =>
+      parseConfig([], {SESAME_ENDPOINT_ALLOWED_NETWORKS: ','}),
+    ).toThrow('Allowed networks must not contain empty entries');
+    // An empty env var is treated as unset (defaults apply), matching
+    // the parser's uniform env handling.
+
+    // Trimmed, fully-specified lists are unaffected.
+    expect(
+      parseConfig(['--allowed-networks', ' tcp , tcp6 ']).config!
+        .allowedNetworks,
+    ).toEqual(['tcp', 'tcp6']);
+  });
+
   it('parses enable flags strictly: only true/false/1/0 are accepted', () => {
     // Accepted spellings, flag form.
     expect(
