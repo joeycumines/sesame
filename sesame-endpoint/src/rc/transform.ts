@@ -582,10 +582,12 @@ export async function executeProxyHops(
       parseHostPort(addr);
     } catch (err: unknown) {
       // Name the offending hop like the Go reference does, keeping the
-      // underlying reason and code.
+      // underlying reason and code. ConnectError.message embeds a
+      // "[code] " tag, so the bare reason text is rawMessage; strip
+      // its module prefix to avoid nesting it under this message.
       const reason =
         err instanceof ConnectError
-          ? err.message.replace(/^sesame\/rc\/netconn: /, '')
+          ? err.rawMessage.replace(/^sesame\/rc\/netconn: /, '')
           : String(err);
       throw new ConnectError(
         `sesame/rc/netconn: invalid proxy hop ${i} address: ${reason}`,

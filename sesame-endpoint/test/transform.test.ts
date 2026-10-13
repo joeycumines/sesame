@@ -235,8 +235,12 @@ describe('executeProxyHops credential and address validation', () => {
     }
     expect(err).toBeInstanceOf(ConnectError);
     expect((err as ConnectError).code).toBe(Code.InvalidArgument);
-    expect((err as ConnectError).message).toContain(
-      'invalid proxy hop 1 address',
+    // Pin the full reason shape: ConnectError.message embeds a
+    // "[code] " tag, so the bare text lives in rawMessage; the hop
+    // wrapper must nest the stripped reason without a duplicate
+    // module prefix or a stray code tag.
+    expect((err as ConnectError).rawMessage).toBe(
+      'sesame/rc/netconn: invalid proxy hop 1 address: Invalid host:port address: proxy.internal',
     );
   });
 
@@ -264,6 +268,32 @@ describe('executeProxyHops credential and address validation', () => {
     expect(err).toBeInstanceOf(ConnectError);
     expect((err as ConnectError).code).toBe(Code.InvalidArgument);
     expect((err as ConnectError).message).toContain('password but no username');
+  });
+
+  it('reports a malformed target over a concurrent abort too', async () => {
+    // The validation-before-abort ordering must cover every violation
+    // class: a target without a port and a pre-aborted signal still
+    // reports the malformed input.
+    const ctrl = new AbortController();
+    ctrl.abort();
+    let err: unknown;
+    try {
+      await executeProxyHops(
+        'tcp',
+        'target.internal',
+        create(ProxyOptionsSchema, {hops: [hopWith()]}),
+        10000,
+        undefined,
+        ctrl.signal,
+      );
+    } catch (e: unknown) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ConnectError);
+    expect((err as ConnectError).code).toBe(Code.InvalidArgument);
+    expect((err as ConnectError).message).toContain(
+      'Invalid host:port address',
+    );
   });
 
   it('rejects a missing middle hop address before any dialing', async () => {
