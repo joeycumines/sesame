@@ -159,6 +159,12 @@ func NewClientControlConn(
 }
 
 func (c *clientControlConn) readLoop(ctx context.Context) {
+	// Set when a window-update send fails with io.EOF because the peer
+	// already completed the RPC: further updates are moot, but response
+	// messages may still be buffered in transport and MUST still reach
+	// the app - closing the pipe on that benign failure would surface
+	// a clean EOF and discard them.
+	windowUpdatesMoot := false
 	for {
 		res, err := c.stream.Recv()
 		if err != nil {
@@ -200,7 +206,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 						c.abortPending(writeErr)
 						return
 					}
-					if c.inboundFC != nil && n > 0 {
+					if c.inboundFC != nil && n > 0 && !windowUpdatesMoot {
 						c.sendMu.Lock()
 						sendErr := c.stream.Send(&rc.NetConnRequest{
 							Data: &rc.NetConnRequest_Control_{
@@ -215,9 +221,18 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 						})
 						c.sendMu.Unlock()
 						if sendErr != nil {
-							_ = c.demuxLocalW.CloseWithError(sendErr)
-							c.abortPending(sendErr)
-							return
+							if !errors.Is(sendErr, io.EOF) {
+								_ = c.demuxLocalW.CloseWithError(sendErr)
+								c.abortPending(sendErr)
+								return
+							}
+							// The peer completed the RPC and the transport
+							// closed the request half: the failure is benign
+							// and no further window update can succeed.
+							// Draining continues so buffered responses
+							// still reach the app; the next Recv delivers
+							// them and then the stream's own terminal.
+							windowUpdatesMoot = true
 						}
 					}
 				}
