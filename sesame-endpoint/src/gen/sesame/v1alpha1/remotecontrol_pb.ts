@@ -157,7 +157,10 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
   } | {
     /**
      * Credit-based stream flow control window update: replenishes the
-     * server's window for client -> server bytes.
+     * server's window for server -> client bytes. Travels opposite to
+     * the data it credits: the client emits it after consuming
+     * server -> client payload bytes, releasing the server's send
+     * window (granted via the client's capabilities.initial_window_size).
      *
      * @generated from field: sesame.v1alpha1.NetConnRequest.Control.WindowUpdate window_update = 2;
      */
@@ -511,7 +514,10 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
   } | {
     /**
      * Credit-based stream flow control window update: replenishes the
-     * client's window for server -> client bytes.
+     * client's window for client -> server bytes. Travels opposite to
+     * the data it credits: the server emits it after consuming
+     * client -> server payload bytes, releasing the client's send
+     * window (granted via the server's capabilities.initial_window_size).
      *
      * @generated from field: sesame.v1alpha1.NetConnResponse.Control.WindowUpdate window_update = 3;
      */

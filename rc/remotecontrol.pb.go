@@ -458,7 +458,10 @@ type NetConnRequest_Control_UpgradeTls struct {
 
 type NetConnRequest_Control_WindowUpdate_ struct {
 	// Credit-based stream flow control window update: replenishes the
-	// server's window for client -> server bytes.
+	// server's window for server -> client bytes. Travels opposite to
+	// the data it credits: the client emits it after consuming
+	// server -> client payload bytes, releasing the server's send
+	// window (granted via the client's capabilities.initial_window_size).
 	WindowUpdate *NetConnRequest_Control_WindowUpdate `protobuf:"bytes,2,opt,name=window_update,json=windowUpdate,proto3,oneof"`
 }
 
@@ -1057,7 +1060,10 @@ type NetConnResponse_Control_TlsUpgradeFailed struct {
 
 type NetConnResponse_Control_WindowUpdate_ struct {
 	// Credit-based stream flow control window update: replenishes the
-	// client's window for server -> client bytes.
+	// client's window for client -> server bytes. Travels opposite to
+	// the data it credits: the server emits it after consuming
+	// client -> server payload bytes, releasing the client's send
+	// window (granted via the server's capabilities.initial_window_size).
 	WindowUpdate *NetConnResponse_Control_WindowUpdate `protobuf:"bytes,3,opt,name=window_update,json=windowUpdate,proto3,oneof"`
 }
 

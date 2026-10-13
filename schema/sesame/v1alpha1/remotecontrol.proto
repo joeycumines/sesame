@@ -129,7 +129,10 @@ message NetConnRequest {
       UpgradeTLS upgrade_tls = 1;
 
       // Credit-based stream flow control window update: replenishes the
-      // server's window for client -> server bytes.
+      // server's window for server -> client bytes. Travels opposite to
+      // the data it credits: the client emits it after consuming
+      // server -> client payload bytes, releasing the server's send
+      // window (granted via the client's capabilities.initial_window_size).
       WindowUpdate window_update = 2;
 
       // Unilateral write-side connection close (TCP FIN / TLS
@@ -268,7 +271,10 @@ message NetConnResponse {
       TLSUpgradeFailed tls_upgrade_failed = 2;
 
       // Credit-based stream flow control window update: replenishes the
-      // client's window for server -> client bytes.
+      // client's window for client -> server bytes. Travels opposite to
+      // the data it credits: the server emits it after consuming
+      // client -> server payload bytes, releasing the client's send
+      // window (granted via the server's capabilities.initial_window_size).
       WindowUpdate window_update = 3;
 
       // Upstream write-side closure (TCP FIN or TLS close_notify). The

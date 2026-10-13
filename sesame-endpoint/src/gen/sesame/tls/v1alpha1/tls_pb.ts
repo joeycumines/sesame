@@ -453,6 +453,15 @@ export const ClientHelloCapabilitiesSchema: GenMessage<ClientHelloCapabilities> 
  * policy; modeling them here describes the protocol universe, not an
  * endorsement.
  *
+ * Naming note (AIP-126): package-level enum values are conventionally
+ * prefixed with the enum name to prevent C++ value-name collisions
+ * between package-level enums sharing a proto package. This is the
+ * package's only package-level enum, so the collision the convention
+ * guards against cannot arise; the non-zero values deliberately remain
+ * unprefixed (google.rpc.Code sets the same precedent), while the zero
+ * value follows the enum-name + _UNSPECIFIED convention. Standing,
+ * considered deviation.
+ *
  * @generated from enum sesame.tls.v1alpha1.TLSVersion
  */
 export enum TLSVersion {
