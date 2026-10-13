@@ -210,7 +210,9 @@ describe('executeProxyHops credential and address validation', () => {
     }
   });
 
-  it('rejects a malformed hop address before any dialing', async () => {
+  it('rejects a malformed hop address before any dialing, naming the hop', async () => {
+    // A malformed address on a multi-hop chain names the offending hop
+    // index, matching the Go reference's per-hop error.
     let err: unknown;
     try {
       await executeProxyHops(
@@ -218,6 +220,7 @@ describe('executeProxyHops credential and address validation', () => {
         'target.internal:443',
         create(ProxyOptionsSchema, {
           hops: [
+            hopWith(),
             hopWith({
               address: create(NetAddrSchema, {
                 network: 'tcp',
@@ -232,6 +235,35 @@ describe('executeProxyHops credential and address validation', () => {
     }
     expect(err).toBeInstanceOf(ConnectError);
     expect((err as ConnectError).code).toBe(Code.InvalidArgument);
+    expect((err as ConnectError).message).toContain(
+      'invalid proxy hop 1 address',
+    );
+  });
+
+  it('reports malformed input over a concurrent abort, matching the Go reference', async () => {
+    // A request that is both malformed and aborted reports the
+    // malformed input (InvalidArgument), not the cancellation; only a
+    // well-formed aborted request surfaces Canceled.
+    const ctrl = new AbortController();
+    ctrl.abort();
+    let err: unknown;
+    try {
+      await executeProxyHops(
+        'tcp',
+        'target.internal:443',
+        create(ProxyOptionsSchema, {
+          hops: [hopWith({password: 'orphaned'})],
+        }),
+        10000,
+        undefined,
+        ctrl.signal,
+      );
+    } catch (e: unknown) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ConnectError);
+    expect((err as ConnectError).code).toBe(Code.InvalidArgument);
+    expect((err as ConnectError).message).toContain('password but no username');
   });
 
   it('rejects a missing middle hop address before any dialing', async () => {

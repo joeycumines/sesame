@@ -541,12 +541,6 @@ export async function executeProxyHops(
   signal?: AbortSignal,
 ): Promise<ProxyExecutionResult> {
   const hops = proxyOpts?.hops ?? [];
-  if (signal?.aborted) {
-    throw new ConnectError(
-      'sesame/rc/netconn: connection aborted by client',
-      Code.Canceled,
-    );
-  }
   if (hops.length === 0) {
     const hp = parseHostPort(targetAddress);
     const socket = await dialTcp(hp.host, hp.port, timeoutMs, signal);
@@ -584,8 +578,32 @@ export async function executeProxyHops(
         Code.InvalidArgument,
       );
     }
-    parseHostPort(addr);
+    try {
+      parseHostPort(addr);
+    } catch (err: unknown) {
+      // Name the offending hop like the Go reference does, keeping the
+      // underlying reason and code.
+      const reason =
+        err instanceof ConnectError
+          ? err.message.replace(/^sesame\/rc\/netconn: /, '')
+          : String(err);
+      throw new ConnectError(
+        `sesame/rc/netconn: invalid proxy hop ${i} address: ${reason}`,
+        Code.InvalidArgument,
+      );
+    }
   });
+
+  // Rejection happens after validation, matching the Go reference: a
+  // request that is both malformed and aborted reports the malformed
+  // input (InvalidArgument), and only a well-formed aborted request
+  // surfaces the cancellation before any dial.
+  if (signal?.aborted) {
+    throw new ConnectError(
+      'sesame/rc/netconn: connection aborted by client',
+      Code.Canceled,
+    );
+  }
 
   const traversedHops: NetAddr[] = [];
   const firstHop = hops[0];
