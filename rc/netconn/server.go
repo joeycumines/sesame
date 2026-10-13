@@ -89,23 +89,11 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 
 	dialReq := msg.GetDial()
 
-	// Validate advertised capabilities at the API boundary: negative
-	// window/chunk values are malformed input, and rejecting them before
-	// any dialing or stream output keeps the failure cheap and precise.
-	if caps := dialReq.GetCapabilities(); caps != nil {
-		if caps.GetInitialWindowSize() < 0 || caps.GetMaxChunkSize() < 0 {
-			return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: negative capability value in dial request")
-		}
-	}
-
-	// Validate the TLS version range at the API boundary, before any
-	// dialing: a floor above its ceiling can never negotiate, and input
-	// validation must precede side effects. ExecuteTLSHandshake re-checks
-	// (covering the in-stream upgrade path and direct callers).
-	if tlsOpts := dialReq.GetTls(); tlsOpts != nil {
-		if minV, maxV := tlsOpts.GetMinVersion(), tlsOpts.GetMaxVersion(); minV != 0 && maxV != 0 && minV > maxV {
-			return status.Error(codes.InvalidArgument, "sesame/rc/netconn: min_version exceeds max_version")
-		}
+	// Input validation precedes side effects: capabilities, TLS range,
+	// timeout, and target address are all client-controlled dial fields
+	// (see validateDialRequest).
+	if err := validateDialRequest(dialReq); err != nil {
+		return err
 	}
 
 	// dialer factory handles timeout etc
@@ -135,14 +123,25 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 		var dialErr error
 		conn, dialErr = dialer.DialContext(ctx, targetNet, targetAddr)
 		if dialErr != nil {
-			return dialErr
+			return wrapDialError(dialErr, "sesame/rc/netconn: dial %s %s failed", targetNet, targetAddr)
 		}
 	}
 	defer conn.Close()
 
 	if dialReq.GetTls() != nil {
+		// The requested dial timeout bounds the whole establishment,
+		// including TLS termination - the tunnel is not "dialed" until
+		// the handshake completes, mirroring the TypeScript reference.
+		// The derived context is scoped to the handshake only; the
+		// steady-state demux below keeps the stream context.
+		hctx := ctx
+		if t := dialReq.GetTimeout().AsDuration(); t > 0 {
+			var hcancel context.CancelFunc
+			hctx, hcancel = context.WithTimeout(ctx, t)
+			defer hcancel()
+		}
 		var tlsErr error
-		conn, tlsResult, tlsErr = ExecuteTLSHandshake(ctx, conn, dialReq.GetTls(), targetAddr, x.TLSProvider)
+		conn, tlsResult, tlsErr = ExecuteTLSHandshake(hctx, conn, dialReq.GetTls(), targetAddr, x.TLSProvider)
 		if tlsErr != nil {
 			return tlsErr
 		}
@@ -215,8 +214,47 @@ func (x *Server) dial(req *rc.NetConnRequest_Dial) (Dialer, error) {
 	return DefaultDialer(req)
 }
 
+// validateDialRequest rejects malformed client input at the API
+// boundary, before any dialer is built or side effect runs: negative
+// advertised capabilities, an impossible TLS version range, a negative
+// dial timeout, and a target address that is not a parseable host:port.
+// Per AIP-193 such requests fail with INVALID_ARGUMENT instead of
+// surfacing later as opaque errors from the dial path. Mirrors the
+// boundary checks of the TypeScript reference's netConn handler, which
+// has always required a host:port target.
+func validateDialRequest(req *rc.NetConnRequest_Dial) error {
+	// Negative window/chunk values are malformed input, and rejecting
+	// them before any dialing or stream output keeps the failure cheap
+	// and precise.
+	if caps := req.GetCapabilities(); caps != nil {
+		if caps.GetInitialWindowSize() < 0 || caps.GetMaxChunkSize() < 0 {
+			return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: negative capability value in dial request")
+		}
+	}
+
+	// A TLS version floor above its ceiling can never negotiate, and
+	// input validation must precede side effects. ExecuteTLSHandshake
+	// re-checks (covering the in-stream upgrade path and direct
+	// callers).
+	if tlsOpts := req.GetTls(); tlsOpts != nil {
+		if minV, maxV := tlsOpts.GetMinVersion(), tlsOpts.GetMaxVersion(); minV != 0 && maxV != 0 && minV > maxV {
+			return status.Error(codes.InvalidArgument, "sesame/rc/netconn: min_version exceeds max_version")
+		}
+	}
+
+	// A negative timeout is malformed input, not "unset": honoring it
+	// would fail the dial immediately for a confusing reason.
+	if t := req.GetTimeout().AsDuration(); t < 0 {
+		return status.Error(codes.InvalidArgument, "sesame/rc/netconn: negative dial timeout")
+	}
+
+	// The target address is client-controlled: both stacks dial
+	// host:port authorities, so anything else is rejected before any
+	// dialing.
+	return validateHostPort(req.GetAddress().GetAddress(), "target address")
+}
+
 func defaultDialer(req *rc.NetConnRequest_Dial) (Dialer, error) {
-	// TODO smarter (grpc) errors for both this func and the returned dialer
 	return &net.Dialer{
 		Timeout: req.GetTimeout().AsDuration(),
 	}, nil

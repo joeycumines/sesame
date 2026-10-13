@@ -11,6 +11,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
@@ -81,8 +83,16 @@ func BuildTLSConfig(opts *sesametls.TLSOptions, defaultServerName string) (*cryp
 	if serverName == "" {
 		serverName = defaultServerName
 	}
-	// Strip port if present in serverName
-	if host, _, err := net.SplitHostPort(serverName); err == nil {
+	// A colon-bearing server_name that is not a bare IPv6 literal must
+	// be a parseable host:port (SNI is a DNS hostname; the port is
+	// stripped). Anything else is malformed client input, rejected with
+	// INVALID_ARGUMENT rather than sent on the wire, mirroring the
+	// TypeScript reference.
+	if strings.Contains(serverName, ":") && net.ParseIP(serverName) == nil {
+		if err := validateHostPort(serverName, "server_name"); err != nil {
+			return nil, err
+		}
+		host, _, _ := net.SplitHostPort(serverName)
 		serverName = host
 	}
 
@@ -197,6 +207,15 @@ func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.
 		appliedSpec = spec // Echo verbatim: we validated we can honor it exactly.
 	}
 
+	// A peer that accepts TCP but never answers the ClientHello would
+	// otherwise hang the handshake until the client disconnects; proxy
+	// handshakes take the same fallback for the same reason. The raw
+	// conn is armed from the caller's deadline or the fallback and
+	// restored afterwards - steady-state deadlines belong to the
+	// caller, and custom TLSProviders receive the ctx and own their
+	// own handshake bounds.
+	defer setHandshakeDeadline(ctx, rawConn)()
+
 	tlsConn := cryptotls.Client(rawConn, cfg)
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return nil, nil, status.Errorf(codes.Unavailable, "sesame/rc/netconn: TLS handshake failed: %v", err)
@@ -214,8 +233,14 @@ const MaxProxyHops = 8
 // ExecuteProxyHops chains egress proxies across one or more hops to establish a tunnel to targetAddress.
 func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesameproxy.ProxyOptions, targetNetwork, targetAddress string) (net.Conn, *sesameproxy.ProxyResult, error) {
 	if proxyOpts == nil || len(proxyOpts.GetHops()) == 0 {
+		if err := validateHostPort(targetAddress, "target address"); err != nil {
+			return nil, nil, err
+		}
 		conn, err := baseDialer.DialContext(ctx, targetNetwork, targetAddress)
-		return conn, nil, err
+		if err != nil {
+			return nil, nil, wrapDialError(err, "sesame/rc/netconn: dial %s %s failed", targetNetwork, targetAddress)
+		}
+		return conn, nil, nil
 	}
 
 	if len(proxyOpts.GetHops()) > MaxProxyHops {
@@ -229,18 +254,35 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 	if err := validateSocks5Targets(targetAddress, hops); err != nil {
 		return nil, nil, err
 	}
+	if err := validateProxyCredentials(hops); err != nil {
+		return nil, nil, err
+	}
+	if err := validateHostPort(targetAddress, "target address"); err != nil {
+		return nil, nil, err
+	}
+	// Every hop address is validated before the first dial: a chain
+	// with a missing or malformed address is rejected without spending
+	// a server-side dial on it.
+	for i, hop := range hops {
+		if hop.GetAddress() == nil || hop.GetAddress().GetAddress() == "" {
+			if i == 0 {
+				return nil, nil, status.Error(codes.InvalidArgument, "sesame/rc/netconn: first proxy hop missing address")
+			}
+			return nil, nil, status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: proxy hop %d missing address", i)
+		}
+		if err := validateHostPort(hop.GetAddress().GetAddress(), fmt.Sprintf("proxy hop %d address", i)); err != nil {
+			return nil, nil, err
+		}
+	}
 	traversed := make([]*netaddr.NetAddr, 0, len(hops))
 
 	// Dial the first hop using the base dialer
 	firstHop := hops[0]
 	firstAddr := firstHop.GetAddress()
-	if firstAddr == nil {
-		return nil, nil, status.Error(codes.InvalidArgument, "sesame/rc/netconn: first proxy hop missing address")
-	}
 
 	currentConn, err := baseDialer.DialContext(ctx, firstAddr.GetNetwork(), firstAddr.GetAddress())
 	if err != nil {
-		return nil, nil, status.Errorf(codes.Unavailable, "sesame/rc/netconn: dialing first proxy hop %s failed: %v", firstAddr.GetAddress(), err)
+		return nil, nil, wrapDialError(err, "sesame/rc/netconn: dialing first proxy hop %s failed", firstAddr.GetAddress())
 	}
 
 	traversed = append(traversed, firstAddr)
@@ -250,12 +292,7 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 		hop := hops[i]
 		var nextAddr string
 		if i+1 < len(hops) {
-			nextHopAddr := hops[i+1].GetAddress()
-			if nextHopAddr == nil {
-				_ = currentConn.Close()
-				return nil, nil, status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: proxy hop %d missing address", i+1)
-			}
-			nextAddr = nextHopAddr.GetAddress()
+			nextAddr = hops[i+1].GetAddress().GetAddress()
 		} else {
 			nextAddr = targetAddress
 		}
@@ -265,6 +302,12 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 			upgradedConn, err := httpConnectHandshake(ctx, currentConn, hop, nextAddr)
 			if err != nil {
 				_ = currentConn.Close()
+				if ctx.Err() != nil {
+					// The client disconnected mid-handshake; the cancel
+					// watcher unblocked the stall. Report the
+					// cancellation, not the induced timeout.
+					return nil, nil, status.Error(codes.Canceled, "sesame/rc/netconn: connection aborted by client")
+				}
 				return nil, nil, err
 			}
 			currentConn = upgradedConn
@@ -273,6 +316,9 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 			upgradedConn, err := socks5Handshake(ctx, currentConn, hop, nextAddr)
 			if err != nil {
 				_ = currentConn.Close()
+				if ctx.Err() != nil {
+					return nil, nil, status.Error(codes.Canceled, "sesame/rc/netconn: connection aborted by client")
+				}
 				return nil, nil, err
 			}
 			currentConn = upgradedConn
@@ -372,20 +418,142 @@ func validateSocks5TargetEncodable(target string) error {
 	return nil
 }
 
-// proxyHandshakeTimeout bounds proxy protocol handshakes (HTTP CONNECT,
-// SOCKS5) when the caller context carries no deadline, so a proxy that
-// stalls mid-handshake cannot hang ExecuteProxyHops forever.
-const proxyHandshakeTimeout = 30 * time.Second
+// validateProxyCredentials rejects, per hop, a password with no
+// username. Both handshake builders gate authentication on a non-empty
+// username (HTTP CONNECT emits Proxy-Authorization only when the
+// username is set; SOCKS5 negotiates RFC 1929 auth only then), so a
+// password-only hop would silently negotiate NO-AUTH and the configured
+// password would never reach the proxy. A misconfiguration this
+// concrete fails loudly at the request boundary instead. A username
+// with an empty password remains valid. The password value is never
+// echoed.
+func validateProxyCredentials(hops []*sesameproxy.ProxyHop) error {
+	for i, hop := range hops {
+		if hop.GetPassword() != "" && hop.GetUsername() == "" {
+			return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: proxy hop %d has a password but no username; authentication requires a username (an empty password is valid)", i)
+		}
+	}
+	return nil
+}
 
-// setProxyHandshakeDeadline arms conn with either the caller's context
-// deadline or the proxyHandshakeTimeout fallback, returning a restore func.
-func setProxyHandshakeDeadline(ctx context.Context, conn net.Conn) func() {
+// validateHostPort rejects an address that is not a parseable host:port.
+// Dial and proxy-hop targets are client-controlled input, and per
+// AIP-193 a malformed value fails with INVALID_ARGUMENT at the
+// boundary - before any dialing or handshake side effects - instead of
+// surfacing later as an opaque error from the dial path. Mirrors
+// parseHostPort in the TypeScript reference: bracketed IPv6 literals
+// are accepted, and the port must be pure ASCII digits in [1, 65535]
+// (strconv tolerates a sign and JS parseInt tolerates trailing garbage;
+// neither leniency belongs in a wire address). field names the address
+// in messages.
+func validateHostPort(addr, field string) error {
+	if addr == "" {
+		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: missing %s", field)
+	}
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: invalid %s %q: %v", field, addr, err)
+	}
+	if !isDigits(port) {
+		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: invalid port in %s %q", field, addr)
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: invalid port in %s %q", field, addr)
+	}
+	return nil
+}
+
+// isDigits reports whether s is non-empty and composed solely of ASCII
+// digits.
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// wrapDialError converts a raw dial error - one carrying no gRPC
+// status; a custom DialerFactory's status errors pass through verbatim,
+// details included - into a status error with the canonical code per
+// AIP-193: Canceled for an aborted request, DeadlineExceeded for
+// timeouts, Unavailable otherwise. Raw errors would otherwise surface
+// as Unknown. Mirrors the TypeScript reference's dialTcp mapping.
+func wrapDialError(err error, format string, args ...any) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := status.FromError(err); ok {
+		return err
+	}
+	return status.Errorf(dialErrorCode(err), format+": %v", append(args, err)...)
+}
+
+// dialErrorCode maps a raw dial error to its canonical gRPC code.
+func dialErrorCode(err error) codes.Code {
+	if errors.Is(err, context.Canceled) {
+		return codes.Canceled
+	}
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
+		return codes.DeadlineExceeded
+	}
+	return codes.Unavailable
+}
+
+// handshakeFallbackTimeout bounds proxy protocol handshakes (HTTP
+// CONNECT, SOCKS5) and the standard-engine TLS handshake when the
+// caller context carries no deadline, so a peer that stalls
+// mid-handshake cannot hang the dial (or the in-stream upgrade)
+// forever.
+const handshakeFallbackTimeout = 30 * time.Second
+
+// setHandshakeDeadline arms conn with either the caller's context
+// deadline or the handshakeFallbackTimeout fallback, returning a restore
+// func. The restore clears BOTH conn deadlines: a caller that armed its
+// own steady-state deadline before the handshake must re-arm it
+// afterwards (in-repo callers always hand over a fresh conn, or clear
+// deadlines themselves around the handshake).
+func setHandshakeDeadline(ctx context.Context, conn net.Conn) func() {
 	if d, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(d)
 	} else {
-		_ = conn.SetDeadline(time.Now().Add(proxyHandshakeTimeout))
+		_ = conn.SetDeadline(time.Now().Add(handshakeFallbackTimeout))
 	}
 	return func() { _ = conn.SetDeadline(timeZero) }
+}
+
+// watchHandshakeCancel unblocks a handshake parked on conn I/O when ctx
+// is cancelled, by forcing a past deadline, so a client that disconnects
+// mid-handshake does not hold the goroutine and socket until the
+// fallback deadline. Mirrors the abort wiring the TypeScript reference
+// threads through its proxy handshakes. The returned stop func waits for
+// the watcher to settle, so a racing cancel-arming cannot fire after the
+// handshake returns; the caller's deadline restore (registered before
+// this watcher, so it runs after stop) clears any induced deadline.
+func watchHandshakeCancel(ctx context.Context, conn net.Conn) func() {
+	if ctx.Done() == nil {
+		return func() {}
+	}
+	stopped := make(chan struct{})
+	stoppedAck := make(chan struct{})
+	go func() {
+		defer close(stoppedAck)
+		select {
+		case <-ctx.Done():
+			_ = conn.SetDeadline(time.Now().Add(-time.Second))
+		case <-stopped:
+		}
+	}()
+	return func() {
+		close(stopped)
+		<-stoppedAck
+	}
 }
 
 func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesameproxy.ProxyHop, target string) (net.Conn, error) {
@@ -398,7 +566,8 @@ func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesameproxy.P
 	}
 	reqStr += "\r\n"
 
-	defer setProxyHandshakeDeadline(ctx, conn)()
+	defer setHandshakeDeadline(ctx, conn)()
+	defer watchHandshakeCancel(ctx, conn)()
 
 	if _, err := io.WriteString(conn, reqStr); err != nil {
 		return nil, status.Errorf(codes.Unavailable, "sesame/rc/netconn: failed writing HTTP CONNECT to proxy: %v", err)
@@ -450,7 +619,8 @@ func socks5Handshake(ctx context.Context, conn net.Conn, hop *sesameproxy.ProxyH
 		return nil, status.Errorf(codes.Internal, "sesame/rc/netconn: failed initializing SOCKS5 dialer: %v", err)
 	}
 
-	defer setProxyHandshakeDeadline(ctx, conn)()
+	defer setHandshakeDeadline(ctx, conn)()
+	defer watchHandshakeCancel(ctx, conn)()
 
 	upgradedConn, err := dialer.Dial("tcp", target)
 	if err != nil {

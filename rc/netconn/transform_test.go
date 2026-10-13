@@ -259,7 +259,7 @@ func TestSocks5Handshake_ArmsFallbackDeadline(t *testing.T) {
 	}()
 
 	// The fallback is 30s; use a short deadline only to bound the test,
-	// via a ctx whose deadline is what setProxyHandshakeDeadline will
+	// via a ctx whose deadline is what setHandshakeDeadline will
 	// arm... instead, call with a deadline-less ctx to exercise the
 	// fallback path. The handshake will block until the armed 30s
 	// deadline fires - too long for a test. So drive it through
@@ -298,6 +298,97 @@ func TestSocks5Handshake_ArmsFallbackDeadline(t *testing.T) {
 	restored := deadlines[len(deadlines)-1]
 	if !restored.IsZero() {
 		t.Fatalf("deadline was not restored after the handshake; last SetDeadline: %v", restored)
+	}
+}
+
+func TestExecuteTLSHandshake_ArmsAndRestoresHandshakeDeadline(t *testing.T) {
+	// A stalled peer must not hang the TLS handshake: with no caller
+	// deadline the same fallback the proxy handshakes use is armed, and
+	// restored afterwards so steady-state I/O stays unbounded. Mirrors
+	// TestSocks5Handshake_ArmsFallbackDeadline.
+	blackhole, blackholeConn := net.Pipe()
+	defer blackhole.Close()
+	defer blackholeConn.Close()
+
+	recording := &deadlineRecordingConn{Conn: blackholeConn}
+
+	// Never service the ClientHello; drain so the write does not block.
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			if _, err := blackhole.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	// The 30s fallback is too long to wait out in a test; close the
+	// conn concurrently to unblock the handshake.
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_ = recording.Close()
+	}()
+
+	_, _, err := ExecuteTLSHandshake(context.Background(), recording, &sesametls.TLSOptions{
+		ServerName: "example.com",
+	}, "example.com", nil)
+	if err == nil {
+		t.Fatal("expected error from closed blackhole TLS handshake")
+	}
+
+	recording.mu.Lock()
+	deadlines := append([]time.Time(nil), recording.deadlines...)
+	recording.mu.Unlock()
+
+	if len(deadlines) == 0 {
+		t.Fatal("no deadline was armed for the TLS handshake")
+	}
+	armed := deadlines[0]
+	if armed.IsZero() {
+		t.Fatal("armed TLS handshake deadline is zero")
+	}
+	if !time.Now().Before(armed) {
+		t.Fatalf("armed deadline %v is not in the future", armed)
+	}
+	restored := deadlines[len(deadlines)-1]
+	if !restored.IsZero() {
+		t.Fatalf("deadline was not restored after the TLS handshake; last SetDeadline: %v", restored)
+	}
+}
+
+func TestExecuteTLSHandshake_HonorsContextDeadline(t *testing.T) {
+	// A caller deadline bounds the handshake (this is what the
+	// dial-time path derives from the request's dial timeout) instead
+	// of leaving the stalled peer to the 30s fallback.
+	blackhole, blackholeConn := net.Pipe()
+	defer blackhole.Close()
+	defer blackholeConn.Close()
+
+	// Never service the ClientHello; drain so the write does not block.
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			if _, err := blackhole.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, _, err := ExecuteTLSHandshake(ctx, blackholeConn, &sesametls.TLSOptions{
+		ServerName: "example.com",
+	}, "example.com", nil)
+	if err == nil {
+		t.Fatal("expected the stalled handshake to fail")
+	}
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("expected Unavailable, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("handshake outlived the context deadline: %v", elapsed)
 	}
 }
 
@@ -622,6 +713,48 @@ func TestExecuteProxyHops_RejectsOversizedSocks5Domain(t *testing.T) {
 	}
 }
 
+func TestBuildTLSConfig_ServerNameHandling(t *testing.T) {
+	// A colon-bearing server_name that is not a bare IPv6 literal must
+	// parse as host:port; anything else is malformed client input,
+	// rejected with INVALID_ARGUMENT, mirroring the TypeScript
+	// reference. Valid forms strip their port; bare IPv6 literals pass
+	// through unchanged.
+	for _, tc := range []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"plain host", "example.com", "example.com"},
+		{"host with port", "example.com:443", "example.com"},
+		{"bracketed ipv6 with port", "[::1]:443", "::1"},
+		{"bare ipv6 literal", "::1", "::1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := BuildTLSConfig(&sesametls.TLSOptions{ServerName: tc.in}, "")
+			if err != nil {
+				t.Fatalf("expected server_name %q to validate, got %v", tc.in, err)
+			}
+			if cfg.ServerName != tc.want {
+				t.Fatalf("got ServerName %q, want %q", cfg.ServerName, tc.want)
+			}
+		})
+	}
+
+	for _, tc := range []struct{ name, in string }{
+		{"multiple separators", "host:80:90"},
+		{"whitespace port", "host: 80"},
+		{"non-numeric port", "host:notaport"},
+		{"bracketed literal without port", "[::1]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := BuildTLSConfig(&sesametls.TLSOptions{ServerName: tc.in}, "")
+			if err == nil || status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("expected InvalidArgument for server_name %q, got %v", tc.in, err)
+			}
+		})
+	}
+}
+
 // dialerFunc adapts a function to the Dialer interface.
 type dialerFunc func(ctx context.Context, network, address string) (net.Conn, error)
 
@@ -674,5 +807,205 @@ func TestBufferedPrefixConn_CloseWriteDelegates(t *testing.T) {
 	bare := &bufferedPrefixConn{Conn: bareEnd}
 	if err := bare.CloseWrite(); err == nil {
 		t.Fatal("expected an error when the wrapped conn does not support CloseWrite, got nil")
+	}
+}
+
+func TestExecuteProxyHops_RejectsPasswordWithoutUsername(t *testing.T) {
+	// Both handshake builders gate authentication on a non-empty
+	// username, so a password-only hop would silently negotiate NO-AUTH
+	// and the configured password would never reach the proxy; the
+	// misconfiguration must be rejected before any dialing. A username
+	// with an empty password remains valid (RFC 1929 allows it).
+	validAddr := &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:1080"}
+
+	for _, tc := range []struct {
+		name string
+		hop  *sesameproxy.ProxyHop
+	}{
+		{"socks5", &sesameproxy.ProxyHop{Type: sesameproxy.ProxyHop_SOCKS5, Address: validAddr, Password: "secret"}},
+		{"http connect", &sesameproxy.ProxyHop{Type: sesameproxy.ProxyHop_HTTP_CONNECT, Address: validAddr, Password: "secret"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+				t.Fatal("dialer must not be called for a password-only hop")
+				return nil, nil
+			}), &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{tc.hop}}, "tcp", "target.internal:443")
+			if err == nil || status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("expected InvalidArgument for a password-only hop, got %v", err)
+			}
+			if !strings.Contains(err.Error(), "password but no username") {
+				t.Fatalf("expected the password/username rule in the error, got %v", err)
+			}
+		})
+	}
+
+	// A username with an empty password is valid: validation passes and
+	// the dial stage is reached.
+	_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		return nil, errors.New("dial reached")
+	}), &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{{
+		Type: sesameproxy.ProxyHop_SOCKS5, Address: validAddr, Username: "user", Password: "",
+	}}}, "tcp", "target.internal:443")
+	if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
+		t.Fatalf("expected a username-only hop to reach the dial stage, got %v", err)
+	}
+}
+
+func TestExecuteProxyHops_RejectsMalformedAddresses(t *testing.T) {
+	// A dial target or hop address that is not a parseable host:port is
+	// malformed client input: INVALID_ARGUMENT at the boundary (AIP-193)
+	// rather than an opaque failure from the dial path. Empty hop
+	// addresses keep their specific missing-address errors.
+	validHop := func() *sesameproxy.ProxyHop {
+		return &sesameproxy.ProxyHop{
+			Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
+			Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
+		}
+	}
+
+	neverDial := dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		t.Fatal("dialer must not be called for a malformed address")
+		return nil, nil
+	})
+	dialReached := dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+		return nil, errors.New("dial reached")
+	})
+
+	for _, target := range []string{"example.com", "::1", "host:80:90", "host:0", "host:65536", "host:+80", "host: 80", "host:"} {
+		_, _, err := ExecuteProxyHops(context.Background(), neverDial, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{validHop()}}, "tcp", target)
+		if err == nil || status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("expected InvalidArgument for malformed target %q, got %v", target, err)
+		}
+		// The 0-hop path validates the target too.
+		_, _, err = ExecuteProxyHops(context.Background(), neverDial, nil, "tcp", target)
+		if err == nil || status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("expected InvalidArgument for malformed 0-hop target %q, got %v", target, err)
+		}
+	}
+
+	// A malformed hop address is rejected before dialing.
+	_, _, err := ExecuteProxyHops(context.Background(), neverDial, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{{
+		Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
+		Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal"},
+	}}}, "tcp", "target.internal:443")
+	if err == nil || status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("expected InvalidArgument for a malformed hop address, got %v", err)
+	}
+
+	// An empty hop address keeps its specific missing-address error.
+	_, _, err = ExecuteProxyHops(context.Background(), neverDial, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{{
+		Type: sesameproxy.ProxyHop_HTTP_CONNECT,
+	}}}, "tcp", "target.internal:443")
+	if err == nil || status.Code(err) != codes.InvalidArgument || !strings.Contains(err.Error(), "first proxy hop missing address") {
+		t.Fatalf("expected the specific missing-address error for an empty hop address, got %v", err)
+	}
+
+	// A missing middle-hop address is rejected before the first dial:
+	// the neverDial dialer proves validation precedes the side effect.
+	_, _, err = ExecuteProxyHops(context.Background(), neverDial, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{
+		{Type: sesameproxy.ProxyHop_HTTP_CONNECT, Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}},
+		{Type: sesameproxy.ProxyHop_HTTP_CONNECT},
+	}}, "tcp", "target.internal:443")
+	if err == nil || status.Code(err) != codes.InvalidArgument || !strings.Contains(err.Error(), "proxy hop 1 missing address") {
+		t.Fatalf("expected the missing middle-hop address to be rejected before dialing, got %v", err)
+	}
+
+	// Well-formed targets and hop addresses must still reach the dial
+	// stage.
+	for _, target := range []string{"target.internal:443", "127.0.0.1:1", "[::1]:443", "host:80"} {
+		_, _, err := ExecuteProxyHops(context.Background(), dialReached, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{validHop()}}, "tcp", target)
+		if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
+			t.Fatalf("expected target %q to pass validation and reach the dial stage, got %v", target, err)
+		}
+	}
+}
+
+func TestExecuteProxyHops_MapsDialErrorCodes(t *testing.T) {
+	// Raw dial errors surface with their canonical code (AIP-193) while
+	// keeping the first-hop message; status errors from a custom dialer
+	// pass through verbatim.
+	hop := &sesameproxy.ProxyHop{
+		Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
+		Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
+	}
+
+	for _, tc := range []struct {
+		name    string
+		err     error
+		want    codes.Code
+		wantMsg string
+	}{
+		{"plain error", errors.New("boom"), codes.Unavailable, "dialing first proxy hop"},
+		{"canceled context", context.Canceled, codes.Canceled, "dialing first proxy hop"},
+		{"context deadline", context.DeadlineExceeded, codes.DeadlineExceeded, "dialing first proxy hop"},
+		{"net timeout", &net.OpError{Op: "dial", Err: fakeTimeoutError{}}, codes.DeadlineExceeded, "dialing first proxy hop"},
+		{"status passthrough", status.Error(codes.NotFound, "custom dialer status"), codes.NotFound, "custom dialer status"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
+				return nil, tc.err
+			}), &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{hop}}, "tcp", "target.internal:443")
+			if err == nil || status.Code(err) != tc.want || !strings.Contains(err.Error(), tc.wantMsg) {
+				t.Fatalf("expected %v (%q), got %v", tc.want, tc.wantMsg, err)
+			}
+		})
+	}
+}
+
+// fakeTimeoutError is a net.Error that always reports a timeout,
+// standing in for a dial deadline firing.
+type fakeTimeoutError struct{}
+
+func (fakeTimeoutError) Error() string   { return "fake timeout" }
+func (fakeTimeoutError) Timeout() bool   { return true }
+func (fakeTimeoutError) Temporary() bool { return false }
+
+func TestProxyHandshakes_UnblockOnContextCancel(t *testing.T) {
+	// A client that disconnects mid-handshake must not hold the goroutine
+	// and socket until the 30s fallback: the cancel watcher arms a past
+	// deadline and the stall surfaces as Canceled, mirroring the
+	// TypeScript reference's abort wiring.
+	for _, tc := range []struct {
+		name string
+		hop  *sesameproxy.ProxyHop
+	}{
+		{"http connect", &sesameproxy.ProxyHop{Type: sesameproxy.ProxyHop_HTTP_CONNECT, Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}}},
+		{"socks5", &sesameproxy.ProxyHop{Type: sesameproxy.ProxyHop_SOCKS5, Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// A blackhole conn: the greeting/CONNECT is written, no
+			// response ever arrives.
+			serverPipe, clientPipe := net.Pipe()
+			defer serverPipe.Close()
+			defer clientPipe.Close()
+
+			// Drain so writes do not block.
+			go func() {
+				buf := make([]byte, 1024)
+				for {
+					if _, err := serverPipe.Read(buf); err != nil {
+						return
+					}
+				}
+			}()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				cancel()
+			}()
+
+			start := time.Now()
+			_, _, err := ExecuteProxyHops(ctx, &pipeDialer{conn: clientPipe}, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{tc.hop}}, "tcp", "target.internal:443")
+			if err == nil {
+				t.Fatal("expected error from the cancelled handshake")
+			}
+			if status.Code(err) != codes.Canceled {
+				t.Fatalf("expected Canceled, got %v", err)
+			}
+			if elapsed := time.Since(start); elapsed > 5*time.Second {
+				t.Fatalf("handshake outlived the cancellation: %v", elapsed)
+			}
+		})
 	}
 }

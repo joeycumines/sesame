@@ -12,6 +12,7 @@ import (
 	"github.com/joeycumines/sesame/stream"
 	grpctun "github.com/joeycumines/sesame/tun/grpc"
 	"github.com/joeycumines/sesame/type/grpctunnel"
+	"github.com/joeycumines/sesame/type/netaddr"
 	"golang.org/x/exp/maps"
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
@@ -24,7 +25,6 @@ import (
 	"net"
 	"runtime"
 	"sort"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -355,7 +355,10 @@ func Test_largeMessage(t *testing.T) {
 	rcConn := factory(func(h testutil.GRPCServer) { rc.RegisterRemoteControlServer(h, &rcServer) })
 	rcClient := netconn.Client{API: rc.NewRemoteControlClient(rcConn)}
 	c1, c2 := func() (net.Conn, net.Conn) {
-		conn, err := rcClient.DialContext(context.Background(), ``, ``)
+		// The dial target must be a valid host:port: the server validates the
+		// request at the boundary (validateDialRequest). The mock dialer
+		// ignores it and returns the pipe.
+		conn, err := rcClient.DialContext(context.Background(), `tcp`, `127.0.0.1:1`)
 		if err != nil {
 			t.Error(err)
 			panic(err)
@@ -438,7 +441,11 @@ func Test_multiplex(t *testing.T) {
 					mu.Lock()
 					defer mu.Unlock()
 					index++
-					address := strconv.Itoa(index)
+					// The address doubles as the pipe's map key; it must
+					// also parse as host:port because the server
+					// validates dial requests at the boundary
+					// (validateDialRequest).
+					address := fmt.Sprintf(`pipe-%d.internal:443`, index)
 					c1, c2 := net.Pipe()
 					pipes[address] = c1
 					return address, c2
@@ -547,7 +554,11 @@ func Test_clientCancel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := rcStream.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Dial_{Dial: &rc.NetConnRequest_Dial{}}}); err != nil {
+	// The dial request must carry a valid host:port target: the server
+	// rejects malformed input at the boundary (validateDialRequest).
+	if err := rcStream.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Dial_{Dial: &rc.NetConnRequest_Dial{
+		Address: &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+	}}}); err != nil {
 		t.Fatal(err)
 	}
 

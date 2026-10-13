@@ -217,7 +217,9 @@ func RC_NetConn_Test_nettest(
 			dialerValue        = `dialer`
 			listenerValue      = `listener`
 			clientNetworkValue = `client_network`
-			clientAddressValue = `client_address`
+			// Must parse as host:port: the server validates dial requests
+			// at the boundary (validateDialRequest).
+			clientAddressValue = `client.example:443`
 		)
 		dialerFactory, listenConn := mockDialFactory(networkValue, dialerValue, listenerValue)
 		t.Cleanup(func() {
