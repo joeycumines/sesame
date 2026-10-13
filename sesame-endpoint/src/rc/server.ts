@@ -80,10 +80,11 @@ function waitForDrain(socket: net.Socket, signal?: AbortSignal): Promise<void> {
 
 // Maps a google.rpc.Status code (canonical gRPC numbering) to the Connect
 // Code enum. Both share the gRPC code space; unmapped/out-of-range values
-// fall back to Canceled, matching the Go reference's reset semantics where
-// a reset is a client-side cancellation.
+// (including OK/0, which carries no reset semantics) fall back to Canceled,
+// matching the Go reference's reset semantics where a reset is a client-side
+// cancellation.
 function codeFromRpcStatus(code: number): Code {
-  if (code >= 0 && code <= 16) {
+  if (code >= 1 && code <= 16) {
     return code as Code;
   }
   return Code.Canceled;
@@ -195,6 +196,12 @@ export function createRemoteControlService(
         );
       }
 
+      // The dial target is client-controlled: validate it before any
+      // dialing, mirroring the Go reference's validateDialRequest - a
+      // malformed address is INVALID_ARGUMENT (AIP-193), not a late
+      // dial failure.
+      parseHostPort(targetAddr);
+
       // Validate ClientHelloSpec and version range upfront, before any
       // dialing, mirroring the Go server's boundary validation.
       if (dialReq.tls) {
@@ -226,6 +233,15 @@ export function createRemoteControlService(
       let tlsResult: TLSHandshakeResult | undefined;
       const requestedTimeoutMs =
         dialReq.timeout !== undefined ? durationMs(dialReq.timeout) : 0;
+      // A negative timeout is malformed input, not "unset": reject it
+      // at the boundary like the negative capability values, matching
+      // the Go reference.
+      if (requestedTimeoutMs < 0) {
+        throw new ConnectError(
+          'sesame/rc/netconn: negative dial timeout',
+          Code.InvalidArgument,
+        );
+      }
       const effectiveDialTimeoutMs =
         requestedTimeoutMs > 0 ? requestedTimeoutMs : config.dialTimeoutMs;
 
@@ -236,6 +252,7 @@ export function createRemoteControlService(
           dialReq.proxy,
           effectiveDialTimeoutMs,
           config.secrets,
+          abortSignal,
         );
         activeSocket = pRes.socket;
         proxyResult = pRes.result;
@@ -312,6 +329,8 @@ export function createRemoteControlService(
           targetAddr,
           config.secrets,
           tlsProvider,
+          abortSignal,
+          effectiveDialTimeoutMs,
         );
         activeSocket = tRes.tlsSocket;
         tlsResult = tRes.result;
@@ -542,6 +561,8 @@ export function createRemoteControlService(
             targetAddr,
             config.secrets,
             tlsProvider,
+            abortSignal,
+            effectiveDialTimeoutMs,
           );
           activeSocket = tlsSocket;
           pausedForUpgrade = false;

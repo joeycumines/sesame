@@ -65,15 +65,41 @@ export function parseHostPort(addr: string): {host: string; port: number} {
   }
   const lastColon = addr.lastIndexOf(':');
   if (lastColon === -1) {
-    throw new Error(`Invalid host:port address: ${addr}`);
+    throw new ConnectError(
+      `sesame/rc/netconn: Invalid host:port address: ${addr}`,
+      Code.InvalidArgument,
+    );
   }
   let host = addr.slice(0, lastColon);
   if (host.startsWith('[') && host.endsWith(']')) {
     host = host.slice(1, -1);
+  } else if (host.includes(':') || host.includes('[') || host.includes(']')) {
+    // No complete bracket pair, yet the host carries a separator or a
+    // stray bracket: the Go reference (net.SplitHostPort) rejects "too
+    // many colons", "missing ']'", and "unexpected ']'", and splitting
+    // at the last colon would otherwise silently mis-parse.
+    throw new ConnectError(
+      `sesame/rc/netconn: Invalid host:port address: ${addr}`,
+      Code.InvalidArgument,
+    );
   }
-  const port = parseInt(addr.slice(lastColon + 1), 10);
-  if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid port in address: ${addr}`);
+  const portStr = addr.slice(lastColon + 1);
+  // The port must be pure ASCII digits: parseInt tolerates trailing
+  // garbage ("host:80x" would dial host:80), leading whitespace, and a
+  // sign - none of which belong in a wire address, and none of which
+  // the Go reference accepts.
+  if (!/^\d+$/.test(portStr)) {
+    throw new ConnectError(
+      `sesame/rc/netconn: Invalid port in address: ${addr}`,
+      Code.InvalidArgument,
+    );
+  }
+  const port = parseInt(portStr, 10);
+  if (port < 1 || port > 65535) {
+    throw new ConnectError(
+      `sesame/rc/netconn: Invalid port in address: ${addr}`,
+      Code.InvalidArgument,
+    );
   }
   return {host, port};
 }
@@ -102,12 +128,15 @@ export interface TLSExecutionResult {
 // TLSProvider mirrors the Go rc/netconn.TLSProvider contract: a custom
 // engine that can perform a TLS handshake with full ClientHello control.
 // When present, the builtin node:tls path is bypassed entirely.
+// Providers SHOULD honor the signal and abort the handshake promptly;
+// the Go contract passes the request context for the same purpose.
 export interface TLSProvider {
   handshake(
     socket: net.Socket,
     opts: TLSOptions,
     defaultServerName: string,
     fallbackSecrets?: ServerSecrets,
+    signal?: AbortSignal,
   ): Promise<TLSExecutionResult>;
 }
 
@@ -299,6 +328,8 @@ export async function executeTLSHandshake(
   defaultServerName: string,
   fallbackSecrets?: ServerSecrets,
   provider?: TLSProvider,
+  signal?: AbortSignal,
+  handshakeTimeoutMs?: number,
 ): Promise<TLSExecutionResult> {
   // Version-range validation at the API boundary, matching the Go
   // reference: a floor above its ceiling can never negotiate.
@@ -321,7 +352,13 @@ export async function executeTLSHandshake(
   // validation. The provider itself is responsible for honoring
   // client_hello fail-closed and echoing appliedClientHello.
   if (provider) {
-    return provider.handshake(socket, opts, defaultServerName, fallbackSecrets);
+    return provider.handshake(
+      socket,
+      opts,
+      defaultServerName,
+      fallbackSecrets,
+      signal,
+    );
   }
 
   // Builtin engine: fail closed on any non-default spec dimension.
@@ -376,6 +413,42 @@ export async function executeTLSHandshake(
     let resolved = false;
     const tlsSocket = tls.connect(tlsConnectOptions);
 
+    // An aborted request stops the handshake immediately instead of
+    // letting it run until the peer or the runtime gives up, mirroring
+    // dialTcp and the Go reference's HandshakeContext(ctx).
+    const onAbort = () => {
+      if (resolved) return;
+      resolved = true;
+      cleanup();
+      tlsSocket.destroy();
+      reject(
+        new ConnectError(
+          'sesame/rc/netconn: connection aborted by client',
+          Code.Canceled,
+        ),
+      );
+    };
+
+    // A peer that accepts TCP but never answers the ClientHello must
+    // not hang the handshake until the client gives up: the same
+    // wall-clock bound the proxy handshakes apply. Custom TLSProviders
+    // own their handshake bounds.
+    let handshakeTimer: ReturnType<typeof setTimeout> | undefined;
+    if (handshakeTimeoutMs && handshakeTimeoutMs > 0) {
+      handshakeTimer = setTimeout(() => {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        tlsSocket.destroy();
+        reject(
+          new ConnectError(
+            'sesame/rc/netconn: TLS handshake timeout',
+            Code.DeadlineExceeded,
+          ),
+        );
+      }, handshakeTimeoutMs);
+    }
+
     const onSecureConnect = () => {
       if (resolved) return;
       resolved = true;
@@ -412,6 +485,7 @@ export async function executeTLSHandshake(
       if (resolved) return;
       resolved = true;
       cleanup();
+      tlsSocket.destroy();
       reject(
         new ConnectError(
           `sesame/rc/netconn: TLS handshake failed: ${err.message}`,
@@ -423,7 +497,21 @@ export async function executeTLSHandshake(
     const cleanup = () => {
       tlsSocket.removeListener('secureConnect', onSecureConnect);
       tlsSocket.removeListener('error', onError);
+      if (handshakeTimer !== undefined) {
+        clearTimeout(handshakeTimer);
+      }
+      signal?.removeEventListener('abort', onAbort);
     };
+
+    // The guard covers an abort that fired while a previous stage held
+    // the only listener: AbortSignal does not replay past events.
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener('abort', onAbort, {once: true});
+    }
 
     tlsSocket.once('secureConnect', onSecureConnect);
     tlsSocket.once('error', onError);
@@ -441,11 +529,18 @@ export async function executeProxyHops(
   proxyOpts?: ProxyOptions,
   timeoutMs = 10000,
   fallbackSecrets?: ServerSecrets,
+  signal?: AbortSignal,
 ): Promise<ProxyExecutionResult> {
   const hops = proxyOpts?.hops ?? [];
+  if (signal?.aborted) {
+    throw new ConnectError(
+      'sesame/rc/netconn: connection aborted by client',
+      Code.Canceled,
+    );
+  }
   if (hops.length === 0) {
     const hp = parseHostPort(targetAddress);
-    const socket = await dialTcp(hp.host, hp.port, timeoutMs);
+    const socket = await dialTcp(hp.host, hp.port, timeoutMs, signal);
     const result = create(ProxyResultSchema, {
       traversedHops: [],
       egressAddress: createNetAddrFromSocket(socket, 'remote'),
@@ -464,33 +559,41 @@ export async function executeProxyHops(
 
   validateProxyWireFields(targetAddress, hops);
   validateSocks5Targets(targetAddress, hops);
+  validateProxyCredentials(hops);
+  // The tunnel target and every hop address must parse as host:port
+  // before any dialing, mirroring the Go reference: malformed input is
+  // INVALID_ARGUMENT (AIP-193), not a late dial failure, and a chain
+  // with a missing address never spends a server-side dial.
+  parseHostPort(targetAddress);
+  hops.forEach((hop, i) => {
+    const addr = hop.address?.address;
+    if (!addr) {
+      throw new ConnectError(
+        i === 0
+          ? 'sesame/rc/netconn: first proxy hop missing address'
+          : `sesame/rc/netconn: proxy hop ${i} missing address`,
+        Code.InvalidArgument,
+      );
+    }
+    parseHostPort(addr);
+  });
 
   const traversedHops: NetAddr[] = [];
   const firstHop = hops[0];
-  if (!firstHop.address?.address) {
-    throw new ConnectError(
-      'sesame/rc/netconn: first proxy hop missing address',
-      Code.InvalidArgument,
-    );
-  }
-
-  const firstHp = parseHostPort(firstHop.address.address);
-  let currentSocket = await dialTcp(firstHp.host, firstHp.port, timeoutMs);
-  traversedHops.push(firstHop.address);
+  const firstHp = parseHostPort(firstHop.address!.address);
+  let currentSocket = await dialTcp(
+    firstHp.host,
+    firstHp.port,
+    timeoutMs,
+    signal,
+  );
+  traversedHops.push(firstHop.address!);
 
   for (let i = 0; i < hops.length; i++) {
     const hop = hops[i];
     let nextAddrStr: string;
     if (i + 1 < hops.length) {
-      const nextAddr = hops[i + 1].address;
-      if (!nextAddr?.address) {
-        currentSocket.destroy();
-        throw new ConnectError(
-          `sesame/rc/netconn: proxy hop ${i + 1} missing address`,
-          Code.InvalidArgument,
-        );
-      }
-      nextAddrStr = nextAddr.address;
+      nextAddrStr = hops[i + 1].address!.address;
     } else {
       nextAddrStr = targetAddress;
     }
@@ -503,6 +606,7 @@ export async function executeProxyHops(
           nextAddrStr,
           timeoutMs,
           fallbackSecrets,
+          signal,
         );
         break;
       }
@@ -513,6 +617,7 @@ export async function executeProxyHops(
           nextAddrStr,
           timeoutMs,
           fallbackSecrets,
+          signal,
         );
         break;
       }
@@ -619,10 +724,30 @@ function validateSocks5Targets(
   }
 }
 
+// validateProxyCredentials mirrors the Go reference: it rejects, per
+// hop, a password with no username. Both handshake builders gate
+// authentication on a non-empty username (HTTP CONNECT emits
+// Proxy-Authorization only when the username is set; SOCKS5 negotiates
+// RFC 1929 auth only then), so a password-only hop would silently
+// negotiate NO-AUTH and the configured password would never reach the
+// proxy. A username with an empty password remains valid. The password
+// value is never echoed.
+function validateProxyCredentials(hops: readonly ProxyHop[]): void {
+  hops.forEach((hop, i) => {
+    if (hop.password && !hop.username) {
+      throw new ConnectError(
+        `sesame/rc/netconn: proxy hop ${i} has a password but no username; authentication requires a username (an empty password is valid)`,
+        Code.InvalidArgument,
+      );
+    }
+  });
+}
+
 function dialTcp(
   host: string,
   port: number,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     let resolved = false;
@@ -631,6 +756,7 @@ function dialTcp(
     const timer = setTimeout(() => {
       if (resolved) return;
       resolved = true;
+      signal?.removeEventListener('abort', onAbort);
       socket.destroy();
       reject(
         new ConnectError(
@@ -640,10 +766,28 @@ function dialTcp(
       );
     }, timeoutMs);
 
+    // An aborted request stops the dial immediately instead of letting
+    // it run to its own timeout, mirroring the direct-dial path in
+    // server.ts and the context cancellation the Go reference gets
+    // from DialContext.
+    const onAbort = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      socket.destroy();
+      reject(
+        new ConnectError(
+          'sesame/rc/netconn: connection aborted by client',
+          Code.Canceled,
+        ),
+      );
+    };
+
     const onConnect = () => {
       if (resolved) return;
       resolved = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       socket.removeListener('error', onError);
       resolve(socket);
     };
@@ -652,6 +796,7 @@ function dialTcp(
       if (resolved) return;
       resolved = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       socket.removeListener('connect', onConnect);
       reject(
         new ConnectError(
@@ -660,6 +805,16 @@ function dialTcp(
         ),
       );
     };
+
+    // The guard covers an abort that fired while a previous stage held
+    // the only listener: AbortSignal does not replay past events.
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener('abort', onAbort, {once: true});
+    }
 
     socket.once('connect', onConnect);
     socket.once('error', onError);
@@ -672,6 +827,7 @@ function httpConnectHandshake(
   target: string,
   timeoutMs: number,
   fallbackSecrets?: ServerSecrets,
+  signal?: AbortSignal,
 ): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     let reqStr = `CONNECT ${target} HTTP/1.1\r\nHost: ${target}\r\n`;
@@ -703,6 +859,23 @@ function httpConnectHandshake(
         ),
       );
     }, timeoutMs);
+
+    // An aborted request stops the handshake immediately instead of
+    // letting it run to its own timeout, mirroring dialTcp and the
+    // direct-dial path in server.ts.
+    const onAbort = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      cleanup();
+      socket.destroy();
+      reject(
+        new ConnectError(
+          'sesame/rc/netconn: connection aborted by client',
+          Code.Canceled,
+        ),
+      );
+    };
 
     const onData = (chunk: Buffer) => {
       buffer = Buffer.concat([buffer, chunk]);
@@ -803,7 +976,18 @@ function httpConnectHandshake(
     const cleanup = () => {
       socket.removeListener('data', onData);
       socket.removeListener('error', onError);
+      signal?.removeEventListener('abort', onAbort);
     };
+
+    // The guard covers an abort that fired while a previous stage held
+    // the only listener: AbortSignal does not replay past events.
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener('abort', onAbort, {once: true});
+    }
 
     socket.on('data', onData);
     socket.once('error', onError);
@@ -817,6 +1001,7 @@ function socks5Handshake(
   target: string,
   timeoutMs: number,
   fallbackSecrets?: ServerSecrets,
+  signal?: AbortSignal,
 ): Promise<net.Socket> {
   return new Promise((resolve, reject) => {
     let resolved = false;
@@ -839,6 +1024,24 @@ function socks5Handshake(
     const cleanup = () => {
       socket.removeListener('data', onData);
       socket.removeListener('error', onError);
+      signal?.removeEventListener('abort', onAbort);
+    };
+
+    // An aborted request stops the handshake immediately instead of
+    // letting it run to its own timeout, mirroring dialTcp and the
+    // direct-dial path in server.ts.
+    const onAbort = () => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
+      cleanup();
+      socket.destroy();
+      reject(
+        new ConnectError(
+          'sesame/rc/netconn: connection aborted by client',
+          Code.Canceled,
+        ),
+      );
     };
 
     const onError = (err: Error) => {
@@ -1006,6 +1209,16 @@ function socks5Handshake(
 
       socket.write(Buffer.concat([header, addrBuf, portBuf]));
     };
+
+    // The guard covers an abort that fired while a previous stage held
+    // the only listener: AbortSignal does not replay past events.
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener('abort', onAbort, {once: true});
+    }
 
     socket.on('data', onData);
     socket.once('error', onError);

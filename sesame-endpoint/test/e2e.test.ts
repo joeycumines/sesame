@@ -2530,6 +2530,133 @@ describe('sesame-endpoint E2E Suite', () => {
     reqStream.close();
   });
 
+  it('rejects a negative dial timeout with InvalidArgument', async () => {
+    // A negative timeout is malformed input, not "unset": both stacks
+    // reject it at the boundary, like the negative capability values.
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: '127.0.0.1:1',
+            }),
+            timeout: durationFromMs(-1000),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    let timeoutErr: unknown;
+    try {
+      while (true) {
+        const resp = await iterator.next();
+        if (resp.done) break;
+      }
+    } catch (err: unknown) {
+      timeoutErr = err;
+    }
+    expect(timeoutErr).toBeInstanceOf(ConnectError);
+    expect((timeoutErr as ConnectError).code).toBe(Code.InvalidArgument);
+    expect((timeoutErr as ConnectError).message).toContain(
+      'negative dial timeout',
+    );
+    reqStream.close();
+  });
+
+  it('rejects a malformed target address with InvalidArgument', async () => {
+    // A target that is not host:port is malformed client input:
+    // INVALID_ARGUMENT at the boundary, not a late dial failure.
+    for (const target of ['example.com', '::1', 'host:80:90', 'host:99999']) {
+      const reqStream = new RequestStream();
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'dial',
+            value: create(NetConnRequest_DialSchema, {
+              address: create(NetAddrSchema, {
+                network: 'tcp',
+                address: target,
+              }),
+            }),
+          },
+        }),
+      );
+
+      const respStream = client.netConn(reqStream);
+      const iterator = respStream[Symbol.asyncIterator]();
+
+      let addrErr: unknown;
+      try {
+        while (true) {
+          const resp = await iterator.next();
+          if (resp.done) break;
+        }
+      } catch (err: unknown) {
+        addrErr = err;
+      }
+      expect(addrErr).toBeInstanceOf(ConnectError);
+      expect((addrErr as ConnectError).code).toBe(Code.InvalidArgument);
+      reqStream.close();
+    }
+  });
+
+  it('rejects a proxy hop with a password but no username with InvalidArgument', async () => {
+    // Both handshake builders gate authentication on a non-empty
+    // username; a password-only hop would silently negotiate NO-AUTH
+    // and the configured password would never reach the proxy.
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: '127.0.0.1:1',
+            }),
+            proxy: create(ProxyOptionsSchema, {
+              hops: [
+                create(ProxyHopSchema, {
+                  type: ProxyHop_Type.SOCKS5,
+                  address: create(NetAddrSchema, {
+                    network: 'tcp',
+                    address: '127.0.0.1:1',
+                  }),
+                  password: 'orphaned',
+                }),
+              ],
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    let credErr: unknown;
+    try {
+      while (true) {
+        const resp = await iterator.next();
+        if (resp.done) break;
+      }
+    } catch (err: unknown) {
+      credErr = err;
+    }
+    expect(credErr).toBeInstanceOf(ConnectError);
+    expect((credErr as ConnectError).code).toBe(Code.InvalidArgument);
+    expect((credErr as ConnectError).message).toContain(
+      'password but no username',
+    );
+    reqStream.close();
+  });
+
   it('clamps outbound chunks to the client-advertised max_chunk_size', async () => {
     const echoServer = net.createServer(rawSocket => {
       rawSocket.pipe(rawSocket);
