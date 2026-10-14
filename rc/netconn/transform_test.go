@@ -384,11 +384,42 @@ func TestExecuteTLSHandshake_HonorsContextDeadline(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected the stalled handshake to fail")
 	}
-	if status.Code(err) != codes.Unavailable {
-		t.Fatalf("expected Unavailable, got %v", err)
+	if status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("expected DeadlineExceeded, got %v", err)
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Fatalf("handshake outlived the context deadline: %v", elapsed)
+	}
+}
+
+func TestExecuteTLSHandshake_HonorsContextCancellation(t *testing.T) {
+	// A canceled context surfaces Canceled - the same mapping the dial
+	// path and the TypeScript reference use - rather than Unavailable.
+	blackhole, blackholeConn := net.Pipe()
+	defer blackhole.Close()
+	defer blackholeConn.Close()
+
+	// Never service the ClientHello; drain so the write does not block.
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			if _, err := blackhole.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := ExecuteTLSHandshake(ctx, blackholeConn, &sesametls.TLSOptions{
+		ServerName: "example.com",
+	}, "example.com", nil)
+	if err == nil {
+		t.Fatal("expected the canceled handshake to fail")
+	}
+	if status.Code(err) != codes.Canceled {
+		t.Fatalf("expected Canceled, got %v", err)
 	}
 }
 

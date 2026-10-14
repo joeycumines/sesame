@@ -218,7 +218,12 @@ func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.
 
 	tlsConn := cryptotls.Client(rawConn, cfg)
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
-		return nil, nil, status.Errorf(codes.Unavailable, "sesame/rc/netconn: TLS handshake failed: %v", err)
+		// Map the failure to the canonical code per AIP-193 with the
+		// same mapping the dial path uses (dialErrorCode), so a
+		// stalled handshake surfaces DeadlineExceeded and a canceled
+		// one Canceled - on parity with the TypeScript reference and
+		// with Go's own dial errors.
+		return nil, nil, status.Errorf(dialErrorCode(err), "sesame/rc/netconn: TLS handshake failed: %v", err)
 	}
 
 	result := ExtractTLSHandshakeResult(tlsConn.ConnectionState(), appliedSpec)
