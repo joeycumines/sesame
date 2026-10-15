@@ -1090,7 +1090,7 @@ func resolveRuntime(runtime string) (string, error) {
 // to the working directory (and the endpoint scenarios skip cleanly if the
 // file is absent).
 func defaultCLIPath() string {
-	rel := filepath.Join("sesame-endpoint", "build", "src", "cli.js")
+	rel := filepath.Join("js", "sesame-endpoint", "build", "src", "cli.js")
 	dir, err := os.Getwd()
 	if err != nil {
 		return rel

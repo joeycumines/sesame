@@ -26,7 +26,7 @@ import (
 
 func findSesameEndpointCLI(t *testing.T) string {
 	t.Helper()
-	cliPath, err := filepath.Abs("../../sesame-endpoint/build/src/cli.js")
+	cliPath, err := filepath.Abs("../../js/sesame-endpoint/build/src/cli.js")
 	if err != nil {
 		t.Fatalf("failed resolving cli path: %v", err)
 	}

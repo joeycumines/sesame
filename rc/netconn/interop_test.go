@@ -23,7 +23,7 @@ import (
 
 func TestClientServer_SesameEndpoint_Interop(t *testing.T) {
 	// 1. Locate sesame-endpoint built CLI
-	cliPath, err := filepath.Abs("../../sesame-endpoint/build/src/cli.js")
+	cliPath, err := filepath.Abs("../../js/sesame-endpoint/build/src/cli.js")
 	if err != nil {
 		t.Fatalf("failed resolving cli path: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestClientServer_SesameEndpoint_Interop(t *testing.T) {
 }
 
 func TestClientServer_SesameEndpoint_TLS_Interop(t *testing.T) {
-	cliPath, err := filepath.Abs("../../sesame-endpoint/build/src/cli.js")
+	cliPath, err := filepath.Abs("../../js/sesame-endpoint/build/src/cli.js")
 	if err != nil {
 		t.Fatalf("failed resolving cli path: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestClientServer_SesameEndpoint_TLS_Interop(t *testing.T) {
 }
 
 func TestClientServer_SesameEndpoint_STARTTLS_Interop(t *testing.T) {
-	cliPath, err := filepath.Abs("../../sesame-endpoint/build/src/cli.js")
+	cliPath, err := filepath.Abs("../../js/sesame-endpoint/build/src/cli.js")
 	if err != nil {
 		t.Fatalf("failed resolving cli path: %v", err)
 	}

@@ -43,7 +43,7 @@ endif
 
 .DEFAULT_GOAL := check
 
-SESAME_ENDPOINT_DIR ?= sesame-endpoint
+SESAME_ENDPOINT_DIR ?= js/sesame-endpoint
 BUN ?= bun
 
 .PHONY: check
