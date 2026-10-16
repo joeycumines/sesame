@@ -15,9 +15,8 @@ import (
 	"strings"
 	"time"
 
-	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
-	"github.com/joeycumines/sesame/type/netaddr"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
+	typepb "github.com/joeycumines/sesame/typepb"
 	xproxy "golang.org/x/net/proxy"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -27,59 +26,59 @@ type (
 	// TLSProvider allows plugging in an alternative TLS implementation, such as uTLS
 	// for client cryptographic fingerprint impersonation or custom handshake engines.
 	TLSProvider interface {
-		Handshake(ctx context.Context, rawConn net.Conn, opts *sesametls.TLSOptions) (net.Conn, *sesametls.TLSHandshakeResult, error)
+		Handshake(ctx context.Context, rawConn net.Conn, opts *sesamepb.TlsOptions) (net.Conn, *sesamepb.TlsHandshakeResult, error)
 	}
 
 	// ConnTransformResult provides metadata about negotiated TLS and proxy state.
 	ConnTransformResult interface {
-		TLSHandshakeResult() *sesametls.TLSHandshakeResult
-		ProxyResult() *sesameproxy.ProxyResult
+		TlsHandshakeResult() *sesamepb.TlsHandshakeResult
+		ProxyResult() *sesamepb.ProxyResult
 	}
 )
 
-// ProtoToTLSVersion maps a protobuf TLSVersion to the crypto/tls version constant.
-func ProtoToTLSVersion(v sesametls.TLSVersion) uint16 {
+// ProtoToTLSVersion maps a protobuf TlsVersion to the crypto/tls version constant.
+func ProtoToTLSVersion(v sesamepb.TlsVersion) uint16 {
 	switch v {
-	case sesametls.TLSVersion_TLS_1_0:
+	case sesamepb.TlsVersion_TLS_VERSION_TLS_1_0:
 		return cryptotls.VersionTLS10
-	case sesametls.TLSVersion_TLS_1_1:
+	case sesamepb.TlsVersion_TLS_VERSION_TLS_1_1:
 		return cryptotls.VersionTLS11
-	case sesametls.TLSVersion_TLS_1_2:
+	case sesamepb.TlsVersion_TLS_VERSION_TLS_1_2:
 		return cryptotls.VersionTLS12
-	case sesametls.TLSVersion_TLS_1_3:
+	case sesamepb.TlsVersion_TLS_VERSION_TLS_1_3:
 		return cryptotls.VersionTLS13
 	default:
 		return 0
 	}
 }
 
-// TLSVersionToProto maps a crypto/tls version constant to the protobuf TLSVersion.
-func TLSVersionToProto(v uint16) sesametls.TLSVersion {
+// TLSVersionToProto maps a crypto/tls version constant to the protobuf TlsVersion.
+func TLSVersionToProto(v uint16) sesamepb.TlsVersion {
 	switch v {
 	case cryptotls.VersionTLS10:
-		return sesametls.TLSVersion_TLS_1_0
+		return sesamepb.TlsVersion_TLS_VERSION_TLS_1_0
 	case cryptotls.VersionTLS11:
-		return sesametls.TLSVersion_TLS_1_1
+		return sesamepb.TlsVersion_TLS_VERSION_TLS_1_1
 	case cryptotls.VersionTLS12:
-		return sesametls.TLSVersion_TLS_1_2
+		return sesamepb.TlsVersion_TLS_VERSION_TLS_1_2
 	case cryptotls.VersionTLS13:
-		return sesametls.TLSVersion_TLS_1_3
+		return sesamepb.TlsVersion_TLS_VERSION_TLS_1_3
 	default:
-		return sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED
+		return sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED
 	}
 }
 
-// BuildTLSConfig constructs a crypto/tls.Config from a sesametls.TLSOptions message.
+// BuildTLSConfig constructs a crypto/tls.Config from a sesamepb.TlsOptions message.
 //
 // opts are REQUIRED: nil is an explicit error, for the same reason as
 // ExecuteTLSHandshake - a silent (nil, nil) return let callers proceed
 // with no TLS configuration and no error.
-func BuildTLSConfig(opts *sesametls.TLSOptions, defaultServerName string) (*cryptotls.Config, error) {
+func BuildTLSConfig(opts *sesamepb.TlsOptions, defaultServerName string) (*cryptotls.Config, error) {
 	if opts == nil {
 		return nil, status.Error(codes.InvalidArgument, "sesame/rc/netconn: tls options required")
 	}
 
-	serverName := opts.GetServerName()
+	serverName := opts.GetSni()
 	if serverName == "" {
 		serverName = defaultServerName
 	}
@@ -140,12 +139,12 @@ func BuildTLSConfig(opts *sesametls.TLSOptions, defaultServerName string) (*cryp
 }
 
 // ExtractTLSHandshakeResult extracts session metadata from a completed TLS connection.
-func ExtractTLSHandshakeResult(state cryptotls.ConnectionState, appliedSpec *sesametls.ClientHelloSpec) *sesametls.TLSHandshakeResult {
-	res := &sesametls.TLSHandshakeResult{
+func ExtractTLSHandshakeResult(state cryptotls.ConnectionState, appliedSpec *sesamepb.ClientHelloSpec) *sesamepb.TlsHandshakeResult {
+	res := &sesamepb.TlsHandshakeResult{
 		NegotiatedProtocol: state.NegotiatedProtocol,
 		CipherSuite:        int32(state.CipherSuite),
 		TlsVersion:         TLSVersionToProto(state.Version),
-		ServerName:         state.ServerName,
+		Sni:                state.ServerName,
 		AppliedClientHello: appliedSpec,
 	}
 
@@ -165,7 +164,7 @@ func ExtractTLSHandshakeResult(state cryptotls.ConnectionState, appliedSpec *ses
 // (rawConn, nil, nil) passthrough was a trap for third-party callers -
 // the connection stayed cleartext while the caller believed TLS had
 // been negotiated. In-repo callers all guard at their call boundary.
-func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.TLSOptions, defaultServerName string, provider TLSProvider) (net.Conn, *sesametls.TLSHandshakeResult, error) {
+func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesamepb.TlsOptions, defaultServerName string, provider TLSProvider) (net.Conn, *sesamepb.TlsHandshakeResult, error) {
 	if opts == nil {
 		return nil, nil, status.Error(codes.InvalidArgument, "sesame/rc/netconn: tls options required")
 	}
@@ -194,7 +193,7 @@ func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.
 	}
 
 	// Apply the ClientHelloSpec if present, fail closed on unsupported dimensions.
-	var appliedSpec *sesametls.ClientHelloSpec
+	var appliedSpec *sesamepb.ClientHelloSpec
 	if spec := opts.GetClientHello(); spec != nil {
 		// Determine effective max version for cipher/group filtering logic.
 		effectiveMax := cfg.MaxVersion
@@ -236,7 +235,7 @@ func ExecuteTLSHandshake(ctx context.Context, rawConn net.Conn, opts *sesametls.
 const MaxProxyHops = 8
 
 // ExecuteProxyHops chains egress proxies across one or more hops to establish a tunnel to targetAddress.
-func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesameproxy.ProxyOptions, targetNetwork, targetAddress string) (net.Conn, *sesameproxy.ProxyResult, error) {
+func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamepb.ProxyOptions, targetNetwork, targetAddress string) (net.Conn, *sesamepb.ProxyResult, error) {
 	if proxyOpts == nil || len(proxyOpts.GetHops()) == 0 {
 		if err := validateHostPort(targetAddress, "target address"); err != nil {
 			return nil, nil, err
@@ -279,7 +278,7 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 			return nil, nil, err
 		}
 	}
-	traversed := make([]*netaddr.NetAddr, 0, len(hops))
+	traversed := make([]*typepb.NetAddr, 0, len(hops))
 
 	// Dial the first hop using the base dialer
 	firstHop := hops[0]
@@ -303,7 +302,7 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 		}
 
 		switch hop.GetType() {
-		case sesameproxy.ProxyHop_HTTP_CONNECT:
+		case sesamepb.ProxyHop_TYPE_HTTP_CONNECT:
 			upgradedConn, err := httpConnectHandshake(ctx, currentConn, hop, nextAddr)
 			if err != nil {
 				_ = currentConn.Close()
@@ -317,7 +316,7 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 			}
 			currentConn = upgradedConn
 
-		case sesameproxy.ProxyHop_SOCKS5:
+		case sesamepb.ProxyHop_TYPE_SOCKS5:
 			upgradedConn, err := socks5Handshake(ctx, currentConn, hop, nextAddr)
 			if err != nil {
 				_ = currentConn.Close()
@@ -338,9 +337,9 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 		}
 	}
 
-	res := &sesameproxy.ProxyResult{
+	res := &sesamepb.ProxyResult{
 		TraversedHops: traversed,
-		EgressAddress: netaddr.New(currentConn.RemoteAddr()),
+		EgressAddress: typepb.New(currentConn.RemoteAddr()),
 	}
 
 	return currentConn, res, nil
@@ -357,7 +356,7 @@ func ExecuteProxyHops(ctx context.Context, baseDialer Dialer, proxyOpts *sesamep
 // this rule: usernames and passwords travel base64-encoded (CONNECT
 // basic auth) or length-prefixed (SOCKS5 RFC 1929), so they cannot
 // break request framing.
-func validateProxyWireFields(targetAddress string, hops []*sesameproxy.ProxyHop) error {
+func validateProxyWireFields(targetAddress string, hops []*sesamepb.ProxyHop) error {
 	if err := rejectControlBytes(targetAddress, "proxy target address"); err != nil {
 		return err
 	}
@@ -390,9 +389,9 @@ func rejectControlBytes(s, field string) error {
 // dialer the Go stack delegates to writes the same truncated byte.
 // The target of hop i is the next hop's address, or the tunnel target
 // for the last hop. HTTP CONNECT has no such limit and is untouched.
-func validateSocks5Targets(targetAddress string, hops []*sesameproxy.ProxyHop) error {
+func validateSocks5Targets(targetAddress string, hops []*sesamepb.ProxyHop) error {
 	for i, hop := range hops {
-		if hop.GetType() != sesameproxy.ProxyHop_SOCKS5 {
+		if hop.GetType() != sesamepb.ProxyHop_TYPE_SOCKS5 {
 			continue
 		}
 		target := targetAddress
@@ -432,7 +431,7 @@ func validateSocks5TargetEncodable(target string) error {
 // concrete fails loudly at the request boundary instead. A username
 // with an empty password remains valid. The password value is never
 // echoed.
-func validateProxyCredentials(hops []*sesameproxy.ProxyHop) error {
+func validateProxyCredentials(hops []*sesamepb.ProxyHop) error {
 	for i, hop := range hops {
 		if hop.GetPassword() != "" && hop.GetUsername() == "" {
 			return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: proxy hop %d has a password but no username; authentication requires a username (an empty password is valid)", i)
@@ -561,7 +560,7 @@ func watchHandshakeCancel(ctx context.Context, conn net.Conn) func() {
 	}
 }
 
-func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesameproxy.ProxyHop, target string) (net.Conn, error) {
+func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesamepb.ProxyHop, target string) (net.Conn, error) {
 	reqStr := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n", target, target)
 	if h := hop.GetAuthHeader(); h != "" {
 		reqStr += fmt.Sprintf("Proxy-Authorization: %s\r\n", h)
@@ -610,7 +609,7 @@ func httpConnectHandshake(ctx context.Context, conn net.Conn, hop *sesameproxy.P
 	return conn, nil
 }
 
-func socks5Handshake(ctx context.Context, conn net.Conn, hop *sesameproxy.ProxyHop, target string) (net.Conn, error) {
+func socks5Handshake(ctx context.Context, conn net.Conn, hop *sesamepb.ProxyHop, target string) (net.Conn, error) {
 	var auth *xproxy.Auth
 	if u := hop.GetUsername(); u != "" {
 		auth = &xproxy.Auth{

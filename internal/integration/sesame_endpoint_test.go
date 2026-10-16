@@ -15,9 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -168,8 +167,8 @@ func runSesameEndpointSubprocessSuite(t *testing.T, runtimeBin string) {
 	defer cc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(cc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(cc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -206,13 +205,13 @@ func runSesameEndpointSubprocessSuite(t *testing.T, runtimeBin string) {
 		defer dialCancel()
 
 		tlsClient := netconn.Client{
-			API: rc.NewRemoteControlClient(cc),
-			TLS: &sesametls.TLSOptions{
-				ServerName:         "localhost",
+			API: sesamepb.NewRemoteControlClient(cc),
+			TLS: &sesamepb.TlsOptions{
+				Sni:                "localhost",
 				AlpnProtocols:      []string{"integration-alpn"},
 				InsecureSkipVerify: true,
 			},
-			Capabilities: &rc.NetConnRequest_Capabilities{
+			Capabilities: &sesamepb.NetConnRequest_Capabilities{
 				SupportsOpportunisticTls: true,
 				SupportsFlowControl:      true,
 			},
@@ -312,14 +311,14 @@ func runSesameEndpointSubprocessSuite(t *testing.T, runtimeBin string) {
 			t.Fatalf("unexpected cleartext reply: %q", string(clearReply))
 		}
 
-		// Perform in-stream UpgradeTLS
-		res, err := inStreamConn.UpgradeTLS(dialCtx, &sesametls.TLSOptions{
-			ServerName:         "localhost",
+		// Perform in-stream UpgradeTls
+		res, err := inStreamConn.UpgradeTls(dialCtx, &sesamepb.TlsOptions{
+			Sni:                "localhost",
 			AlpnProtocols:      []string{"starttls-subprocess"},
 			InsecureSkipVerify: true,
 		})
 		if err != nil {
-			t.Fatalf("UpgradeTLS failed: %v", err)
+			t.Fatalf("UpgradeTls failed: %v", err)
 		}
 		if res == nil || res.GetNegotiatedProtocol() != "starttls-subprocess" {
 			t.Fatalf("unexpected upgrade result: %+v", res)
@@ -374,9 +373,9 @@ func runSesameEndpointSubprocessSuite(t *testing.T, runtimeBin string) {
 		defer dialCancel()
 
 		badClient := netconn.Client{
-			API: rc.NewRemoteControlClient(cc),
-			TLS: &sesametls.TLSOptions{
-				ClientHello: &sesametls.ClientHelloSpec{
+			API: sesamepb.NewRemoteControlClient(cc),
+			TLS: &sesamepb.TlsOptions{
+				ClientHello: &sesamepb.ClientHelloSpec{
 					// Neither builtin engine exposes signature_algorithms control.
 					SignatureAlgorithms: []int32{0x0403},
 				},

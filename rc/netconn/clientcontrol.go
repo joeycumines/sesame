@@ -11,10 +11,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/joeycumines/sesame/ionet"
-	"github.com/joeycumines/sesame/rc"
-	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 )
@@ -29,21 +29,21 @@ type (
 	// continues) followed by reading until the target's EOF.
 	InStreamConn interface {
 		net.Conn
-		TLSResult() *sesametls.TLSHandshakeResult
-		ProxyResult() *sesameproxy.ProxyResult
-		ServerCapabilities() *rc.NetConnResponse_Capabilities
-		UpgradeTLS(ctx context.Context, opts *sesametls.TLSOptions) (*sesametls.TLSHandshakeResult, error)
+		TLSResult() *sesamepb.TlsHandshakeResult
+		ProxyResult() *sesamepb.ProxyResult
+		ServerCapabilities() *sesamepb.NetConnResponse_Capabilities
+		UpgradeTls(ctx context.Context, opts *sesamepb.TlsOptions) (*sesamepb.TlsHandshakeResult, error)
 		Ping(ctx context.Context) (time.Duration, error)
 		CloseWrite() error
 	}
 
 	clientControlConn struct {
-		stream      rc.RemoteControl_NetConnClient
+		stream      sesamepb.RemoteControl_NetConnClient
 		cancel      context.CancelFunc
 		ctx         context.Context
-		tlsResult   *sesametls.TLSHandshakeResult
-		proxyResult *sesameproxy.ProxyResult
-		serverCaps  *rc.NetConnResponse_Capabilities
+		tlsResult   *sesamepb.TlsHandshakeResult
+		proxyResult *sesamepb.ProxyResult
+		serverCaps  *sesamepb.NetConnResponse_Capabilities
 		localAddr   net.Addr
 		remoteAddr  net.Addr
 
@@ -74,7 +74,7 @@ type (
 
 		pingCounter  atomic.Int64
 		pingsMu      sync.Mutex
-		pendingPings map[int64]chan int64
+		pendingPings map[int64]chan *timestamppb.Timestamp
 
 		upgradeMu        sync.Mutex
 		pendingUpgrade   chan upgradeResult
@@ -97,7 +97,7 @@ type (
 	}
 
 	upgradeResult struct {
-		result *sesametls.TLSHandshakeResult
+		result *sesamepb.TlsHandshakeResult
 		err    error
 	}
 )
@@ -108,9 +108,9 @@ var _ InStreamConn = (*clientControlConn)(nil)
 func NewClientControlConn(
 	ctx context.Context,
 	cancel context.CancelFunc,
-	stream rc.RemoteControl_NetConnClient,
-	connRes *rc.NetConnResponse_Conn,
-	clientCaps *rc.NetConnRequest_Capabilities,
+	stream sesamepb.RemoteControl_NetConnClient,
+	connRes *sesamepb.NetConnResponse_Conn,
+	clientCaps *sesamepb.NetConnRequest_Capabilities,
 ) InStreamConn {
 	local, remote := ionet.Pipe()
 	// local's SendPipe writer is the readLoop's write end; remote is the
@@ -128,7 +128,7 @@ func NewClientControlConn(
 		remoteAddr:   connRes.GetRemote().AsGoNetAddr(),
 		demuxLocalW:  localWriter,
 		demuxRemote:  remote,
-		pendingPings: make(map[int64]chan int64),
+		pendingPings: make(map[int64]chan *timestamppb.Timestamp),
 	}
 
 	if clientCaps.GetSupportsFlowControl() && connRes.GetCapabilities().GetSupportsFlowControl() {
@@ -174,7 +174,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 		}
 
 		switch data := res.GetData().(type) {
-		case *rc.NetConnResponse_Bytes:
+		case *sesamepb.NetConnResponse_Bytes:
 			if len(data.Bytes) > 0 {
 				rem := data.Bytes
 				for len(rem) > 0 && !c.closed.Load() {
@@ -208,11 +208,11 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 					}
 					if c.inboundFC != nil && n > 0 && !windowUpdatesMoot {
 						c.sendMu.Lock()
-						sendErr := c.stream.Send(&rc.NetConnRequest{
-							Data: &rc.NetConnRequest_Control_{
-								Control: &rc.NetConnRequest_Control{
-									Action: &rc.NetConnRequest_Control_WindowUpdate_{
-										WindowUpdate: &rc.NetConnRequest_Control_WindowUpdate{
+						sendErr := c.stream.Send(&sesamepb.NetConnRequest{
+							Data: &sesamepb.NetConnRequest_Control_{
+								Control: &sesamepb.NetConnRequest_Control{
+									Action: &sesamepb.NetConnRequest_Control_WindowUpdate_{
+										WindowUpdate: &sesamepb.NetConnRequest_Control_WindowUpdate{
 											CreditBytes: int32(n),
 										},
 									},
@@ -238,14 +238,14 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 				}
 			}
 
-		case *rc.NetConnResponse_Control_:
+		case *sesamepb.NetConnResponse_Control_:
 			ctl := data.Control
 			if ctl == nil {
 				continue
 			}
 
 			switch event := ctl.GetEvent().(type) {
-			case *rc.NetConnResponse_Control_TlsUpgraded:
+			case *sesamepb.NetConnResponse_Control_TlsUpgraded_:
 				result := event.TlsUpgraded.GetResult()
 				requestID := event.TlsUpgraded.GetRequestId()
 				c.upgradeMu.Lock()
@@ -253,7 +253,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 				id := c.pendingUpgradeID
 				mismatch := ch != nil && requestID != id
 				if mismatch {
-					// A result for a different UpgradeTLS call must not be
+					// A result for a different UpgradeTls call must not be
 					// honored: with no correlation this was exactly the
 					// window where a retried upgrade received the first
 					// (timed-out) call's late result. Deliver the failure to
@@ -266,7 +266,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 					// Send under the mutex: the buffered cap-1 channel and
 					// the single-send-per-slot invariant make this
 					// non-blocking, and it linearizes result delivery
-					// against a concurrently timing-out UpgradeTLS - the
+					// against a concurrently timing-out UpgradeTls - the
 					// result is either honored by its drain or the slot
 					// is already nil and we poison. Never both nor neither.
 					ch <- upgradeResult{result: result}
@@ -287,7 +287,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 					return
 				}
 
-			case *rc.NetConnResponse_Control_TlsUpgradeFailed:
+			case *sesamepb.NetConnResponse_Control_TlsUpgradeFailed_:
 				requestID := event.TlsUpgradeFailed.GetRequestId()
 				c.upgradeMu.Lock()
 				ch := c.pendingUpgrade
@@ -296,7 +296,7 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 				if ch != nil {
 					c.pendingUpgrade = nil
 					if mismatch {
-						ch <- upgradeResult{err: fmt.Errorf("sesame/rc/netconn: TLSUpgradeFailed request_id %d does not match pending upgrade request_id %d", requestID, id)}
+						ch <- upgradeResult{err: fmt.Errorf("sesame/rc/netconn: TlsUpgradeFailed request_id %d does not match pending upgrade request_id %d", requestID, id)}
 					} else {
 						errMsg := "sesame/rc/netconn: TLS upgrade failed"
 						if st := event.TlsUpgradeFailed.GetError(); st != nil {
@@ -313,29 +313,29 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 					// Same unknowable-state reasoning as TlsUpgraded: a
 					// failure result nobody is waiting for means lost
 					// synchronization with the server's upgrade state.
-					c.poison(errors.New("sesame/rc/netconn: unsolicited TLSUpgradeFailed event"))
+					c.poison(errors.New("sesame/rc/netconn: unsolicited TlsUpgradeFailed event"))
 					return
 				}
 				if mismatch {
-					c.poison(fmt.Errorf("sesame/rc/netconn: TLSUpgradeFailed request_id %d does not match pending upgrade request_id %d", requestID, id))
+					c.poison(fmt.Errorf("sesame/rc/netconn: TlsUpgradeFailed request_id %d does not match pending upgrade request_id %d", requestID, id))
 					return
 				}
 
-			case *rc.NetConnResponse_Control_Pong_:
+			case *sesamepb.NetConnResponse_Control_Pong_:
 				c.pingsMu.Lock()
 				ch := c.pendingPings[event.Pong.GetId()]
 				delete(c.pendingPings, event.Pong.GetId())
 				c.pingsMu.Unlock()
 				if ch != nil {
-					ch <- event.Pong.GetTimestampNanos()
+					ch <- event.Pong.GetSendTime()
 				}
 
-			case *rc.NetConnResponse_Control_HalfClose_:
+			case *sesamepb.NetConnResponse_Control_HalfClose_:
 				// Clean EOF to the app; nil error stores io.EOF on the
 				// pipe, matching io.Pipe Close semantics.
 				_ = c.demuxLocalW.Close()
 
-			case *rc.NetConnResponse_Control_WindowUpdate_:
+			case *sesamepb.NetConnResponse_Control_WindowUpdate_:
 				// Negative credit is a protocol violation, not an unknown
 				// message: fail closed regardless of whether flow control
 				// is active, per the schema's unconditional rule and
@@ -483,8 +483,8 @@ func (c *clientControlConn) Write(b []byte) (int, error) {
 		rem = rem[sendLen:]
 
 		c.sendMu.Lock()
-		err := c.stream.Send(&rc.NetConnRequest{
-			Data: &rc.NetConnRequest_Bytes{Bytes: chunk},
+		err := c.stream.Send(&sesamepb.NetConnRequest{
+			Data: &sesamepb.NetConnRequest_Bytes{Bytes: chunk},
 		})
 		c.sendMu.Unlock()
 		if err != nil {
@@ -506,18 +506,18 @@ func (c *clientControlConn) CloseWrite() error {
 	c.sendMu.Lock()
 	defer c.sendMu.Unlock()
 
-	return c.stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Control_{
-			Control: &rc.NetConnRequest_Control{
-				Action: &rc.NetConnRequest_Control_HalfClose_{
-					HalfClose: &rc.NetConnRequest_Control_HalfClose{},
+	return c.stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Control_{
+			Control: &sesamepb.NetConnRequest_Control{
+				Action: &sesamepb.NetConnRequest_Control_HalfClose_{
+					HalfClose: &sesamepb.NetConnRequest_Control_HalfClose{},
 				},
 			},
 		},
 	})
 }
 
-func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSOptions) (*sesametls.TLSHandshakeResult, error) {
+func (c *clientControlConn) UpgradeTls(ctx context.Context, opts *sesamepb.TlsOptions) (*sesamepb.TlsHandshakeResult, error) {
 	if c.closed.Load() {
 		return nil, io.ErrClosedPipe
 	}
@@ -550,11 +550,11 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 	c.upgradeMu.Unlock()
 
 	c.sendMu.Lock()
-	sendErr := c.stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Control_{
-			Control: &rc.NetConnRequest_Control{
-				Action: &rc.NetConnRequest_Control_UpgradeTls{
-					UpgradeTls: &rc.NetConnRequest_Control_UpgradeTLS{
+	sendErr := c.stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Control_{
+			Control: &sesamepb.NetConnRequest_Control{
+				Action: &sesamepb.NetConnRequest_Control_UpgradeTls_{
+					UpgradeTls: &sesamepb.NetConnRequest_Control_UpgradeTls{
 						Options:   opts,
 						RequestId: requestID,
 					},
@@ -574,7 +574,7 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 
 	select {
 	case <-ctx.Done():
-		// Clear the pending slot so a later UpgradeTLS does not fail
+		// Clear the pending slot so a later UpgradeTls does not fail
 		// with FailedPrecondition for a dead request. If the result raced
 		// us and already arrived, it was buffered into ch - drain it.
 		c.upgradeMu.Lock()
@@ -597,22 +597,21 @@ func (c *clientControlConn) UpgradeTLS(ctx context.Context, opts *sesametls.TLSO
 func (c *clientControlConn) Ping(ctx context.Context) (time.Duration, error) {
 	id := c.pingCounter.Add(1)
 	start := time.Now()
-	timestampNs := start.UnixNano()
 
-	ch := make(chan int64, 1)
+	ch := make(chan *timestamppb.Timestamp, 1)
 
 	c.pingsMu.Lock()
 	c.pendingPings[id] = ch
 	c.pingsMu.Unlock()
 
 	c.sendMu.Lock()
-	sendErr := c.stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Control_{
-			Control: &rc.NetConnRequest_Control{
-				Action: &rc.NetConnRequest_Control_Ping_{
-					Ping: &rc.NetConnRequest_Control_Ping{
-						Id:             id,
-						TimestampNanos: timestampNs,
+	sendErr := c.stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Control_{
+			Control: &sesamepb.NetConnRequest_Control{
+				Action: &sesamepb.NetConnRequest_Control_Ping_{
+					Ping: &sesamepb.NetConnRequest_Control_Ping{
+						Id:       id,
+						SendTime: timestamppb.New(start),
 					},
 				},
 			},
@@ -641,7 +640,7 @@ func (c *clientControlConn) Ping(ctx context.Context) (time.Duration, error) {
 	}
 }
 
-func (c *clientControlConn) TLSResult() *sesametls.TLSHandshakeResult {
+func (c *clientControlConn) TLSResult() *sesamepb.TlsHandshakeResult {
 	// Guarded: readLoop writes tlsResult under upgradeMu when an upgrade
 	// completes, and TLSResult may be called from any goroutine.
 	c.upgradeMu.Lock()
@@ -649,17 +648,17 @@ func (c *clientControlConn) TLSResult() *sesametls.TLSHandshakeResult {
 	return c.tlsResult
 }
 
-func (c *clientControlConn) TLSHandshakeResult() *sesametls.TLSHandshakeResult {
+func (c *clientControlConn) TlsHandshakeResult() *sesamepb.TlsHandshakeResult {
 	c.upgradeMu.Lock()
 	defer c.upgradeMu.Unlock()
 	return c.tlsResult
 }
 
-func (c *clientControlConn) ProxyResult() *sesameproxy.ProxyResult {
+func (c *clientControlConn) ProxyResult() *sesamepb.ProxyResult {
 	return c.proxyResult
 }
 
-func (c *clientControlConn) ServerCapabilities() *rc.NetConnResponse_Capabilities {
+func (c *clientControlConn) ServerCapabilities() *sesamepb.NetConnResponse_Capabilities {
 	return c.serverCaps
 }
 

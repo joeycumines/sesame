@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file sesame/type/netaddr.proto.
  */
 export const file_sesame_type_netaddr: GenFile = /*@__PURE__*/
-  fileDesc("ChlzZXNhbWUvdHlwZS9uZXRhZGRyLnByb3RvEgtzZXNhbWUudHlwZSIrCgdOZXRBZGRyEg8KB25ldHdvcmsYASABKAkSDwoHYWRkcmVzcxgCIAEoCUIsWipnaXRodWIuY29tL2pvZXljdW1pbmVzL3Nlc2FtZS90eXBlL25ldGFkZHJiBnByb3RvMw");
+  fileDesc("ChlzZXNhbWUvdHlwZS9uZXRhZGRyLnByb3RvEgtzZXNhbWUudHlwZSIrCgdOZXRBZGRyEg8KB25ldHdvcmsYASABKAkSDwoHYWRkcmVzcxgCIAEoCUJZCiFpby5naXRodWIuam9leWN1bWluZXMuc2VzYW1lLnR5cGVCDE5ldGFkZHJQcm90b1ABWiRnaXRodWIuY29tL2pvZXljdW1pbmVzL3Nlc2FtZS90eXBlcGJiBnByb3RvMw");
 
 /**
  * NetAddr represents a network end point address.
@@ -24,11 +24,15 @@ export const file_sesame_type_netaddr: GenFile = /*@__PURE__*/
  */
 export type NetAddr = Message<"sesame.type.NetAddr"> & {
   /**
+   * The network the address belongs to, e.g. "tcp" or "udp".
+   *
    * @generated from field: string network = 1;
    */
   network: string;
 
   /**
+   * The address itself, in a network-specific form, e.g. "host:port".
+   *
    * @generated from field: string address = 2;
    */
   address: string;

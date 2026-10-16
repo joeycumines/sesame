@@ -24,11 +24,9 @@ import (
 	"time"
 
 	"github.com/joeycumines/sesame/internal/testutil"
-	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
-	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
-	"github.com/joeycumines/sesame/type/netaddr"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
+	typepb "github.com/joeycumines/sesame/typepb"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -104,19 +102,19 @@ func TestClientServer_InStream_Ping(t *testing.T) {
 	defer serverPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -165,14 +163,14 @@ func TestClientServer_FailClosed_CleartextViolation(t *testing.T) {
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, mockServer)
+		sesamepb.RegisterRemoteControlServer(h, mockServer)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		TLS: &sesametls.TLSOptions{
-			ServerName: "secure.internal",
+		API: sesamepb.NewRemoteControlClient(gc),
+		TLS: &sesamepb.TlsOptions{
+			Sni: "secure.internal",
 		},
 	}
 
@@ -199,23 +197,23 @@ func TestClientServer_FailClosed_ClientHelloUnsupported(t *testing.T) {
 	defer serverPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	// Request a ClientHello dimension the builtin engine cannot honor,
 	// without configuring a custom TLSProvider.
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		TLS: &sesametls.TLSOptions{
-			ServerName: "secure.internal",
-			ClientHello: &sesametls.ClientHelloSpec{
+		API: sesamepb.NewRemoteControlClient(gc),
+		TLS: &sesamepb.TlsOptions{
+			Sni: "secure.internal",
+			ClientHello: &sesamepb.ClientHelloSpec{
 				SignatureAlgorithms: []int32{0x0403},
 			},
 		},
@@ -250,17 +248,17 @@ func TestClientServer_FailClosed_ProxyViolation(t *testing.T) {
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, mockServer)
+		sesamepb.RegisterRemoteControlServer(h, mockServer)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Proxy: &sesameproxy.ProxyOptions{
-			Hops: []*sesameproxy.ProxyHop{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Proxy: &sesamepb.ProxyOptions{
+			Hops: []*sesamepb.ProxyHop{
 				{
-					Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
-					Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
+					Type:    sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
+					Address: &typepb.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
 				},
 			},
 		},
@@ -292,13 +290,13 @@ func TestClientServer_InStream_UpgradeTLS(t *testing.T) {
 	defer serverPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
@@ -334,8 +332,8 @@ func TestClientServer_InStream_UpgradeTLS(t *testing.T) {
 	}()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -370,19 +368,19 @@ func TestClientServer_InStream_UpgradeTLS(t *testing.T) {
 	}
 
 	// 2. In-stream TLS Upgrade
-	upgradeOpts := &sesametls.TLSOptions{
-		ServerName:         "mail.internal",
+	upgradeOpts := &sesamepb.TlsOptions{
+		Sni:                "mail.internal",
 		AlpnProtocols:      []string{"test-proto"},
 		CaCertificates:     caCertPEM,
 		InsecureSkipVerify: true,
 	}
 
-	tlsRes, err := inStreamConn.UpgradeTLS(ctx, upgradeOpts)
+	tlsRes, err := inStreamConn.UpgradeTls(ctx, upgradeOpts)
 	if err != nil {
-		t.Fatalf("UpgradeTLS failed: %v", err)
+		t.Fatalf("UpgradeTls failed: %v", err)
 	}
 	if tlsRes == nil {
-		t.Fatal("expected non-nil TLSHandshakeResult")
+		t.Fatal("expected non-nil TlsHandshakeResult")
 	}
 	if tlsRes.GetNegotiatedProtocol() != "test-proto" {
 		t.Errorf("expected negotiated protocol test-proto, got %q", tlsRes.GetNegotiatedProtocol())
@@ -433,25 +431,25 @@ func TestClientServer_Dial_TLSTermination(t *testing.T) {
 	}()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		TLS: &sesametls.TLSOptions{
-			ServerName:         "mail.internal",
+		API: sesamepb.NewRemoteControlClient(gc),
+		TLS: &sesamepb.TlsOptions{
+			Sni:                "mail.internal",
 			AlpnProtocols:      []string{"h2", "http/1.1"},
 			CaCertificates:     caCertPEM,
 			InsecureSkipVerify: true,
 		},
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -478,8 +476,8 @@ func TestClientServer_Dial_TLSTermination(t *testing.T) {
 	if tlsRes.GetNegotiatedProtocol() != "h2" {
 		t.Errorf("negotiated protocol got %q, want h2", tlsRes.GetNegotiatedProtocol())
 	}
-	if tlsRes.GetServerName() != "mail.internal" {
-		t.Errorf("server name got %q, want mail.internal", tlsRes.GetServerName())
+	if tlsRes.GetSni() != "mail.internal" {
+		t.Errorf("server name got %q, want mail.internal", tlsRes.GetSni())
 	}
 
 	// Application data exchange
@@ -500,14 +498,14 @@ func TestClientServer_Dial_TLSTermination(t *testing.T) {
 // recordingNetConnClient delegates to a real NetConn stream while recording
 // the length of every NetConnRequest_Bytes payload sent through it.
 type recordingNetConnClient struct {
-	rc.RemoteControl_NetConnClient
+	sesamepb.RemoteControl_NetConnClient
 
 	mu      sync.Mutex
 	lengths []int
 }
 
-func (r *recordingNetConnClient) Send(req *rc.NetConnRequest) error {
-	if b, ok := req.GetData().(*rc.NetConnRequest_Bytes); ok {
+func (r *recordingNetConnClient) Send(req *sesamepb.NetConnRequest) error {
+	if b, ok := req.GetData().(*sesamepb.NetConnRequest_Bytes); ok {
 		r.mu.Lock()
 		r.lengths = append(r.lengths, len(b.Bytes))
 		r.mu.Unlock()
@@ -540,10 +538,10 @@ func TestClientControl_WriteRespectsMaxChunkSize(t *testing.T) {
 	}()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
-		Capabilities: &rc.NetConnResponse_Capabilities{
+		Capabilities: &sesamepb.NetConnResponse_Capabilities{
 			SupportsFlowControl:      true,
 			SupportsOpportunisticTls: true,
 			MaxChunkSize:             4096,
@@ -552,17 +550,17 @@ func TestClientControl_WriteRespectsMaxChunkSize(t *testing.T) {
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	recording := &recordingNetConnClient{}
 	client := netconn.Client{
 		API: recordingNetConnClientFactory{
-			inner:    rc.NewRemoteControlClient(gc),
+			inner:    sesamepb.NewRemoteControlClient(gc),
 			recorder: recording,
 		},
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsFlowControl: true,
 		},
 	}
@@ -638,23 +636,23 @@ func TestClientControl_WriteChunksAtDefaultWithoutAdvertisement(t *testing.T) {
 	// Capabilities deliberately absent -> server advertises its defaults
 	// (MaxChunkSize normalized to DefaultChunkSize by Server.NetConn).
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	recording := &recordingNetConnClient{}
 	client := netconn.Client{
 		API: recordingNetConnClientFactory{
-			inner:    rc.NewRemoteControlClient(gc),
+			inner:    sesamepb.NewRemoteControlClient(gc),
 			recorder: recording,
 		},
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsFlowControl: true,
 			InitialWindowSize:   1 << 20,
 		},
@@ -699,11 +697,11 @@ func TestClientControl_WriteChunksAtDefaultWithoutAdvertisement(t *testing.T) {
 // recordingNetConnClientFactory adapts a recordingNetConnClient to the
 // ClientAPI interface.
 type recordingNetConnClientFactory struct {
-	inner    rc.RemoteControlClient
+	inner    sesamepb.RemoteControlClient
 	recorder *recordingNetConnClient
 }
 
-func (f recordingNetConnClientFactory) NetConn(ctx context.Context, opts ...grpc.CallOption) (rc.RemoteControl_NetConnClient, error) {
+func (f recordingNetConnClientFactory) NetConn(ctx context.Context, opts ...grpc.CallOption) (sesamepb.RemoteControl_NetConnClient, error) {
 	stream, err := f.inner.NetConn(ctx, opts...)
 	if err != nil {
 		return nil, err
@@ -723,19 +721,19 @@ func TestClientServer_InStream_UpgradeTLS_NilOptions(t *testing.T) {
 	defer serverPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 		},
 	}
@@ -756,9 +754,9 @@ func TestClientServer_InStream_UpgradeTLS_NilOptions(t *testing.T) {
 
 	// The client must reject a nil-options upgrade locally, before
 	// anything touches the wire, with InvalidArgument.
-	_, err = inStreamConn.UpgradeTLS(ctx, nil)
+	_, err = inStreamConn.UpgradeTls(ctx, nil)
 	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("expected InvalidArgument from nil-options UpgradeTLS, got %v", err)
+		t.Fatalf("expected InvalidArgument from nil-options UpgradeTls, got %v", err)
 	}
 
 	// Fail closed, not fail broken: the connection must remain usable
@@ -786,13 +784,13 @@ func TestClientServer_InStream_UpgradeTLS_NilOptions_ServerRejects(t *testing.T)
 	defer clientPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
@@ -802,16 +800,16 @@ func TestClientServer_InStream_UpgradeTLS_NilOptions_ServerRejects(t *testing.T)
 	// Hand-crafted stream: a protocol-level upgrade_tls with absent
 	// options must be rejected by the server itself, not silently
 	// "succeed" with a nil handshake result.
-	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	stream, err := sesamepb.NewRemoteControlClient(gc).NetConn(ctx)
 	if err != nil {
 		t.Fatalf("failed opening NetConn stream: %v", err)
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Dial_{
-			Dial: &rc.NetConnRequest_Dial{
-				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
-				Capabilities: &rc.NetConnRequest_Capabilities{
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Dial_{
+			Dial: &sesamepb.NetConnRequest_Dial{
+				Address: &typepb.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &sesamepb.NetConnRequest_Capabilities{
 					SupportsOpportunisticTls: true,
 				},
 			},
@@ -828,11 +826,11 @@ func TestClientServer_InStream_UpgradeTLS_NilOptions_ServerRejects(t *testing.T)
 		t.Fatalf("expected conn response, got %T", res.GetData())
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Control_{
-			Control: &rc.NetConnRequest_Control{
-				Action: &rc.NetConnRequest_Control_UpgradeTls{
-					UpgradeTls: &rc.NetConnRequest_Control_UpgradeTLS{},
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Control_{
+			Control: &sesamepb.NetConnRequest_Control{
+				Action: &sesamepb.NetConnRequest_Control_UpgradeTls_{
+					UpgradeTls: &sesamepb.NetConnRequest_Control_UpgradeTls{},
 				},
 			},
 		},
@@ -863,10 +861,10 @@ func TestClientServer_InStream_UpgradeTLS_DisabledByServerPolicy(t *testing.T) {
 	defer clientPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
-		Capabilities: &rc.NetConnResponse_Capabilities{
+		Capabilities: &sesamepb.NetConnResponse_Capabilities{
 			SupportsFlowControl:      true,
 			SupportsOpportunisticTls: false,
 			MaxChunkSize:             4096,
@@ -875,7 +873,7 @@ func TestClientServer_InStream_UpgradeTLS_DisabledByServerPolicy(t *testing.T) {
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
@@ -886,16 +884,16 @@ func TestClientServer_InStream_UpgradeTLS_DisabledByServerPolicy(t *testing.T) {
 	// server advertised SupportsOpportunisticTls=false, so the server
 	// must reject with FailedPrecondition before any handshake or
 	// socket mutation.
-	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	stream, err := sesamepb.NewRemoteControlClient(gc).NetConn(ctx)
 	if err != nil {
 		t.Fatalf("failed opening NetConn stream: %v", err)
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Dial_{
-			Dial: &rc.NetConnRequest_Dial{
-				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
-				Capabilities: &rc.NetConnRequest_Capabilities{
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Dial_{
+			Dial: &sesamepb.NetConnRequest_Dial{
+				Address: &typepb.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &sesamepb.NetConnRequest_Capabilities{
 					SupportsOpportunisticTls: true,
 				},
 			},
@@ -915,13 +913,13 @@ func TestClientServer_InStream_UpgradeTLS_DisabledByServerPolicy(t *testing.T) {
 		t.Fatalf("expected server caps to disable opportunistic TLS")
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Control_{
-			Control: &rc.NetConnRequest_Control{
-				Action: &rc.NetConnRequest_Control_UpgradeTls{
-					UpgradeTls: &rc.NetConnRequest_Control_UpgradeTLS{
-						Options: &sesametls.TLSOptions{
-							ServerName: "example.com",
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Control_{
+			Control: &sesamepb.NetConnRequest_Control{
+				Action: &sesamepb.NetConnRequest_Control_UpgradeTls_{
+					UpgradeTls: &sesamepb.NetConnRequest_Control_UpgradeTls{
+						Options: &sesamepb.TlsOptions{
+							Sni: "example.com",
 						},
 					},
 				},
@@ -969,19 +967,19 @@ func TestClientServer_InStream_UpgradeTLS_Failure(t *testing.T) {
 	}()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 		},
 	}
@@ -1010,12 +1008,12 @@ func TestClientServer_InStream_UpgradeTLS_Failure(t *testing.T) {
 	}
 
 	// In-stream TLS upgrade should fail
-	_, err = inStreamConn.UpgradeTLS(ctx, &sesametls.TLSOptions{
-		ServerName:         "mail.internal",
+	_, err = inStreamConn.UpgradeTls(ctx, &sesamepb.TlsOptions{
+		Sni:                "mail.internal",
 		InsecureSkipVerify: true,
 	})
 	if err == nil {
-		t.Fatal("expected UpgradeTLS error when upstream abruptly drops, got nil")
+		t.Fatal("expected UpgradeTls error when upstream abruptly drops, got nil")
 	}
 
 	// Verify fail-closed: connection must not be usable in cleartext
@@ -1051,19 +1049,19 @@ func TestClientServer_InStream_FlowControl(t *testing.T) {
 	}()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsFlowControl: true,
 			InitialWindowSize:   100, // Small window to test window updates
 		},
@@ -1151,13 +1149,13 @@ func TestClientServer_InStream_HalfClose(t *testing.T) {
 
 	server := netconn.Server{}
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -1242,19 +1240,19 @@ func TestClientServer_InStream_HalfClose_UnsupportedConnFailsClosed(t *testing.T
 	}()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -1313,10 +1311,10 @@ func (m *mockPipeDialer) DialContext(ctx context.Context, network, address strin
 
 type mockServerWithoutTLS struct {
 	dialer netconn.Dialer
-	rc.UnimplementedRemoteControlServer
+	sesamepb.UnimplementedRemoteControlServer
 }
 
-func (m *mockServerWithoutTLS) NetConn(stream rc.RemoteControl_NetConnServer) error {
+func (m *mockServerWithoutTLS) NetConn(stream sesamepb.RemoteControl_NetConnServer) error {
 	msg, err := stream.Recv()
 	if err != nil {
 		return err
@@ -1328,11 +1326,11 @@ func (m *mockServerWithoutTLS) NetConn(stream rc.RemoteControl_NetConnServer) er
 	defer conn.Close()
 
 	// Deliberately omit TLS and Proxy results in Conn response to test fail-closed invariants
-	return stream.Send(&rc.NetConnResponse{
-		Data: &rc.NetConnResponse_Conn_{
-			Conn: &rc.NetConnResponse_Conn{
-				Local:  netaddr.New(conn.LocalAddr()),
-				Remote: netaddr.New(conn.RemoteAddr()),
+	return stream.Send(&sesamepb.NetConnResponse{
+		Data: &sesamepb.NetConnResponse_Conn_{
+			Conn: &sesamepb.NetConnResponse_Conn{
+				Local:  typepb.New(conn.LocalAddr()),
+				Remote: typepb.New(conn.RemoteAddr()),
 			},
 		},
 	})
@@ -1394,19 +1392,19 @@ func newDeadlineTestConn(t *testing.T) (netconn.InStreamConn, net.Conn) {
 	})
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	t.Cleanup(func() { _ = gc.Close() })
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsFlowControl: true,
 		},
 	}
@@ -1548,10 +1546,10 @@ type blockingTLSProvider struct {
 	once    sync.Once
 }
 
-func (p *blockingTLSProvider) Handshake(ctx context.Context, rawConn net.Conn, opts *sesametls.TLSOptions) (net.Conn, *sesametls.TLSHandshakeResult, error) {
+func (p *blockingTLSProvider) Handshake(ctx context.Context, rawConn net.Conn, opts *sesamepb.TlsOptions) (net.Conn, *sesamepb.TlsHandshakeResult, error) {
 	select {
 	case <-p.release:
-		return rawConn, &sesametls.TLSHandshakeResult{ServerName: opts.GetServerName()}, nil
+		return rawConn, &sesamepb.TlsHandshakeResult{Sni: opts.GetSni()}, nil
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
@@ -1576,20 +1574,20 @@ func dialControlConnWithProvider(t *testing.T, provider netconn.TLSProvider) (ne
 	})
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 		TLSProvider: provider,
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	t.Cleanup(func() { _ = gc.Close() })
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsFlowControl:      true,
 			SupportsOpportunisticTls: true,
 		},
@@ -1634,28 +1632,28 @@ func TestClientServer_UpgradeTLS_RequestIDEchoed(t *testing.T) {
 			}()
 
 			server := netconn.Server{
-				Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+				Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 					return &mockPipeDialer{conn: clientPipe}, nil
 				},
 			}
 			gc := ccFactory(func(h testutil.GRPCServer) {
-				rc.RegisterRemoteControlServer(h, &server)
+				sesamepb.RegisterRemoteControlServer(h, &server)
 			})
 			defer gc.Close()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			raw, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+			raw, err := sesamepb.NewRemoteControlClient(gc).NetConn(ctx)
 			if err != nil {
 				t.Fatalf("NetConn failed: %v", err)
 			}
 			defer raw.CloseSend()
 
-			if err := raw.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Dial_{
-				Dial: &rc.NetConnRequest_Dial{
-					Address: &netaddr.NetAddr{Network: "tcp", Address: "mail.internal:25"},
-					Capabilities: &rc.NetConnRequest_Capabilities{
+			if err := raw.Send(&sesamepb.NetConnRequest{Data: &sesamepb.NetConnRequest_Dial_{
+				Dial: &sesamepb.NetConnRequest_Dial{
+					Address: &typepb.NetAddr{Network: "tcp", Address: "mail.internal:25"},
+					Capabilities: &sesamepb.NetConnRequest_Capabilities{
 						SupportsOpportunisticTls: true,
 						SupportsFlowControl:      true,
 					},
@@ -1664,12 +1662,12 @@ func TestClientServer_UpgradeTLS_RequestIDEchoed(t *testing.T) {
 				t.Fatalf("dial send failed: %v", err)
 			}
 
-			if err := raw.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Control_{
-				Control: &rc.NetConnRequest_Control{
-					Action: &rc.NetConnRequest_Control_UpgradeTls{
-						UpgradeTls: &rc.NetConnRequest_Control_UpgradeTLS{
-							Options: &sesametls.TLSOptions{
-								ServerName:         "mail.internal",
+			if err := raw.Send(&sesamepb.NetConnRequest{Data: &sesamepb.NetConnRequest_Control_{
+				Control: &sesamepb.NetConnRequest_Control{
+					Action: &sesamepb.NetConnRequest_Control_UpgradeTls_{
+						UpgradeTls: &sesamepb.NetConnRequest_Control_UpgradeTls{
+							Options: &sesamepb.TlsOptions{
+								Sni:                "mail.internal",
 								InsecureSkipVerify: true,
 							},
 							RequestId: requestID,
@@ -1716,20 +1714,20 @@ func TestClientServer_UpgradeTLS_MismatchedResultPoisons(t *testing.T) {
 	// its pending slot.
 	firstCtx, firstCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer firstCancel()
-	_, err := conn.UpgradeTLS(firstCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+	_, err := conn.UpgradeTls(firstCtx, &sesamepb.TlsOptions{Sni: "example.com"})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected DeadlineExceeded from blocked first upgrade, got %v", err)
 	}
 
 	// Retry: registers a fresh pending call with a fresh request id.
 	resultCh := make(chan struct{}, 1)
-	var retryResult *sesametls.TLSHandshakeResult
+	var retryResult *sesamepb.TlsHandshakeResult
 	var retryErr error
 	go func() {
 		defer func() { resultCh <- struct{}{} }()
 		retryCtx, retryCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer retryCancel()
-		retryResult, retryErr = conn.UpgradeTLS(retryCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+		retryResult, retryErr = conn.UpgradeTls(retryCtx, &sesamepb.TlsOptions{Sni: "example.com"})
 	}()
 
 	// Let the retry register BEFORE the stale result can arrive -
@@ -1765,8 +1763,8 @@ func TestClientServer_UpgradeTLS_MismatchedResultPoisons(t *testing.T) {
 	}
 }
 
-// TestClientServer_UpgradeTLS_TimeoutClearsPending: a timed-out UpgradeTLS
-// must clear the pending slot so a subsequent UpgradeTLS does not return
+// TestClientServer_UpgradeTLS_TimeoutClearsPending: a timed-out UpgradeTls
+// must clear the pending slot so a subsequent UpgradeTls does not return
 // FailedPrecondition (pending-conflict) for a dead request.
 func TestClientServer_UpgradeTLS_TimeoutClearsPending(t *testing.T) {
 	provider := &blockingTLSProvider{release: make(chan struct{})}
@@ -1775,19 +1773,19 @@ func TestClientServer_UpgradeTLS_TimeoutClearsPending(t *testing.T) {
 	upgradeCtx, upgradeCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer upgradeCancel()
 
-	_, err := conn.UpgradeTLS(upgradeCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+	_, err := conn.UpgradeTls(upgradeCtx, &sesamepb.TlsOptions{Sni: "example.com"})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected DeadlineExceeded from blocked upgrade, got %v", err)
 	}
 
-	// The pending slot must be clear: a second UpgradeTLS must not fail
+	// The pending slot must be clear: a second UpgradeTls must not fail
 	// with the pending-conflict error (it gets a fresh pending
 	// registration and then hits its own short timeout).
 	secondCtx, secondCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer secondCancel()
-	_, err = conn.UpgradeTLS(secondCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+	_, err = conn.UpgradeTls(secondCtx, &sesamepb.TlsOptions{Sni: "example.com"})
 	if status.Code(err) == codes.FailedPrecondition && strings.Contains(err.Error(), "already pending") {
-		t.Fatalf("second UpgradeTLS failed with the pending-conflict error; pending slot was not cleared: %v", err)
+		t.Fatalf("second UpgradeTls failed with the pending-conflict error; pending slot was not cleared: %v", err)
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected DeadlineExceeded from second blocked upgrade, got %v", err)
@@ -1796,7 +1794,7 @@ func TestClientServer_UpgradeTLS_TimeoutClearsPending(t *testing.T) {
 
 // TestClientServer_UpgradeTLS_LateResultPoisons: after a timed-out upgrade,
 // a late TlsUpgraded arriving with no waiter must tear the connection down -
-// subsequent Read/Write/UpgradeTLS all fail rather than continuing cleartext
+// subsequent Read/Write/UpgradeTls all fail rather than continuing cleartext
 // against a peer that switched to TLS. Teardown must happen promptly: a
 // healthy connection only ever yields our own probe deadlines.
 func TestClientServer_UpgradeTLS_LateResultPoisons(t *testing.T) {
@@ -1806,7 +1804,7 @@ func TestClientServer_UpgradeTLS_LateResultPoisons(t *testing.T) {
 	upgradeCtx, upgradeCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer upgradeCancel()
 
-	_, err := conn.UpgradeTLS(upgradeCtx, &sesametls.TLSOptions{ServerName: "example.com"})
+	_, err := conn.UpgradeTls(upgradeCtx, &sesamepb.TlsOptions{Sni: "example.com"})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected DeadlineExceeded from blocked upgrade, got %v", err)
 	}
@@ -1839,8 +1837,8 @@ func TestClientServer_UpgradeTLS_LateResultPoisons(t *testing.T) {
 	}
 	thirdCtx, thirdCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer thirdCancel()
-	if _, uerr := conn.UpgradeTLS(thirdCtx, &sesametls.TLSOptions{ServerName: "example.com"}); uerr == nil {
-		t.Fatal("expected UpgradeTLS to fail on poisoned connection, got nil")
+	if _, uerr := conn.UpgradeTls(thirdCtx, &sesamepb.TlsOptions{Sni: "example.com"}); uerr == nil {
+		t.Fatal("expected UpgradeTls to fail on poisoned connection, got nil")
 	}
 }
 
@@ -1870,8 +1868,8 @@ func TestClientServer_TLSResult_ConcurrentAccessDuringUpgrade(t *testing.T) {
 
 	upCtx, upCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer upCancel()
-	if _, err := conn.UpgradeTLS(upCtx, &sesametls.TLSOptions{ServerName: "example.com"}); err != nil {
-		t.Fatalf("UpgradeTLS failed: %v", err)
+	if _, err := conn.UpgradeTls(upCtx, &sesamepb.TlsOptions{Sni: "example.com"}); err != nil {
+		t.Fatalf("UpgradeTls failed: %v", err)
 	}
 	wg.Wait()
 }
@@ -1928,29 +1926,29 @@ func TestClientServer_WindowUpdate_NegativeCredit_ServerRejects(t *testing.T) {
 	defer clientPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	stream, err := sesamepb.NewRemoteControlClient(gc).NetConn(ctx)
 	if err != nil {
 		t.Fatalf("failed opening NetConn stream: %v", err)
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Dial_{
-			Dial: &rc.NetConnRequest_Dial{
-				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
-				Capabilities: &rc.NetConnRequest_Capabilities{
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Dial_{
+			Dial: &sesamepb.NetConnRequest_Dial{
+				Address: &typepb.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &sesamepb.NetConnRequest_Capabilities{
 					SupportsFlowControl: true,
 				},
 			},
@@ -1963,11 +1961,11 @@ func TestClientServer_WindowUpdate_NegativeCredit_ServerRejects(t *testing.T) {
 		t.Fatalf("expected conn response, got (%v, %T)", err, res.GetData())
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Control_{
-			Control: &rc.NetConnRequest_Control{
-				Action: &rc.NetConnRequest_Control_WindowUpdate_{
-					WindowUpdate: &rc.NetConnRequest_Control_WindowUpdate{
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Control_{
+			Control: &sesamepb.NetConnRequest_Control{
+				Action: &sesamepb.NetConnRequest_Control_WindowUpdate_{
+					WindowUpdate: &sesamepb.NetConnRequest_Control_WindowUpdate{
 						CreditBytes: -1024,
 					},
 				},
@@ -2001,29 +1999,29 @@ func TestClientServer_Reset_PropagatesReasonCode(t *testing.T) {
 	defer clientPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	stream, err := sesamepb.NewRemoteControlClient(gc).NetConn(ctx)
 	if err != nil {
 		t.Fatalf("failed opening NetConn stream: %v", err)
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Dial_{
-			Dial: &rc.NetConnRequest_Dial{
-				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
-				Capabilities: &rc.NetConnRequest_Capabilities{
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Dial_{
+			Dial: &sesamepb.NetConnRequest_Dial{
+				Address: &typepb.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &sesamepb.NetConnRequest_Capabilities{
 					SupportsFlowControl: true,
 				},
 			},
@@ -2036,11 +2034,11 @@ func TestClientServer_Reset_PropagatesReasonCode(t *testing.T) {
 		t.Fatalf("expected conn response, got (%v, %T)", err, res.GetData())
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Control_{
-			Control: &rc.NetConnRequest_Control{
-				Action: &rc.NetConnRequest_Control_Reset_{
-					Reset_: &rc.NetConnRequest_Control_Reset{
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Control_{
+			Control: &sesamepb.NetConnRequest_Control{
+				Action: &sesamepb.NetConnRequest_Control_Reset_{
+					Reset_: &sesamepb.NetConnRequest_Control_Reset{
 						Reason: &rpcstatus.Status{
 							Code:    int32(codes.FailedPrecondition),
 							Message: "client requested abort",
@@ -2078,15 +2076,15 @@ func TestClientServer_NegativeCapabilities_RejectedAtDial(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		caps *rc.NetConnRequest_Capabilities
+		caps *sesamepb.NetConnRequest_Capabilities
 	}{
 		{
 			name: "negative initial window",
-			caps: &rc.NetConnRequest_Capabilities{InitialWindowSize: -1},
+			caps: &sesamepb.NetConnRequest_Capabilities{InitialWindowSize: -1},
 		},
 		{
 			name: "negative max chunk",
-			caps: &rc.NetConnRequest_Capabilities{MaxChunkSize: -512},
+			caps: &sesamepb.NetConnRequest_Capabilities{MaxChunkSize: -512},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2094,28 +2092,28 @@ func TestClientServer_NegativeCapabilities_RejectedAtDial(t *testing.T) {
 			defer clientPipe.Close()
 
 			server := netconn.Server{
-				Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+				Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 					return &mockPipeDialer{conn: clientPipe}, nil
 				},
 			}
 
 			gc := ccFactory(func(h testutil.GRPCServer) {
-				rc.RegisterRemoteControlServer(h, &server)
+				sesamepb.RegisterRemoteControlServer(h, &server)
 			})
 			defer gc.Close()
 
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 
-			stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+			stream, err := sesamepb.NewRemoteControlClient(gc).NetConn(ctx)
 			if err != nil {
 				t.Fatalf("failed opening NetConn stream: %v", err)
 			}
 
-			if err := stream.Send(&rc.NetConnRequest{
-				Data: &rc.NetConnRequest_Dial_{
-					Dial: &rc.NetConnRequest_Dial{
-						Address:      &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
+			if err := stream.Send(&sesamepb.NetConnRequest{
+				Data: &sesamepb.NetConnRequest_Dial_{
+					Dial: &sesamepb.NetConnRequest_Dial{
+						Address:      &typepb.NetAddr{Network: "tcp", Address: "example.com:80"},
 						Capabilities: tc.caps,
 					},
 				},
@@ -2150,31 +2148,31 @@ func TestServer_ClampsOutboundChunksToClientMaxChunkSize(t *testing.T) {
 	defer serverPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	stream, err := sesamepb.NewRemoteControlClient(gc).NetConn(ctx)
 	if err != nil {
 		t.Fatalf("failed opening NetConn stream: %v", err)
 	}
 
 	const clientMaxChunk = 1024
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Dial_{
-			Dial: &rc.NetConnRequest_Dial{
-				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
-				Capabilities: &rc.NetConnRequest_Capabilities{
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Dial_{
+			Dial: &sesamepb.NetConnRequest_Dial{
+				Address: &typepb.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &sesamepb.NetConnRequest_Capabilities{
 					SupportsFlowControl: true,
 					MaxChunkSize:        clientMaxChunk,
 				},
@@ -2201,7 +2199,7 @@ func TestServer_ClampsOutboundChunksToClientMaxChunkSize(t *testing.T) {
 		if err != nil {
 			t.Fatalf("receive failed after %d bytes: %v", received, err)
 		}
-		if b, ok := res.GetData().(*rc.NetConnResponse_Bytes); ok {
+		if b, ok := res.GetData().(*sesamepb.NetConnResponse_Bytes); ok {
 			if len(b.Bytes) > clientMaxChunk {
 				t.Fatalf("server emitted a %d byte chunk, exceeding the client's advertised max_chunk_size %d", len(b.Bytes), clientMaxChunk)
 			}
@@ -2223,32 +2221,32 @@ func TestClientServer_DialTLSMinVersionAboveMax_RejectedAtDial(t *testing.T) {
 	defer clientPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	stream, err := sesamepb.NewRemoteControlClient(gc).NetConn(ctx)
 	if err != nil {
 		t.Fatalf("failed opening NetConn stream: %v", err)
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Dial_{
-			Dial: &rc.NetConnRequest_Dial{
-				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
-				Tls: &sesametls.TLSOptions{
-					ServerName: "example.com",
-					MinVersion: sesametls.TLSVersion_TLS_1_3,
-					MaxVersion: sesametls.TLSVersion_TLS_1_2,
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Dial_{
+			Dial: &sesamepb.NetConnRequest_Dial{
+				Address: &typepb.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Tls: &sesamepb.TlsOptions{
+					Sni:        "example.com",
+					MinVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_3,
+					MaxVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_2,
 				},
 			},
 		},
@@ -2271,13 +2269,13 @@ func TestClientServer_DialTLSMinVersionAboveMax_RejectedAtDial(t *testing.T) {
 // plays a server emitting a conn response followed by a protocol-violating
 // negative window_update, to exercise the client's fail-closed path.
 type maliciousServerStream struct {
-	rc.RemoteControl_NetConnClient
-	responses []*rc.NetConnResponse
+	sesamepb.RemoteControl_NetConnClient
+	responses []*sesamepb.NetConnResponse
 	recvIdx   int
 	ctx       context.Context
 }
 
-func (m *maliciousServerStream) Recv() (*rc.NetConnResponse, error) {
+func (m *maliciousServerStream) Recv() (*sesamepb.NetConnResponse, error) {
 	if m.recvIdx < len(m.responses) {
 		res := m.responses[m.recvIdx]
 		m.recvIdx++
@@ -2287,7 +2285,7 @@ func (m *maliciousServerStream) Recv() (*rc.NetConnResponse, error) {
 	return nil, m.ctx.Err()
 }
 
-func (m *maliciousServerStream) Send(*rc.NetConnRequest) error { return nil }
+func (m *maliciousServerStream) Send(*sesamepb.NetConnRequest) error { return nil }
 
 func (m *maliciousServerStream) Context() context.Context { return m.ctx }
 
@@ -2295,7 +2293,7 @@ type maliciousServerAPI struct {
 	stream *maliciousServerStream
 }
 
-func (f *maliciousServerAPI) NetConn(ctx context.Context, _ ...grpc.CallOption) (rc.RemoteControl_NetConnClient, error) {
+func (f *maliciousServerAPI) NetConn(ctx context.Context, _ ...grpc.CallOption) (sesamepb.RemoteControl_NetConnClient, error) {
 	f.stream.ctx = ctx
 	return f.stream, nil
 }
@@ -2309,20 +2307,20 @@ func TestClientControl_NegativeWindowUpdate_Poisons(t *testing.T) {
 	defer cancel()
 
 	stream := &maliciousServerStream{
-		responses: []*rc.NetConnResponse{
-			{Data: &rc.NetConnResponse_Conn_{
-				Conn: &rc.NetConnResponse_Conn{
-					Local:  &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
-					Remote: &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:2"},
-					Capabilities: &rc.NetConnResponse_Capabilities{
+		responses: []*sesamepb.NetConnResponse{
+			{Data: &sesamepb.NetConnResponse_Conn_{
+				Conn: &sesamepb.NetConnResponse_Conn{
+					Local:  &typepb.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+					Remote: &typepb.NetAddr{Network: "tcp", Address: "127.0.0.1:2"},
+					Capabilities: &sesamepb.NetConnResponse_Capabilities{
 						SupportsFlowControl: true,
 					},
 				},
 			}},
-			{Data: &rc.NetConnResponse_Control_{
-				Control: &rc.NetConnResponse_Control{
-					Event: &rc.NetConnResponse_Control_WindowUpdate_{
-						WindowUpdate: &rc.NetConnResponse_Control_WindowUpdate{
+			{Data: &sesamepb.NetConnResponse_Control_{
+				Control: &sesamepb.NetConnResponse_Control{
+					Event: &sesamepb.NetConnResponse_Control_WindowUpdate_{
+						WindowUpdate: &sesamepb.NetConnResponse_Control_WindowUpdate{
 							CreditBytes: -4096,
 						},
 					},
@@ -2333,7 +2331,7 @@ func TestClientControl_NegativeWindowUpdate_Poisons(t *testing.T) {
 
 	client := netconn.Client{
 		API: &maliciousServerAPI{stream: stream},
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsFlowControl: true,
 		},
 	}
@@ -2389,31 +2387,31 @@ func TestClientServer_WindowUpdate_NegativeCredit_FlowControlOff(t *testing.T) {
 	defer clientPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	stream, err := rc.NewRemoteControlClient(gc).NetConn(ctx)
+	stream, err := sesamepb.NewRemoteControlClient(gc).NetConn(ctx)
 	if err != nil {
 		t.Fatalf("failed opening NetConn stream: %v", err)
 	}
 
 	// Capabilities present (consent to control) but flow control NOT
 	// advertised: the server's outbound controller is nil on this path.
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Dial_{
-			Dial: &rc.NetConnRequest_Dial{
-				Address: &netaddr.NetAddr{Network: "tcp", Address: "example.com:80"},
-				Capabilities: &rc.NetConnRequest_Capabilities{
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Dial_{
+			Dial: &sesamepb.NetConnRequest_Dial{
+				Address: &typepb.NetAddr{Network: "tcp", Address: "example.com:80"},
+				Capabilities: &sesamepb.NetConnRequest_Capabilities{
 					SupportsOpportunisticTls: true,
 				},
 			},
@@ -2426,11 +2424,11 @@ func TestClientServer_WindowUpdate_NegativeCredit_FlowControlOff(t *testing.T) {
 		t.Fatalf("expected conn response, got (%v, %T)", err, res.GetData())
 	}
 
-	if err := stream.Send(&rc.NetConnRequest{
-		Data: &rc.NetConnRequest_Control_{
-			Control: &rc.NetConnRequest_Control{
-				Action: &rc.NetConnRequest_Control_WindowUpdate_{
-					WindowUpdate: &rc.NetConnRequest_Control_WindowUpdate{
+	if err := stream.Send(&sesamepb.NetConnRequest{
+		Data: &sesamepb.NetConnRequest_Control_{
+			Control: &sesamepb.NetConnRequest_Control{
+				Action: &sesamepb.NetConnRequest_Control_WindowUpdate_{
+					WindowUpdate: &sesamepb.NetConnRequest_Control_WindowUpdate{
 						CreditBytes: -1,
 					},
 				},
@@ -2460,20 +2458,20 @@ func TestClientControl_NegativeWindowUpdate_FlowControlOff_Poisons(t *testing.T)
 	defer cancel()
 
 	stream := &maliciousServerStream{
-		responses: []*rc.NetConnResponse{
-			{Data: &rc.NetConnResponse_Conn_{
-				Conn: &rc.NetConnResponse_Conn{
-					Local:  &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
-					Remote: &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:2"},
-					Capabilities: &rc.NetConnResponse_Capabilities{
+		responses: []*sesamepb.NetConnResponse{
+			{Data: &sesamepb.NetConnResponse_Conn_{
+				Conn: &sesamepb.NetConnResponse_Conn{
+					Local:  &typepb.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+					Remote: &typepb.NetAddr{Network: "tcp", Address: "127.0.0.1:2"},
+					Capabilities: &sesamepb.NetConnResponse_Capabilities{
 						SupportsFlowControl: false,
 					},
 				},
 			}},
-			{Data: &rc.NetConnResponse_Control_{
-				Control: &rc.NetConnResponse_Control{
-					Event: &rc.NetConnResponse_Control_WindowUpdate_{
-						WindowUpdate: &rc.NetConnResponse_Control_WindowUpdate{
+			{Data: &sesamepb.NetConnResponse_Control_{
+				Control: &sesamepb.NetConnResponse_Control{
+					Event: &sesamepb.NetConnResponse_Control_WindowUpdate_{
+						WindowUpdate: &sesamepb.NetConnResponse_Control_WindowUpdate{
 							CreditBytes: -1,
 						},
 					},
@@ -2486,7 +2484,7 @@ func TestClientControl_NegativeWindowUpdate_FlowControlOff_Poisons(t *testing.T)
 		API: &maliciousServerAPI{stream: stream},
 		// No supports_flow_control: the outbound controller is nil, so
 		// only the unconditional check can catch the violation.
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 		},
 	}
@@ -2525,15 +2523,15 @@ func TestClientControl_NegativeWindowUpdate_FlowControlOff_Poisons(t *testing.T)
 func TestClientControl_NegativeServerCapabilities_FailDial(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		caps *rc.NetConnResponse_Capabilities
+		caps *sesamepb.NetConnResponse_Capabilities
 	}{
 		{
 			name: "negative initial window",
-			caps: &rc.NetConnResponse_Capabilities{InitialWindowSize: -65535},
+			caps: &sesamepb.NetConnResponse_Capabilities{InitialWindowSize: -65535},
 		},
 		{
 			name: "negative max chunk",
-			caps: &rc.NetConnResponse_Capabilities{MaxChunkSize: -1024},
+			caps: &sesamepb.NetConnResponse_Capabilities{MaxChunkSize: -1024},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2541,11 +2539,11 @@ func TestClientControl_NegativeServerCapabilities_FailDial(t *testing.T) {
 			defer cancel()
 
 			stream := &maliciousServerStream{
-				responses: []*rc.NetConnResponse{
-					{Data: &rc.NetConnResponse_Conn_{
-						Conn: &rc.NetConnResponse_Conn{
-							Local:        &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
-							Remote:       &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:2"},
+				responses: []*sesamepb.NetConnResponse{
+					{Data: &sesamepb.NetConnResponse_Conn_{
+						Conn: &sesamepb.NetConnResponse_Conn{
+							Local:        &typepb.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+							Remote:       &typepb.NetAddr{Network: "tcp", Address: "127.0.0.1:2"},
 							Capabilities: tc.caps,
 						},
 					}},
@@ -2554,7 +2552,7 @@ func TestClientControl_NegativeServerCapabilities_FailDial(t *testing.T) {
 
 			client := netconn.Client{
 				API: &maliciousServerAPI{stream: stream},
-				Capabilities: &rc.NetConnRequest_Capabilities{
+				Capabilities: &sesamepb.NetConnRequest_Capabilities{
 					SupportsFlowControl: true,
 				},
 			}
@@ -2594,18 +2592,18 @@ func TestClientServer_LegacyClose_BoundedWhenUpstreamStalled(t *testing.T) {
 	defer serverPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := ccFactory(func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	// No Capabilities: the legacy pipe path under test.
-	client := netconn.Client{API: rc.NewRemoteControlClient(gc)}
+	client := netconn.Client{API: sesamepb.NewRemoteControlClient(gc)}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

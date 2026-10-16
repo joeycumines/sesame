@@ -20,7 +20,7 @@ export {
   executeProxyHops,
   parseHostPort,
   createNetAddrFromSocket,
-  protoToTLSVersion,
+  protoToTlsVersion,
   tlsVersionToProto,
   validateClientHelloSpec,
   assertBuiltinClientHelloHonorable,
@@ -28,6 +28,6 @@ export {
 } from './rc/transform';
 
 export * from './gen/sesame/v1alpha1/remotecontrol_pb';
-export * from './gen/sesame/tls/v1alpha1/tls_pb';
-export * from './gen/sesame/proxy/v1alpha1/proxy_pb';
+export * from './gen/sesame/v1alpha1/tls_pb';
+export * from './gen/sesame/v1alpha1/proxy_pb';
 export * from './gen/sesame/type/netaddr_pb';

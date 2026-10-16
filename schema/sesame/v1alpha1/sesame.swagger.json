@@ -30,23 +30,15 @@
     "application/json"
   ],
   "paths": {
-    "/v1alpha1/proxy": {
-      "post": {
-        "operationId": "Sesame_Proxy",
+    "/v1alpha1/{endpoint.name}": {
+      "patch": {
+        "summary": "Updates an endpoint.",
+        "operationId": "Sesame_UpdateEndpoint",
         "responses": {
           "200": {
-            "description": "A successful response.(streaming responses)",
+            "description": "A successful response.",
             "schema": {
-              "type": "object",
-              "properties": {
-                "result": {
-                  "$ref": "#/definitions/v1alpha1ProxyResponse"
-                },
-                "error": {
-                  "$ref": "#/definitions/rpcStatus"
-                }
-              },
-              "title": "Stream result of v1alpha1ProxyResponse"
+              "$ref": "#/definitions/v1alpha1Endpoint"
             }
           },
           "default": {
@@ -58,12 +50,42 @@
         },
         "parameters": [
           {
-            "name": "body",
-            "description": " (streaming inputs)",
+            "name": "endpoint.name",
+            "description": "The resource name of the endpoint.\nFormat: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "namespaces/[^/]+/remotes/[^/]+/endpoints/[^/]+"
+          },
+          {
+            "name": "endpoint",
+            "description": "The endpoint to update.\n\nThe endpoint's `name` field is used to identify the endpoint to update.\nFormat: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}",
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1alpha1ProxyRequest"
+              "type": "object",
+              "properties": {
+                "displayName": {
+                  "type": "string",
+                  "description": "Human-readable name of the endpoint."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Description of the endpoint."
+                },
+                "createTime": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Creation timestamp of the endpoint.",
+                  "readOnly": true
+                },
+                "spec": {
+                  "$ref": "#/definitions/EndpointSpec",
+                  "description": "The endpoint specification, containing configuration around access and\nusage behavior."
+                }
+              },
+              "description": "The endpoint's `name` field is used to identify the endpoint to update.\nFormat: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}",
+              "title": "The endpoint to update."
             }
           }
         ],
@@ -74,6 +96,7 @@
     },
     "/v1alpha1/{name_1}": {
       "get": {
+        "summary": "Gets an endpoint by resource name.",
         "operationId": "Sesame_GetEndpoint",
         "responses": {
           "200": {
@@ -92,6 +115,7 @@
         "parameters": [
           {
             "name": "name_1",
+            "description": "The endpoint to retrieve, by resource name.\nFormat: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}",
             "in": "path",
             "required": true,
             "type": "string",
@@ -103,6 +127,7 @@
         ]
       },
       "delete": {
+        "summary": "Deletes an endpoint by resource name.",
         "operationId": "Sesame_DeleteEndpoint",
         "responses": {
           "200": {
@@ -122,47 +147,11 @@
         "parameters": [
           {
             "name": "name_1",
+            "description": "The endpoint to delete, by resource name.\nFormat: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}",
             "in": "path",
             "required": true,
             "type": "string",
             "pattern": "namespaces/[^/]+/remotes/[^/]+/endpoints/[^/]+"
-          }
-        ],
-        "tags": [
-          "Sesame"
-        ]
-      },
-      "patch": {
-        "operationId": "Sesame_UpdateEndpoint",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1alpha1Endpoint"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "name_1",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "pattern": "namespaces/[^/]+/remotes/[^/]+/endpoints/[^/]+"
-          },
-          {
-            "name": "endpoint",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1alpha1Endpoint"
-            }
           }
         ],
         "tags": [
@@ -172,6 +161,7 @@
     },
     "/v1alpha1/{name}": {
       "get": {
+        "summary": "Gets a remote by resource name.",
         "operationId": "Sesame_GetRemote",
         "responses": {
           "200": {
@@ -190,6 +180,7 @@
         "parameters": [
           {
             "name": "name",
+            "description": "The remote to retrieve, by resource name.\nFormat: namespaces/{namespace}/remotes/{remote}",
             "in": "path",
             "required": true,
             "type": "string",
@@ -201,6 +192,7 @@
         ]
       },
       "delete": {
+        "summary": "Deletes a remote by resource name.",
         "operationId": "Sesame_DeleteRemote",
         "responses": {
           "200": {
@@ -220,47 +212,18 @@
         "parameters": [
           {
             "name": "name",
-            "in": "path",
-            "required": true,
-            "type": "string",
-            "pattern": "namespaces/[^/]+/remotes/[^/]+"
-          }
-        ],
-        "tags": [
-          "Sesame"
-        ]
-      },
-      "patch": {
-        "operationId": "Sesame_UpdateRemote",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1alpha1Remote"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "name",
+            "description": "The remote to delete, by resource name.\nFormat: namespaces/{namespace}/remotes/{remote}",
             "in": "path",
             "required": true,
             "type": "string",
             "pattern": "namespaces/[^/]+/remotes/[^/]+"
           },
           {
-            "name": "remote",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1alpha1Remote"
-            }
+            "name": "force",
+            "description": "If set to true, any endpoints of the remote will also be deleted.\n(Otherwise, the request will only succeed if the remote has no\nendpoints.)",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -270,6 +233,7 @@
     },
     "/v1alpha1/{parent}/endpoints": {
       "get": {
+        "summary": "Lists endpoints in the given remote.",
         "operationId": "Sesame_ListEndpoints",
         "responses": {
           "200": {
@@ -288,6 +252,7 @@
         "parameters": [
           {
             "name": "parent",
+            "description": "The remote to list endpoints in, by resource name.\nFormat: namespaces/{namespace}/remotes/{remote}",
             "in": "path",
             "required": true,
             "type": "string",
@@ -295,6 +260,7 @@
           },
           {
             "name": "pageSize",
+            "description": "The maximum number of endpoints to return. The service may return fewer\nthan this value. If unspecified, at most 50 endpoints will be returned.\nThe maximum value is 1000; values above 1000 will be coerced to 1000.",
             "in": "query",
             "required": false,
             "type": "integer",
@@ -302,6 +268,7 @@
           },
           {
             "name": "pageToken",
+            "description": "A page token, received from a previous ListEndpoints call.\nProvide this to retrieve the subsequent page.\n\nWhen paginating, all other parameters provided to ListEndpoints must\nmatch the call that provided the page token.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -312,6 +279,7 @@
         ]
       },
       "post": {
+        "summary": "Creates an endpoint in the given remote.",
         "operationId": "Sesame_CreateEndpoint",
         "responses": {
           "200": {
@@ -330,7 +298,7 @@
         "parameters": [
           {
             "name": "parent",
-            "description": "The name of the parent Remote, note that endpoint.name MUST NOT be set.",
+            "description": "The remote to create the endpoint in, by resource name.\nFormat: namespaces/{namespace}/remotes/{remote}",
             "in": "path",
             "required": true,
             "type": "string",
@@ -338,6 +306,7 @@
           },
           {
             "name": "endpoint",
+            "description": "The endpoint to create. endpoint.name MUST NOT be set.",
             "in": "body",
             "required": true,
             "schema": {
@@ -345,8 +314,8 @@
             }
           },
           {
-            "name": "resourceId",
-            "description": "May be specified to request a specific (non-trailing) resource id, note it's a single path segment, w/o any \"/\".",
+            "name": "endpointId",
+            "description": "The ID to use for the endpoint, which will become the final component\nof the endpoint's resource name. A single path segment, without any \"/\".\nThis value should be 4-63 characters, and valid characters are\n/[a-z][0-9]-/. May be omitted, in which case a server-assigned ID is\nused.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -359,6 +328,7 @@
     },
     "/v1alpha1/{parent}/remotes": {
       "get": {
+        "summary": "Lists remotes in the given namespace.",
         "operationId": "Sesame_ListRemotes",
         "responses": {
           "200": {
@@ -377,6 +347,7 @@
         "parameters": [
           {
             "name": "parent",
+            "description": "The namespace to list remotes in, by resource name.\nFormat: namespaces/{namespace}",
             "in": "path",
             "required": true,
             "type": "string",
@@ -384,6 +355,7 @@
           },
           {
             "name": "pageSize",
+            "description": "The maximum number of remotes to return. The service may return fewer\nthan this value. If unspecified, at most 50 remotes will be returned.\nThe maximum value is 1000; values above 1000 will be coerced to 1000.",
             "in": "query",
             "required": false,
             "type": "integer",
@@ -391,6 +363,7 @@
           },
           {
             "name": "pageToken",
+            "description": "A page token, received from a previous ListRemotes call.\nProvide this to retrieve the subsequent page.\n\nWhen paginating, all other parameters provided to ListRemotes must match\nthe call that provided the page token.",
             "in": "query",
             "required": false,
             "type": "string"
@@ -401,6 +374,7 @@
         ]
       },
       "post": {
+        "summary": "Creates a remote in the given namespace.",
         "operationId": "Sesame_CreateRemote",
         "responses": {
           "200": {
@@ -419,7 +393,7 @@
         "parameters": [
           {
             "name": "parent",
-            "description": "The name of the parent Namespace, note that remote.name MUST NOT be set.",
+            "description": "The namespace to create the remote in, by resource name.\nFormat: namespaces/{namespace}",
             "in": "path",
             "required": true,
             "type": "string",
@@ -427,6 +401,7 @@
           },
           {
             "name": "remote",
+            "description": "The remote to create. remote.name MUST NOT be set.",
             "in": "body",
             "required": true,
             "schema": {
@@ -434,11 +409,71 @@
             }
           },
           {
-            "name": "resourceId",
-            "description": "May be specified to request a specific (non-trailing) resource id, note it's a single path segment, w/o any \"/\".",
+            "name": "remoteId",
+            "description": "The ID to use for the remote, which will become the final component of\nthe remote's resource name. A single path segment, without any \"/\".\nThis value should be 4-63 characters, and valid characters are\n/[a-z][0-9]-/. May be omitted, in which case a server-assigned ID is\nused.",
             "in": "query",
             "required": false,
             "type": "string"
+          }
+        ],
+        "tags": [
+          "Sesame"
+        ]
+      }
+    },
+    "/v1alpha1/{remote.name}": {
+      "patch": {
+        "summary": "Updates a remote.",
+        "operationId": "Sesame_UpdateRemote",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1alpha1Remote"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "remote.name",
+            "description": "The resource name of the remote.\nFormat: namespaces/{namespace}/remotes/{remote}",
+            "in": "path",
+            "required": true,
+            "type": "string",
+            "pattern": "namespaces/[^/]+/remotes/[^/]+"
+          },
+          {
+            "name": "remote",
+            "description": "The remote to update.\n\nThe remote's `name` field is used to identify the remote to update.\nFormat: namespaces/{namespace}/remotes/{remote}",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "displayName": {
+                  "type": "string",
+                  "description": "Human-readable name of the remote."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Description of the remote."
+                },
+                "createTime": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Creation timestamp of the remote.",
+                  "readOnly": true
+                }
+              },
+              "description": "The remote's `name` field is used to identify the remote to update.\nFormat: namespaces/{namespace}/remotes/{remote}",
+              "title": "The remote to update."
+            }
           }
         ],
         "tags": [
@@ -452,68 +487,15 @@
       "type": "object",
       "properties": {
         "tunnel": {
-          "$ref": "#/definitions/EndpointTunnel"
+          "$ref": "#/definitions/EndpointTunnel",
+          "description": "Tunnel models an endpoint exposed directly over a tunnel provider."
         }
       },
       "description": "Spec models the endpoint specification, containing configuration around access and usage behavior."
     },
     "EndpointTunnel": {
       "type": "object",
-      "description": "Tunnel models an endpoint exposed directly over a tunnel provider.\n\nTODO might eventually make this configurable (more than one tunnel pattern)"
-    },
-    "GrpcMetadataBin": {
-      "type": "object",
-      "properties": {
-        "values": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "format": "byte"
-          }
-        }
-      }
-    },
-    "GrpcMetadataStr": {
-      "type": "object",
-      "properties": {
-        "values": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "ProxyRequestDial": {
-      "type": "object",
-      "properties": {
-        "endpoint": {
-          "type": "string"
-        },
-        "method": {
-          "type": "string"
-        },
-        "connMask": {
-          "type": "string",
-          "description": "conn_mask is an optional field mask for ProxyResponse.conn."
-        }
-      },
-      "description": "Dial models the initial request routing of a method call."
-    },
-    "ProxyResponseConn": {
-      "type": "object",
-      "properties": {
-        "namespace": {
-          "$ref": "#/definitions/v1alpha1Namespace"
-        },
-        "remote": {
-          "$ref": "#/definitions/v1alpha1Remote"
-        },
-        "endpoint": {
-          "$ref": "#/definitions/v1alpha1Endpoint"
-        }
-      },
-      "description": "Conn is the response to ProxyRequest.dial."
+      "title": "Tunnel models an endpoint exposed directly over a tunnel provider.\nTODO might eventually make this configurable (more than one tunnel pattern)"
     },
     "protobufAny": {
       "type": "object",
@@ -549,49 +531,30 @@
       },
       "description": "The `Status` type defines a logical error model that is suitable for\ndifferent programming environments, including REST APIs and RPC APIs. It is\nused by [gRPC](https://github.com/grpc). Each `Status` message contains\nthree pieces of data: error code, error message, and error details.\n\nYou can find out more about this error model and how to work with it in the\n[API Design Guide](https://cloud.google.com/apis/design/errors)."
     },
-    "typeGrpcMetadata": {
-      "type": "object",
-      "properties": {
-        "data": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/typeGrpcMetadataValue"
-          }
-        }
-      },
-      "description": "GrpcMetadata represents gRPC request or response (header, trailer) metadata."
-    },
-    "typeGrpcMetadataValue": {
-      "type": "object",
-      "properties": {
-        "str": {
-          "$ref": "#/definitions/GrpcMetadataStr"
-        },
-        "bin": {
-          "$ref": "#/definitions/GrpcMetadataBin"
-        }
-      }
-    },
     "v1alpha1Endpoint": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string",
-          "readOnly": true
+          "title": "The resource name of the endpoint.\nFormat: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}"
         },
         "displayName": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable name of the endpoint."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Description of the endpoint."
         },
         "createTime": {
           "type": "string",
           "format": "date-time",
+          "description": "Creation timestamp of the endpoint.",
           "readOnly": true
         },
         "spec": {
-          "$ref": "#/definitions/EndpointSpec"
+          "$ref": "#/definitions/EndpointSpec",
+          "description": "The endpoint specification, containing configuration around access and\nusage behavior."
         }
       },
       "description": "Endpoint is a gRPC service available via a remote."
@@ -604,12 +567,15 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1alpha1Endpoint"
-          }
+          },
+          "description": "The endpoints from the specified remote."
         },
         "nextPageToken": {
-          "type": "string"
+          "type": "string",
+          "description": "A token, which can be sent as page_token to retrieve the next page.\nIf this field is omitted, there are no subsequent pages."
         }
-      }
+      },
+      "description": "ListEndpointsResponse models a Sesame.ListEndpoints response."
     },
     "v1alpha1ListRemotesResponse": {
       "type": "object",
@@ -619,74 +585,35 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1alpha1Remote"
-          }
+          },
+          "description": "The remotes from the specified namespace."
         },
         "nextPageToken": {
-          "type": "string"
-        }
-      }
-    },
-    "v1alpha1Namespace": {
-      "type": "object",
-      "properties": {
-        "name": {
           "type": "string",
-          "readOnly": true
+          "description": "A token, which can be sent as page_token to retrieve the next page.\nIf this field is omitted, there are no subsequent pages."
         }
       },
-      "description": "Namespace scopes resources in the Sesame API, and is intended to (eventually) facilitate scoped simple auth."
-    },
-    "v1alpha1ProxyRequest": {
-      "type": "object",
-      "properties": {
-        "dial": {
-          "$ref": "#/definitions/ProxyRequestDial"
-        },
-        "header": {
-          "$ref": "#/definitions/typeGrpcMetadata"
-        },
-        "content": {
-          "$ref": "#/definitions/protobufAny"
-        }
-      }
-    },
-    "v1alpha1ProxyResponse": {
-      "type": "object",
-      "properties": {
-        "conn": {
-          "$ref": "#/definitions/ProxyResponseConn"
-        },
-        "error": {
-          "$ref": "#/definitions/rpcStatus",
-          "title": "error models an error from the inner call, and may be received any time after conn"
-        },
-        "header": {
-          "$ref": "#/definitions/typeGrpcMetadata"
-        },
-        "content": {
-          "$ref": "#/definitions/protobufAny"
-        },
-        "trailer": {
-          "$ref": "#/definitions/typeGrpcMetadata"
-        }
-      }
+      "description": "ListRemotesResponse models a Sesame.ListRemotes response."
     },
     "v1alpha1Remote": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string",
-          "readOnly": true
+          "title": "The resource name of the remote.\nFormat: namespaces/{namespace}/remotes/{remote}"
         },
         "displayName": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable name of the remote."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Description of the remote."
         },
         "createTime": {
           "type": "string",
           "format": "date-time",
+          "description": "Creation timestamp of the remote.",
           "readOnly": true
         }
       },

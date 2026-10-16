@@ -65,9 +65,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -457,20 +456,20 @@ func startInProcessGRPC() (addr string, stop func(), err error) {
 		return "", nil, err
 	}
 	srv := grpc.NewServer()
-	rc.RegisterRemoteControlServer(srv, &netconn.Server{})
+	sesamepb.RegisterRemoteControlServer(srv, &netconn.Server{})
 	go srv.Serve(ln)
 	return ln.Addr().String(), func() { srv.Stop(); _ = ln.Close() }, nil
 }
 
-func newGoClient(grpcAddr string, tlsOpts *sesametls.TLSOptions) (netconn.Client, *grpc.ClientConn, error) {
+func newGoClient(grpcAddr string, tlsOpts *sesamepb.TlsOptions) (netconn.Client, *grpc.ClientConn, error) {
 	cc, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return netconn.Client{}, nil, err
 	}
 	return netconn.Client{
-		API: rc.NewRemoteControlClient(cc),
+		API: sesamepb.NewRemoteControlClient(cc),
 		TLS: tlsOpts,
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -530,7 +529,7 @@ func stderrf(format string, args ...interface{}) {
 }
 
 // specSummary returns a compact human-readable summary of a ClientHelloSpec.
-func specSummary(spec *sesametls.ClientHelloSpec) map[string]interface{} {
+func specSummary(spec *sesamepb.ClientHelloSpec) map[string]interface{} {
 	if spec == nil {
 		return nil
 	}
@@ -557,11 +556,11 @@ func specSummary(spec *sesametls.ClientHelloSpec) map[string]interface{} {
 	if spec.SessionIdLength != 0 {
 		out["session_id_length"] = spec.SessionIdLength
 	}
-	if spec.LegacyVersion != sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED {
+	if spec.LegacyVersion != sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED {
 		out["legacy_version"] = spec.LegacyVersion.String()
 	}
-	if spec.PadToSize != 0 {
-		out["pad_to_size"] = spec.PadToSize
+	if spec.TargetSize != 0 {
+		out["pad_to_size"] = spec.TargetSize
 	}
 	return out
 }
@@ -581,17 +580,17 @@ func runGoEngine(ctx context.Context, grpcAddr string, cert cryptotls.Certificat
 	failClosed := []struct {
 		id   string
 		name string
-		spec *sesametls.ClientHelloSpec
-		maxV sesametls.TLSVersion
+		spec *sesamepb.ClientHelloSpec
+		maxV sesamepb.TlsVersion
 	}{
-		{"fc-reversed-ciphers", "fail-closed: reversed cipher order", &sesametls.ClientHelloSpec{CipherSuites: []int32{0x0035, 0x002f}}, sesametls.TLSVersion_TLS_1_2},
-		{"fc-reversed-groups", "fail-closed: reversed group order", &sesametls.ClientHelloSpec{SupportedGroups: []int32{23, 29}}, sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED},
-		{"fc-unknown-group", "fail-closed: unknown group 0x7a7a", &sesametls.ClientHelloSpec{SupportedGroups: []int32{0x7a7a}}, sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED},
-		{"fc-sigalgs", "fail-closed: non-empty signature_algorithms", &sesametls.ClientHelloSpec{SignatureAlgorithms: []int32{0x0403}}, sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED},
-		{"fc-extensions", "fail-closed: non-empty extensions", &sesametls.ClientHelloSpec{Extensions: []*sesametls.ClientHelloExtension{{Type: 43}}}, sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED},
-		{"fc-session-id", "fail-closed: session_id_length=-1", &sesametls.ClientHelloSpec{SessionIdLength: -1}, sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED},
-		{"fc-pad", "fail-closed: pad_to_size=512", &sesametls.ClientHelloSpec{PadToSize: 512}, sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED},
-		{"fc-legacy-version", "fail-closed: legacy_version=TLS_1_2", &sesametls.ClientHelloSpec{LegacyVersion: sesametls.TLSVersion_TLS_1_2}, sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED},
+		{"fc-reversed-ciphers", "fail-closed: reversed cipher order", &sesamepb.ClientHelloSpec{CipherSuites: []int32{0x0035, 0x002f}}, sesamepb.TlsVersion_TLS_VERSION_TLS_1_2},
+		{"fc-reversed-groups", "fail-closed: reversed group order", &sesamepb.ClientHelloSpec{SupportedGroups: []int32{23, 29}}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
+		{"fc-unknown-group", "fail-closed: unknown group 0x7a7a", &sesamepb.ClientHelloSpec{SupportedGroups: []int32{0x7a7a}}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
+		{"fc-sigalgs", "fail-closed: non-empty signature_algorithms", &sesamepb.ClientHelloSpec{SignatureAlgorithms: []int32{0x0403}}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
+		{"fc-extensions", "fail-closed: non-empty extensions", &sesamepb.ClientHelloSpec{Extensions: []*sesamepb.ClientHelloExtension{{Type: 43}}}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
+		{"fc-session-id", "fail-closed: session_id_length=-1", &sesamepb.ClientHelloSpec{SessionIdLength: -1}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
+		{"fc-pad", "fail-closed: pad_to_size=512", &sesamepb.ClientHelloSpec{TargetSize: 512}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
+		{"fc-legacy-version", "fail-closed: legacy_version=TLS_1_2", &sesamepb.ClientHelloSpec{LegacyVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_2}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
 	}
 	for _, fc := range failClosed {
 		scenarios = append(scenarios, runFailClosed(ctx, grpcAddr, fc.id, fc.name, fc.spec, fc.maxV, codes.FailedPrecondition))
@@ -601,15 +600,15 @@ func runGoEngine(ctx context.Context, grpcAddr string, cert cryptotls.Certificat
 	invalid := []struct {
 		id   string
 		name string
-		spec *sesametls.ClientHelloSpec
+		spec *sesamepb.ClientHelloSpec
 	}{
-		{"inv-cipher-range", "invalid: cipher suite 1<<20", &sesametls.ClientHelloSpec{CipherSuites: []int32{1 << 20}}},
-		{"inv-group-negative", "invalid: group -1", &sesametls.ClientHelloSpec{SupportedGroups: []int32{-1}}},
-		{"inv-session-id-33", "invalid: session_id_length=33", &sesametls.ClientHelloSpec{SessionIdLength: 33}},
-		{"inv-pad-negative", "invalid: pad_to_size=-1", &sesametls.ClientHelloSpec{PadToSize: -1}},
+		{"inv-cipher-range", "invalid: cipher suite 1<<20", &sesamepb.ClientHelloSpec{CipherSuites: []int32{1 << 20}}},
+		{"inv-group-negative", "invalid: group -1", &sesamepb.ClientHelloSpec{SupportedGroups: []int32{-1}}},
+		{"inv-session-id-33", "invalid: session_id_length=33", &sesamepb.ClientHelloSpec{SessionIdLength: 33}},
+		{"inv-pad-negative", "invalid: pad_to_size=-1", &sesamepb.ClientHelloSpec{TargetSize: -1}},
 	}
 	for _, iv := range invalid {
-		scenarios = append(scenarios, runFailClosed(ctx, grpcAddr, iv.id, iv.name, iv.spec, sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED, codes.InvalidArgument))
+		scenarios = append(scenarios, runFailClosed(ctx, grpcAddr, iv.id, iv.name, iv.spec, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED, codes.InvalidArgument))
 	}
 
 	scenarios = append(scenarios, runClientVerify())
@@ -618,7 +617,7 @@ func runGoEngine(ctx context.Context, grpcAddr string, cert cryptotls.Certificat
 
 // dialAndCapture dials through the in-process gRPC server, targeting the
 // capture listener. Returns the InStreamConn and capture result.
-func dialAndCapture(ctx context.Context, grpcAddr string, targetAddr string, tlsOpts *sesametls.TLSOptions, captureCh <-chan captureResult) (netconn.InStreamConn, captureResult, error) {
+func dialAndCapture(ctx context.Context, grpcAddr string, targetAddr string, tlsOpts *sesamepb.TlsOptions, captureCh <-chan captureResult) (netconn.InStreamConn, captureResult, error) {
 	client, cc, err := newGoClient(grpcAddr, tlsOpts)
 	if err != nil {
 		return nil, captureResult{}, err
@@ -671,8 +670,8 @@ func runDefaultHello(ctx context.Context, grpcAddr string, cert cryptotls.Certif
 	}
 	defer ln.Close()
 
-	tlsOpts := &sesametls.TLSOptions{
-		ServerName:         "localhost",
+	tlsOpts := &sesamepb.TlsOptions{
+		Sni:                "localhost",
 		InsecureSkipVerify: true,
 		AlpnProtocols:      []string{"http/1.1"},
 	}
@@ -711,7 +710,7 @@ func runDefaultHello(ctx context.Context, grpcAddr string, cert cryptotls.Certif
 		fmt.Sprintf("key_share groups=%v", ch.KeyShareGroups)})
 	s.add(check{deetMessageSize, ch.MessageSize > 200,
 		fmt.Sprintf("ClientHello message_size=%d bytes", ch.MessageSize)})
-	s.add(check{deetNegotiatedVer, tlsRes.GetTlsVersion() == sesametls.TLSVersion_TLS_1_3,
+	s.add(check{deetNegotiatedVer, tlsRes.GetTlsVersion() == sesamepb.TlsVersion_TLS_VERSION_TLS_1_3,
 		fmt.Sprintf("negotiated version=%v", tlsRes.GetTlsVersion())})
 	s.add(check{deetAppliedEcho, tlsRes.GetAppliedClientHello() == nil,
 		"no spec requested => applied_client_hello absent"})
@@ -721,7 +720,7 @@ func runDefaultHello(ctx context.Context, grpcAddr string, cert cryptotls.Certif
 }
 
 func runHonoredGroups(ctx context.Context, grpcAddr string, cert cryptotls.Certificate) scenario {
-	spec := &sesametls.ClientHelloSpec{SupportedGroups: []int32{29, 23}}
+	spec := &sesamepb.ClientHelloSpec{SupportedGroups: []int32{29, 23}}
 	s := scenario{
 		ID:            "honored-groups",
 		Name:          "Go engine honors SupportedGroups [29,23]",
@@ -736,8 +735,8 @@ func runHonoredGroups(ctx context.Context, grpcAddr string, cert cryptotls.Certi
 	}
 	defer ln.Close()
 
-	tlsOpts := &sesametls.TLSOptions{
-		ServerName:         "localhost",
+	tlsOpts := &sesamepb.TlsOptions{
+		Sni:                "localhost",
 		InsecureSkipVerify: true,
 		AlpnProtocols:      []string{"http/1.1"},
 		ClientHello:        spec,
@@ -770,7 +769,7 @@ func runHonoredGroups(ctx context.Context, grpcAddr string, cert cryptotls.Certi
 }
 
 func runHonoredCiphersTLS12(ctx context.Context, grpcAddr string, cert cryptotls.Certificate) scenario {
-	spec := &sesametls.ClientHelloSpec{CipherSuites: []int32{0x002f, 0x0035}}
+	spec := &sesamepb.ClientHelloSpec{CipherSuites: []int32{0x002f, 0x0035}}
 	s := scenario{
 		ID:   "honored-ciphers-tls12",
 		Name: "Go engine honors CipherSuites [0x002f,0x0035] at TLS 1.2",
@@ -790,11 +789,11 @@ func runHonoredCiphersTLS12(ctx context.Context, grpcAddr string, cert cryptotls
 	}
 	defer ln.Close()
 
-	tlsOpts := &sesametls.TLSOptions{
-		ServerName:         "localhost",
+	tlsOpts := &sesamepb.TlsOptions{
+		Sni:                "localhost",
 		InsecureSkipVerify: true,
 		AlpnProtocols:      []string{"http/1.1"},
-		MaxVersion:         sesametls.TLSVersion_TLS_1_2,
+		MaxVersion:         sesamepb.TlsVersion_TLS_VERSION_TLS_1_2,
 		ClientHello:        spec,
 	}
 
@@ -815,7 +814,7 @@ func runHonoredCiphersTLS12(ctx context.Context, grpcAddr string, cert cryptotls
 
 	s.add(check{deetCipherOrder, intsEq(ch.CipherSuites, want),
 		fmt.Sprintf("captured ciphers=%v want=%v", fmtHexInts(ch.CipherSuites), fmtHexInts(want))})
-	s.add(check{deetNegotiatedVer, tlsRes.GetTlsVersion() == sesametls.TLSVersion_TLS_1_2,
+	s.add(check{deetNegotiatedVer, tlsRes.GetTlsVersion() == sesamepb.TlsVersion_TLS_VERSION_TLS_1_2,
 		fmt.Sprintf("negotiated version=%v (want TLS_1_2)", tlsRes.GetTlsVersion())})
 	s.add(check{deetNegotiatedSuite, tlsRes.GetCipherSuite() == 0x002f || tlsRes.GetCipherSuite() == 0x0035,
 		fmt.Sprintf("negotiated cipher=0x%04x", tlsRes.GetCipherSuite())})
@@ -826,7 +825,7 @@ func runHonoredCiphersTLS12(ctx context.Context, grpcAddr string, cert cryptotls
 	return s
 }
 
-func runFailClosed(ctx context.Context, grpcAddr, id, name string, spec *sesametls.ClientHelloSpec, maxV sesametls.TLSVersion, wantCode codes.Code) scenario {
+func runFailClosed(ctx context.Context, grpcAddr, id, name string, spec *sesamepb.ClientHelloSpec, maxV sesamepb.TlsVersion, wantCode codes.Code) scenario {
 	s := scenario{
 		ID:            id,
 		Name:          name,
@@ -857,12 +856,12 @@ func runFailClosed(ctx context.Context, grpcAddr, id, name string, spec *sesamet
 		bytesReceived <- n
 	}()
 
-	tlsOpts := &sesametls.TLSOptions{
-		ServerName:         "localhost",
+	tlsOpts := &sesamepb.TlsOptions{
+		Sni:                "localhost",
 		InsecureSkipVerify: true,
 		ClientHello:        spec,
 	}
-	if maxV != sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED {
+	if maxV != sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED {
 		tlsOpts.MaxVersion = maxV
 	}
 
@@ -902,14 +901,14 @@ func runClientVerify() scenario {
 		Path: "go-engine",
 	}
 
-	spec := &sesametls.ClientHelloSpec{
+	spec := &sesamepb.ClientHelloSpec{
 		SupportedGroups: []int32{29, 23},
 		CipherSuites:    []int32{0x002f, 0x0035},
 		SessionIdLength: 32,
 	}
 
 	// Verbatim echo: must pass.
-	verbatim := &sesametls.ClientHelloSpec{
+	verbatim := &sesamepb.ClientHelloSpec{
 		SupportedGroups: []int32{29, 23},
 		CipherSuites:    []int32{0x002f, 0x0035},
 		SessionIdLength: 32,
@@ -919,7 +918,7 @@ func runClientVerify() scenario {
 		fmt.Sprintf("verbatim echo: err=%v (want nil)", err)})
 
 	// Mutated echo: must fail.
-	mutated := &sesametls.ClientHelloSpec{
+	mutated := &sesamepb.ClientHelloSpec{
 		SupportedGroups: []int32{23, 29}, // reversed
 		CipherSuites:    []int32{0x002f, 0x0035},
 		SessionIdLength: 32,
@@ -1196,8 +1195,8 @@ func runEndpointDefaultHello(ctx context.Context, epAddr string, cert cryptotls.
 	}
 	defer ln.Close()
 
-	tlsOpts := &sesametls.TLSOptions{
-		ServerName:         "localhost",
+	tlsOpts := &sesamepb.TlsOptions{
+		Sni:                "localhost",
 		InsecureSkipVerify: true,
 		AlpnProtocols:      []string{"http/1.1"},
 	}
@@ -1309,7 +1308,7 @@ func runEndpointFailClosed(ctx context.Context, epAddr string) scenario {
 		ID:            "endpoint-fail-closed",
 		Name:          "Endpoint rejects non-default ClientHelloSpec dimension",
 		Path:          "endpoint-bun",
-		RequestedSpec: specSummary(&sesametls.ClientHelloSpec{SignatureAlgorithms: []int32{0x0403}}),
+		RequestedSpec: specSummary(&sesamepb.ClientHelloSpec{SignatureAlgorithms: []int32{0x0403}}),
 	}
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1333,10 +1332,10 @@ func runEndpointFailClosed(ctx context.Context, epAddr string) scenario {
 		bytesReceived <- n
 	}()
 
-	tlsOpts := &sesametls.TLSOptions{
-		ServerName:         "localhost",
+	tlsOpts := &sesamepb.TlsOptions{
+		Sni:                "localhost",
 		InsecureSkipVerify: true,
-		ClientHello:        &sesametls.ClientHelloSpec{SignatureAlgorithms: []int32{0x0403}},
+		ClientHello:        &sesamepb.ClientHelloSpec{SignatureAlgorithms: []int32{0x0403}},
 	}
 
 	client, cc, cerr := newGoClient(epAddr, tlsOpts)
@@ -1382,8 +1381,8 @@ func runEndpointCaps(ctx context.Context, epAddr string, cert cryptotls.Certific
 	}
 	defer ln.Close()
 
-	tlsOpts := &sesametls.TLSOptions{
-		ServerName:         "localhost",
+	tlsOpts := &sesamepb.TlsOptions{
+		Sni:                "localhost",
 		InsecureSkipVerify: true,
 		AlpnProtocols:      []string{"http/1.1"},
 	}

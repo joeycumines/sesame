@@ -18,11 +18,9 @@ import (
 	"time"
 
 	"github.com/joeycumines/sesame/internal/testutil"
-	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
-	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
-	"github.com/joeycumines/sesame/type/netaddr"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -125,25 +123,25 @@ func TestLifecycle_EndpointTLS_ALPN(t *testing.T) {
 	}()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := testutil.ClientConnFactories["inprocgrpc"](func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		TLS: &sesametls.TLSOptions{
-			ServerName:         "mail.internal",
+		API: sesamepb.NewRemoteControlClient(gc),
+		TLS: &sesamepb.TlsOptions{
+			Sni:                "mail.internal",
 			AlpnProtocols:      []string{"h2", "http/1.1"},
 			CaCertificates:     certPEM,
 			InsecureSkipVerify: true,
 		},
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -165,7 +163,7 @@ func TestLifecycle_EndpointTLS_ALPN(t *testing.T) {
 
 	tlsRes := inStreamConn.TLSResult()
 	if tlsRes == nil {
-		t.Fatalf("missing TLSHandshakeResult")
+		t.Fatalf("missing TlsHandshakeResult")
 	}
 	if tlsRes.GetNegotiatedProtocol() != "h2" {
 		t.Errorf("got negotiated protocol %q, want h2", tlsRes.GetNegotiatedProtocol())
@@ -217,25 +215,25 @@ func TestLifecycle_ALPN_EmptySuppressionRule(t *testing.T) {
 	}()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := testutil.ClientConnFactories["inprocgrpc"](func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		TLS: &sesametls.TLSOptions{
-			ServerName:         "mail.internal",
+		API: sesamepb.NewRemoteControlClient(gc),
+		TLS: &sesamepb.TlsOptions{
+			Sni:                "mail.internal",
 			CaCertificates:     certPEM,
 			InsecureSkipVerify: true,
 			// empty alpn_protocols triggers empty suppression rule
 		},
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -299,23 +297,23 @@ func TestLifecycle_HTTPConnectProxyHop(t *testing.T) {
 	}()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := testutil.ClientConnFactories["inprocgrpc"](func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Proxy: &sesameproxy.ProxyOptions{
-			Hops: []*sesameproxy.ProxyHop{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Proxy: &sesamepb.ProxyOptions{
+			Hops: []*sesamepb.ProxyHop{
 				{
-					Type: sesameproxy.ProxyHop_HTTP_CONNECT,
-					Address: &netaddr.NetAddr{
+					Type: sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
+					Address: &typepb.NetAddr{
 						Network: "tcp",
 						Address: "proxy.internal:8080",
 					},
@@ -324,7 +322,7 @@ func TestLifecycle_HTTPConnectProxyHop(t *testing.T) {
 				},
 			},
 		},
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -351,7 +349,7 @@ func TestLifecycle_HTTPConnectProxyHop(t *testing.T) {
 	}
 }
 
-// TestLifecycle_InStream_STARTTLS tests dynamic in-stream UpgradeTLS.
+// TestLifecycle_InStream_STARTTLS tests dynamic in-stream UpgradeTls.
 func TestLifecycle_InStream_STARTTLS(t *testing.T) {
 	skipUnlessIntegration(t)
 
@@ -395,19 +393,19 @@ func TestLifecycle_InStream_STARTTLS(t *testing.T) {
 	}()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := testutil.ClientConnFactories["inprocgrpc"](func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -440,20 +438,20 @@ func TestLifecycle_InStream_STARTTLS(t *testing.T) {
 		t.Fatalf("unexpected cleartext reply: %s", string(replyBuf[:rn]))
 	}
 
-	// 2. Trigger in-stream UpgradeTLS
-	upgradeOpts := &sesametls.TLSOptions{
-		ServerName:         "mail.internal",
+	// 2. Trigger in-stream UpgradeTls
+	upgradeOpts := &sesamepb.TlsOptions{
+		Sni:                "mail.internal",
 		AlpnProtocols:      []string{"test-proto"},
 		CaCertificates:     certPEM,
 		InsecureSkipVerify: true,
 	}
 
-	tlsRes, err := inStreamConn.UpgradeTLS(ctx, upgradeOpts)
+	tlsRes, err := inStreamConn.UpgradeTls(ctx, upgradeOpts)
 	if err != nil {
-		t.Fatalf("UpgradeTLS failed: %v", err)
+		t.Fatalf("UpgradeTls failed: %v", err)
 	}
 	if tlsRes == nil {
-		t.Fatal("expected non-nil UpgradeTLS result")
+		t.Fatal("expected non-nil UpgradeTls result")
 	}
 	if tlsRes.GetNegotiatedProtocol() != "test-proto" {
 		t.Errorf("got negotiated protocol %q, want test-proto", tlsRes.GetNegotiatedProtocol())
@@ -482,19 +480,19 @@ func TestLifecycle_InStream_PingPong(t *testing.T) {
 	defer serverPipe.Close()
 
 	server := netconn.Server{
-		Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+		Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 			return &mockPipeDialer{conn: clientPipe}, nil
 		},
 	}
 
 	gc := testutil.ClientConnFactories["inprocgrpc"](func(h testutil.GRPCServer) {
-		rc.RegisterRemoteControlServer(h, &server)
+		sesamepb.RegisterRemoteControlServer(h, &server)
 	})
 	defer gc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(gc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(gc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -533,20 +531,20 @@ func TestLifecycle_FailClosed_Security(t *testing.T) {
 		defer serverPipe.Close()
 
 		server := netconn.Server{
-			Dialer: func(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+			Dialer: func(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 				return &mockPipeDialer{conn: clientPipe}, nil
 			},
 		}
 
 		gc := testutil.ClientConnFactories["inprocgrpc"](func(h testutil.GRPCServer) {
-			rc.RegisterRemoteControlServer(h, &server)
+			sesamepb.RegisterRemoteControlServer(h, &server)
 		})
 		defer gc.Close()
 
 		client := netconn.Client{
-			API: rc.NewRemoteControlClient(gc),
-			TLS: &sesametls.TLSOptions{
-				ClientHello: &sesametls.ClientHelloSpec{
+			API: sesamepb.NewRemoteControlClient(gc),
+			TLS: &sesamepb.TlsOptions{
+				ClientHello: &sesamepb.ClientHelloSpec{
 					SignatureAlgorithms: []int32{0x0403},
 				},
 			},
@@ -571,15 +569,15 @@ func TestLifecycle_FailClosed_Security(t *testing.T) {
 
 		// Server returns Conn without TLS confirmation
 		gc := testutil.ClientConnFactories["inprocgrpc"](func(h testutil.GRPCServer) {
-			rc.RegisterRemoteControlServer(h, &mockUnconfirmedServer{
+			sesamepb.RegisterRemoteControlServer(h, &mockUnconfirmedServer{
 				dialer: &mockPipeDialer{conn: clientPipe},
 			})
 		})
 		defer gc.Close()
 
 		client := netconn.Client{
-			API: rc.NewRemoteControlClient(gc),
-			TLS: &sesametls.TLSOptions{ServerName: "target"},
+			API: sesamepb.NewRemoteControlClient(gc),
+			TLS: &sesamepb.TlsOptions{Sni: "target"},
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -596,10 +594,10 @@ func TestLifecycle_FailClosed_Security(t *testing.T) {
 
 type mockUnconfirmedServer struct {
 	dialer netconn.Dialer
-	rc.UnimplementedRemoteControlServer
+	sesamepb.UnimplementedRemoteControlServer
 }
 
-func (m *mockUnconfirmedServer) NetConn(stream rc.RemoteControl_NetConnServer) error {
+func (m *mockUnconfirmedServer) NetConn(stream sesamepb.RemoteControl_NetConnServer) error {
 	msg, err := stream.Recv()
 	if err != nil {
 		return err
@@ -611,11 +609,11 @@ func (m *mockUnconfirmedServer) NetConn(stream rc.RemoteControl_NetConnServer) e
 	defer conn.Close()
 
 	// Deliberately omit TLS and Proxy results in Conn response to test fail-closed invariants
-	return stream.Send(&rc.NetConnResponse{
-		Data: &rc.NetConnResponse_Conn_{
-			Conn: &rc.NetConnResponse_Conn{
-				Local:  netaddr.New(conn.LocalAddr()),
-				Remote: netaddr.New(conn.RemoteAddr()),
+	return stream.Send(&sesamepb.NetConnResponse{
+		Data: &sesamepb.NetConnResponse_Conn_{
+			Conn: &sesamepb.NetConnResponse_Conn{
+				Local:  typepb.New(conn.LocalAddr()),
+				Remote: typepb.New(conn.RemoteAddr()),
 			},
 		},
 	})

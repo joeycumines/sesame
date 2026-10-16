@@ -20,8 +20,7 @@ import (
 	"fmt"
 	"github.com/fullstorydev/grpchan"
 	"github.com/joeycumines/sesame/internal/flowcontrol"
-	"github.com/joeycumines/sesame/type/grpcmetadata"
-	"github.com/joeycumines/sesame/type/grpctunnel"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -71,7 +70,7 @@ func serveTunnel(c *tunnelConfig) error {
 	// initialise flow control, wrapping stream
 	// WARNING not ready for use yet (needs to be wired up with the tunnelServer)
 	fcInterface := &flowControlServer{tunnelStreamServer: stream}
-	fcConn := flowcontrol.NewConn[uint64, *grpctunnel.ServerToClient, *grpctunnel.ClientToServer](fcInterface)
+	fcConn := flowcontrol.NewConn[uint64, *typepb.OpenTunnelResponse, *typepb.OpenTunnelRequest](fcInterface)
 	stream = fcConn
 
 	tun := tunnelServer{
@@ -91,13 +90,13 @@ func serveTunnel(c *tunnelConfig) error {
 
 type tunnelStreamServer interface {
 	Context() context.Context
-	Send(*grpctunnel.ServerToClient) error
-	Recv() (*grpctunnel.ClientToServer, error)
+	Send(*typepb.OpenTunnelResponse) error
+	Recv() (*typepb.OpenTunnelRequest, error)
 }
 
 type tunnelServer struct {
 	stream       tunnelStreamServer
-	updateWindow func(msg *grpctunnel.ClientToServer)
+	updateWindow func(msg *typepb.OpenTunnelRequest)
 	services     grpchan.HandlerMap
 	stop         <-chan struct{} // graceful
 
@@ -141,16 +140,16 @@ func (s *tunnelServer) serve() error {
 					return status.Error(codes.InvalidArgument, "invalid frame")
 				}
 
-				if f, ok := msg.Frame.(*grpctunnel.ClientToServer_NewStream_); ok {
-					if ok, err := s.createStream(ctx, msg.StreamId, f.NewStream); err != nil {
+				if f, ok := msg.Frame.(*typepb.OpenTunnelRequest_NewStream); ok {
+					if ok, err := s.createStream(ctx, uint64(msg.StreamId), f.NewStream); err != nil {
 						if !ok {
 							return err
 						} else {
 							st, _ := status.FromError(err)
-							_ = s.stream.Send(&grpctunnel.ServerToClient{
+							_ = s.stream.Send(&typepb.OpenTunnelResponse{
 								StreamId: msg.StreamId,
-								Frame: &grpctunnel.ServerToClient_CloseStream_{
-									CloseStream: &grpctunnel.ServerToClient_CloseStream{
+								Frame: &typepb.OpenTunnelResponse_CloseStream{
+									CloseStream: &typepb.CloseStream{
 										Status: st.Proto(),
 									},
 								},
@@ -160,12 +159,12 @@ func (s *tunnelServer) serve() error {
 					continue
 				}
 
-				str, err := s.getStream(msg.StreamId)
+				str, err := s.getStream(uint64(msg.StreamId))
 				if err != nil {
 					return err
 				}
 
-				if _, ok := msg.GetFrame().(*grpctunnel.ClientToServer_WindowUpdate); ok {
+				if _, ok := msg.GetFrame().(*typepb.OpenTunnelRequest_WindowUpdate); ok {
 					// handled in the flow control wrapper impl.
 					continue
 				}
@@ -216,7 +215,7 @@ func (s *tunnelServer) waitAllStreams(ctx context.Context) error {
 	}
 }
 
-func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame *grpctunnel.ClientToServer_NewStream) (bool, error) {
+func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame *typepb.NewStream) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -270,7 +269,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 		stream:         s.stream,
 		isClientStream: isClientStream,
 		isServerStream: isServerStream,
-		buffer:         make(chan *grpctunnel.ClientToServer, windowMaxBuffer),
+		buffer:         make(chan *typepb.OpenTunnelRequest, windowMaxBuffer),
 		closed:         make(chan struct{}),
 	}
 	s.streams[streamID] = str
@@ -330,7 +329,7 @@ type tunnelServerStream struct {
 	isServerStream bool
 
 	ingestMu   sync.Mutex
-	buffer     chan *grpctunnel.ClientToServer
+	buffer     chan *typepb.OpenTunnelRequest
 	halfClosed error
 
 	readMu  sync.Mutex
@@ -346,7 +345,7 @@ type tunnelServerStream struct {
 	hasSent bool
 }
 
-func (st *tunnelServerStream) acceptClientFrame(msg *grpctunnel.ClientToServer) {
+func (st *tunnelServerStream) acceptClientFrame(msg *typepb.OpenTunnelRequest) {
 	if st == nil {
 		// can happen if server decided that the stream ID was recently used
 		// yet inactive -- it returns nil error but also nil stream, which
@@ -356,11 +355,11 @@ func (st *tunnelServerStream) acceptClientFrame(msg *grpctunnel.ClientToServer) 
 	}
 
 	switch msg.GetFrame().(type) {
-	case *grpctunnel.ClientToServer_HalfClose:
+	case *typepb.OpenTunnelRequest_HalfClose:
 		st.halfClose(io.EOF)
 		return
 
-	case *grpctunnel.ClientToServer_Cancel:
+	case *typepb.OpenTunnelRequest_Cancel:
 		st.finishStream(context.Canceled)
 		return
 	}
@@ -406,9 +405,9 @@ func (st *tunnelServerStream) setHeader(md metadata.MD, send bool) error {
 }
 
 func (st *tunnelServerStream) sendHeadersLocked() error {
-	err := st.stream.Send(&grpctunnel.ServerToClient{
-		StreamId: st.streamID,
-		Frame: &grpctunnel.ServerToClient_Header{
+	err := st.stream.Send(&typepb.OpenTunnelResponse{
+		StreamId: int64(st.streamID),
+		Frame: &typepb.OpenTunnelResponse_Header{
 			Header: toProto(st.header),
 		},
 	})
@@ -417,16 +416,16 @@ func (st *tunnelServerStream) sendHeadersLocked() error {
 	return err
 }
 
-func fromProto(md *grpcmetadata.GrpcMetadata) metadata.MD {
+func fromProto(md *typepb.GrpcMetadata) metadata.MD {
 	if md == nil {
 		return nil
 	}
 	vals := make(metadata.MD, len(md.GetData()))
 	for k, v := range md.GetData() {
 		switch v := v.GetData().(type) {
-		case *grpcmetadata.GrpcMetadata_Value_Str:
+		case *typepb.GrpcMetadata_Value_Str:
 			vals[k] = v.Str.GetValues()
-		case *grpcmetadata.GrpcMetadata_Value_Bin:
+		case *typepb.GrpcMetadata_Value_Bin:
 			var a []string
 			if l := len(v.Bin.GetValues()); l != 0 {
 				a = make([]string, 0, l)
@@ -442,9 +441,9 @@ func fromProto(md *grpcmetadata.GrpcMetadata) metadata.MD {
 	return vals
 }
 
-func toProto(md metadata.MD) *grpcmetadata.GrpcMetadata {
-	var r grpcmetadata.GrpcMetadata
-	r.Data = make(map[string]*grpcmetadata.GrpcMetadata_Value, len(md))
+func toProto(md metadata.MD) *typepb.GrpcMetadata {
+	var r typepb.GrpcMetadata
+	r.Data = make(map[string]*typepb.GrpcMetadata_Value, len(md))
 	for k, v := range md {
 		if strings.HasSuffix(k, `-bin`) {
 			var a [][]byte
@@ -454,9 +453,9 @@ func toProto(md metadata.MD) *grpcmetadata.GrpcMetadata {
 					a = append(a, []byte(v))
 				}
 			}
-			r.Data[k] = &grpcmetadata.GrpcMetadata_Value{Data: &grpcmetadata.GrpcMetadata_Value_Bin{Bin: &grpcmetadata.GrpcMetadata_Bin{Values: a}}}
+			r.Data[k] = &typepb.GrpcMetadata_Value{Data: &typepb.GrpcMetadata_Value_Bin{Bin: &typepb.GrpcMetadata_Bin{Values: a}}}
 		} else {
-			r.Data[k] = &grpcmetadata.GrpcMetadata_Value{Data: &grpcmetadata.GrpcMetadata_Value_Str{Str: &grpcmetadata.GrpcMetadata_Str{Values: v}}}
+			r.Data[k] = &typepb.GrpcMetadata_Value{Data: &typepb.GrpcMetadata_Value_Str{Str: &typepb.GrpcMetadata_Str{Values: v}}}
 		}
 	}
 	return &r
@@ -512,19 +511,19 @@ func (st *tunnelServerStream) SendMsg(m interface{}) error {
 		}
 
 		if i == 0 {
-			err = st.stream.Send(&grpctunnel.ServerToClient{
-				StreamId: st.streamID,
-				Frame: &grpctunnel.ServerToClient_Message{
-					Message: &grpctunnel.EncodedMessage{
+			err = st.stream.Send(&typepb.OpenTunnelResponse{
+				StreamId: int64(st.streamID),
+				Frame: &typepb.OpenTunnelResponse_Message{
+					Message: &typepb.EncodedMessage{
 						Size: int32(len(b)),
 						Data: chunk,
 					},
 				},
 			})
 		} else {
-			err = st.stream.Send(&grpctunnel.ServerToClient{
-				StreamId: st.streamID,
-				Frame: &grpctunnel.ServerToClient_MessageData{
+			err = st.stream.Send(&typepb.OpenTunnelResponse{
+				StreamId: int64(st.streamID),
+				Frame: &typepb.OpenTunnelResponse_MessageData{
 					MessageData: chunk,
 				},
 			})
@@ -613,7 +612,7 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 			st.tun.updateWindow(msg)
 
 			switch frame := msg.GetFrame().(type) {
-			case *grpctunnel.ClientToServer_Message:
+			case *typepb.OpenTunnelRequest_Message:
 				if msgLen != -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "received redundant request message envelope")
 				}
@@ -626,7 +625,7 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 					return b, true, nil
 				}
 
-			case *grpctunnel.ClientToServer_MessageData:
+			case *typepb.OpenTunnelRequest_MessageData:
 				if msgLen == -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "never received envelope for request message")
 				}
@@ -692,10 +691,10 @@ func (st *tunnelServerStream) finishStream(err error) {
 	}
 
 	stat, _ := status.FromError(err)
-	_ = st.stream.Send(&grpctunnel.ServerToClient{
-		StreamId: st.streamID,
-		Frame: &grpctunnel.ServerToClient_CloseStream_{
-			CloseStream: &grpctunnel.ServerToClient_CloseStream{
+	_ = st.stream.Send(&typepb.OpenTunnelResponse{
+		StreamId: int64(st.streamID),
+		Frame: &typepb.OpenTunnelResponse_CloseStream{
+			CloseStream: &typepb.CloseStream{
 				Status:  stat.Proto(),
 				Trailer: toProto(st.trailer),
 			},

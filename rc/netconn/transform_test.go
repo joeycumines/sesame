@@ -4,29 +4,28 @@ import (
 	"context"
 	cryptotls "crypto/tls"
 	"errors"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	"net"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
-	"github.com/joeycumines/sesame/type/netaddr"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func TestProtoToTLSVersion(t *testing.T) {
 	tests := []struct {
-		proto sesametls.TLSVersion
+		proto sesamepb.TlsVersion
 		want  uint16
 	}{
-		{sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED, 0},
-		{sesametls.TLSVersion_TLS_1_0, cryptotls.VersionTLS10},
-		{sesametls.TLSVersion_TLS_1_1, cryptotls.VersionTLS11},
-		{sesametls.TLSVersion_TLS_1_2, cryptotls.VersionTLS12},
-		{sesametls.TLSVersion_TLS_1_3, cryptotls.VersionTLS13},
+		{sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED, 0},
+		{sesamepb.TlsVersion_TLS_VERSION_TLS_1_0, cryptotls.VersionTLS10},
+		{sesamepb.TlsVersion_TLS_VERSION_TLS_1_1, cryptotls.VersionTLS11},
+		{sesamepb.TlsVersion_TLS_VERSION_TLS_1_2, cryptotls.VersionTLS12},
+		{sesamepb.TlsVersion_TLS_VERSION_TLS_1_3, cryptotls.VersionTLS13},
 	}
 	for _, tt := range tests {
 		if got := ProtoToTLSVersion(tt.proto); got != tt.want {
@@ -42,8 +41,8 @@ func TestProtoToTLSVersion(t *testing.T) {
 
 func TestBuildTLSConfig_ALPN_Rule(t *testing.T) {
 	// Standing Directive: If alpn_protocols is empty, ALPN extension MUST NOT be sent.
-	opts := &sesametls.TLSOptions{
-		ServerName: "example.com",
+	opts := &sesamepb.TlsOptions{
+		Sni: "example.com",
 	}
 	cfg, err := BuildTLSConfig(opts, "fallback.com")
 	if err != nil {
@@ -57,8 +56,8 @@ func TestBuildTLSConfig_ALPN_Rule(t *testing.T) {
 	}
 
 	// When ALPN protocols are provided
-	optsWithALPN := &sesametls.TLSOptions{
-		ServerName:    "example.com:443",
+	optsWithALPN := &sesamepb.TlsOptions{
+		Sni:           "example.com:443",
 		AlpnProtocols: []string{"h2", "http/1.1"},
 	}
 	cfgALPN, err := BuildTLSConfig(optsWithALPN, "fallback.com")
@@ -76,9 +75,9 @@ func TestBuildTLSConfig_ALPN_Rule(t *testing.T) {
 func TestExecuteTLSHandshake_FailsClosedOnUnhonorableSpec(t *testing.T) {
 	// The builtin engine MUST fail closed (FAILED_PRECONDITION) when a
 	// requested ClientHello dimension cannot be honored exactly.
-	opts := &sesametls.TLSOptions{
-		ServerName: "example.com",
-		ClientHello: &sesametls.ClientHelloSpec{
+	opts := &sesamepb.TlsOptions{
+		Sni: "example.com",
+		ClientHello: &sesamepb.ClientHelloSpec{
 			SignatureAlgorithms: []int32{0x0403},
 		},
 	}
@@ -96,9 +95,9 @@ func TestExecuteTLSHandshake_FailsClosedOnUnhonorableSpec(t *testing.T) {
 	}
 
 	// Range violations are INVALID_ARGUMENT and equally rejected.
-	_, _, err = ExecuteTLSHandshake(context.Background(), rawConn, &sesametls.TLSOptions{
-		ServerName: "example.com",
-		ClientHello: &sesametls.ClientHelloSpec{
+	_, _, err = ExecuteTLSHandshake(context.Background(), rawConn, &sesamepb.TlsOptions{
+		Sni: "example.com",
+		ClientHello: &sesamepb.ClientHelloSpec{
 			CipherSuites: []int32{1 << 20},
 		},
 	}, "example.com", nil)
@@ -133,11 +132,11 @@ func TestExecuteProxyHops_HTTPConnect(t *testing.T) {
 	}()
 
 	mockDialer := &pipeDialer{conn: clientPipe}
-	proxyOpts := &sesameproxy.ProxyOptions{
-		Hops: []*sesameproxy.ProxyHop{
+	proxyOpts := &sesamepb.ProxyOptions{
+		Hops: []*sesamepb.ProxyHop{
 			{
-				Type: sesameproxy.ProxyHop_HTTP_CONNECT,
-				Address: &netaddr.NetAddr{
+				Type: sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
+				Address: &typepb.NetAddr{
 					Network: "tcp",
 					Address: proxyAddr,
 				},
@@ -186,9 +185,9 @@ func TestHttpConnectHandshake_RejectsFramed200Body(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			_, err := httpConnectHandshake(ctx, clientPipe, &sesameproxy.ProxyHop{
-				Type: sesameproxy.ProxyHop_HTTP_CONNECT,
-				Address: &netaddr.NetAddr{
+			_, err := httpConnectHandshake(ctx, clientPipe, &sesamepb.ProxyHop{
+				Type: sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
+				Address: &typepb.NetAddr{
 					Network: "tcp",
 					Address: "proxy.internal:8080",
 				},
@@ -270,8 +269,8 @@ func TestSocks5Handshake_ArmsFallbackDeadline(t *testing.T) {
 		_ = recording.Close()
 	}()
 
-	_, err := socks5Handshake(context.Background(), recording, &sesameproxy.ProxyHop{
-		Type:     sesameproxy.ProxyHop_SOCKS5,
+	_, err := socks5Handshake(context.Background(), recording, &sesamepb.ProxyHop{
+		Type:     sesamepb.ProxyHop_TYPE_SOCKS5,
 		Username: "user",
 		Password: "pass",
 	}, "target.internal:443")
@@ -329,8 +328,8 @@ func TestExecuteTLSHandshake_ArmsAndRestoresHandshakeDeadline(t *testing.T) {
 		_ = recording.Close()
 	}()
 
-	_, _, err := ExecuteTLSHandshake(context.Background(), recording, &sesametls.TLSOptions{
-		ServerName: "example.com",
+	_, _, err := ExecuteTLSHandshake(context.Background(), recording, &sesamepb.TlsOptions{
+		Sni: "example.com",
 	}, "example.com", nil)
 	if err == nil {
 		t.Fatal("expected error from closed blackhole TLS handshake")
@@ -378,8 +377,8 @@ func TestExecuteTLSHandshake_HonorsContextDeadline(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, _, err := ExecuteTLSHandshake(ctx, blackholeConn, &sesametls.TLSOptions{
-		ServerName: "example.com",
+	_, _, err := ExecuteTLSHandshake(ctx, blackholeConn, &sesamepb.TlsOptions{
+		Sni: "example.com",
 	}, "example.com", nil)
 	if err == nil {
 		t.Fatal("expected the stalled handshake to fail")
@@ -412,8 +411,8 @@ func TestExecuteTLSHandshake_HonorsContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, _, err := ExecuteTLSHandshake(ctx, blackholeConn, &sesametls.TLSOptions{
-		ServerName: "example.com",
+	_, _, err := ExecuteTLSHandshake(ctx, blackholeConn, &sesamepb.TlsOptions{
+		Sni: "example.com",
 	}, "example.com", nil)
 	if err == nil {
 		t.Fatal("expected the canceled handshake to fail")
@@ -426,22 +425,22 @@ func TestExecuteTLSHandshake_HonorsContextCancellation(t *testing.T) {
 func TestValidateClientHelloSpec_RejectsOutOfRangeValues(t *testing.T) {
 	cases := []struct {
 		name string
-		spec *sesametls.ClientHelloSpec
+		spec *sesamepb.ClientHelloSpec
 	}{
-		{"cipher suite above uint16", &sesametls.ClientHelloSpec{CipherSuites: []int32{0x1301, 1 << 20}}},
-		{"negative cipher suite", &sesametls.ClientHelloSpec{CipherSuites: []int32{-1}}},
-		{"supported group above uint16", &sesametls.ClientHelloSpec{SupportedGroups: []int32{70000}}},
-		{"negative supported group", &sesametls.ClientHelloSpec{SupportedGroups: []int32{-29}}},
-		{"signature algorithm above uint16", &sesametls.ClientHelloSpec{SignatureAlgorithms: []int32{1 << 16}}},
-		{"negative signature algorithm", &sesametls.ClientHelloSpec{SignatureAlgorithms: []int32{-1}}},
-		{"extension type above uint16", &sesametls.ClientHelloSpec{Extensions: []*sesametls.ClientHelloExtension{{Type: 1 << 16}}}},
-		{"negative extension type", &sesametls.ClientHelloSpec{Extensions: []*sesametls.ClientHelloExtension{{Type: -1}}}},
-		{"nil extension entry", &sesametls.ClientHelloSpec{Extensions: []*sesametls.ClientHelloExtension{nil}}},
-		{"compression method above uint8", &sesametls.ClientHelloSpec{CompressionMethods: []int32{256}}},
-		{"negative compression method", &sesametls.ClientHelloSpec{CompressionMethods: []int32{-1}}},
-		{"session id length below sentinel", &sesametls.ClientHelloSpec{SessionIdLength: -2}},
-		{"session id length above 32", &sesametls.ClientHelloSpec{SessionIdLength: 33}},
-		{"negative pad to size", &sesametls.ClientHelloSpec{PadToSize: -1}},
+		{"cipher suite above uint16", &sesamepb.ClientHelloSpec{CipherSuites: []int32{0x1301, 1 << 20}}},
+		{"negative cipher suite", &sesamepb.ClientHelloSpec{CipherSuites: []int32{-1}}},
+		{"supported group above uint16", &sesamepb.ClientHelloSpec{SupportedGroups: []int32{70000}}},
+		{"negative supported group", &sesamepb.ClientHelloSpec{SupportedGroups: []int32{-29}}},
+		{"signature algorithm above uint16", &sesamepb.ClientHelloSpec{SignatureAlgorithms: []int32{1 << 16}}},
+		{"negative signature algorithm", &sesamepb.ClientHelloSpec{SignatureAlgorithms: []int32{-1}}},
+		{"extension type above uint16", &sesamepb.ClientHelloSpec{Extensions: []*sesamepb.ClientHelloExtension{{Type: 1 << 16}}}},
+		{"negative extension type", &sesamepb.ClientHelloSpec{Extensions: []*sesamepb.ClientHelloExtension{{Type: -1}}}},
+		{"nil extension entry", &sesamepb.ClientHelloSpec{Extensions: []*sesamepb.ClientHelloExtension{nil}}},
+		{"compression method above uint8", &sesamepb.ClientHelloSpec{CompressionMethods: []int32{256}}},
+		{"negative compression method", &sesamepb.ClientHelloSpec{CompressionMethods: []int32{-1}}},
+		{"session id length below sentinel", &sesamepb.ClientHelloSpec{SessionIdLength: -2}},
+		{"session id length above 32", &sesamepb.ClientHelloSpec{SessionIdLength: 33}},
+		{"negative pad to size", &sesamepb.ClientHelloSpec{TargetSize: -1}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -456,17 +455,17 @@ func TestValidateClientHelloSpec_RejectsOutOfRangeValues(t *testing.T) {
 	}
 
 	// In-range values must validate cleanly, including GREASE-range IDs.
-	valid := &sesametls.ClientHelloSpec{
+	valid := &sesamepb.ClientHelloSpec{
 		CipherSuites:        []int32{0x1301, 0xc02b, 0x0a0a},
 		SupportedGroups:     []int32{29, 23, 0x1a1a},
 		SignatureAlgorithms: []int32{0x0403},
-		Extensions: []*sesametls.ClientHelloExtension{
-			{Type: 0, Body: &sesametls.ClientHelloExtension_Raw{Raw: []byte{}}},
-			{Type: 65535, Body: &sesametls.ClientHelloExtension_Auto{Auto: &sesametls.AutoExtensionBody{}}},
+		Extensions: []*sesamepb.ClientHelloExtension{
+			{Type: 0, Body: &sesamepb.ClientHelloExtension_Raw{Raw: []byte{}}},
+			{Type: 65535, Body: &sesamepb.ClientHelloExtension_Auto{Auto: &sesamepb.AutoExtensionBody{}}},
 		},
 		CompressionMethods: []int32{0},
 		SessionIdLength:    32,
-		PadToSize:          512,
+		TargetSize:         512,
 	}
 	if err := ValidateClientHelloSpec(valid); err != nil {
 		t.Fatalf("expected valid spec, got %v", err)
@@ -477,10 +476,10 @@ func TestValidateClientHelloSpec_RejectsOutOfRangeValues(t *testing.T) {
 }
 
 func TestBuildTLSConfig_RejectsMinVersionAboveMax(t *testing.T) {
-	_, err := BuildTLSConfig(&sesametls.TLSOptions{
-		ServerName: "example.com",
-		MinVersion: sesametls.TLSVersion_TLS_1_3,
-		MaxVersion: sesametls.TLSVersion_TLS_1_2,
+	_, err := BuildTLSConfig(&sesamepb.TlsOptions{
+		Sni:        "example.com",
+		MinVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_3,
+		MaxVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_2,
 	}, "")
 	if err == nil {
 		t.Fatal("expected InvalidArgument for min_version above max_version")
@@ -490,10 +489,10 @@ func TestBuildTLSConfig_RejectsMinVersionAboveMax(t *testing.T) {
 	}
 
 	// A valid range, and one-sided bounds, must still build.
-	for _, opts := range []*sesametls.TLSOptions{
-		{ServerName: "example.com", MinVersion: sesametls.TLSVersion_TLS_1_2, MaxVersion: sesametls.TLSVersion_TLS_1_3},
-		{ServerName: "example.com", MinVersion: sesametls.TLSVersion_TLS_1_2},
-		{ServerName: "example.com", MaxVersion: sesametls.TLSVersion_TLS_1_3},
+	for _, opts := range []*sesamepb.TlsOptions{
+		{Sni: "example.com", MinVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_2, MaxVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_3},
+		{Sni: "example.com", MinVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_2},
+		{Sni: "example.com", MaxVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_3},
 	} {
 		if _, err := BuildTLSConfig(opts, ""); err != nil {
 			t.Fatalf("BuildTLSConfig failed for valid bounds %+v: %v", opts, err)
@@ -504,10 +503,10 @@ func TestBuildTLSConfig_RejectsMinVersionAboveMax(t *testing.T) {
 func TestExecuteTLSHandshake_RejectsMinVersionAboveMax(t *testing.T) {
 	// The version-range rule applies to every provider path, not just the
 	// standard runtime: validation must precede any provider dispatch.
-	_, _, err := ExecuteTLSHandshake(context.Background(), nil, &sesametls.TLSOptions{
-		ServerName: "example.com",
-		MinVersion: sesametls.TLSVersion_TLS_1_3,
-		MaxVersion: sesametls.TLSVersion_TLS_1_0,
+	_, _, err := ExecuteTLSHandshake(context.Background(), nil, &sesamepb.TlsOptions{
+		Sni:        "example.com",
+		MinVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_3,
+		MaxVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_0,
 	}, "", nil)
 	if err == nil {
 		t.Fatal("expected InvalidArgument for min_version above max_version")
@@ -541,11 +540,11 @@ func TestBuildTLSConfig_NilOptionsRejected(t *testing.T) {
 }
 
 func TestExecuteProxyHops_TooManyHops(t *testing.T) {
-	hops := make([]*sesameproxy.ProxyHop, MaxProxyHops+1)
+	hops := make([]*sesamepb.ProxyHop, MaxProxyHops+1)
 	for i := range hops {
-		hops[i] = &sesameproxy.ProxyHop{
-			Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
-			Address: &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+		hops[i] = &sesamepb.ProxyHop{
+			Type:    sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
+			Address: &typepb.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
 		}
 	}
 
@@ -554,7 +553,7 @@ func TestExecuteProxyHops_TooManyHops(t *testing.T) {
 	_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 		t.Fatal("dialer must not be called for an over-bound hop chain")
 		return nil, nil
-	}), &sesameproxy.ProxyOptions{Hops: hops}, "tcp", "example.com:80")
+	}), &sesamepb.ProxyOptions{Hops: hops}, "tcp", "example.com:80")
 	if err == nil {
 		t.Fatal("expected InvalidArgument for too many hops")
 	}
@@ -568,12 +567,12 @@ func TestExecuteProxyHops_RejectsControlBytes(t *testing.T) {
 	// lines into the raw CONNECT request; other control bytes are
 	// garbage in an authority or header value. Validation must fire
 	// before any dialing.
-	validAddr := &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}
+	validAddr := &typepb.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}
 
 	cases := []struct {
 		name    string
 		target  string
-		hopMods [2]func(*sesameproxy.ProxyHop)
+		hopMods [2]func(*sesamepb.ProxyHop)
 	}{
 		{
 			name:   "CR/LF in target injects a Host line",
@@ -590,38 +589,38 @@ func TestExecuteProxyHops_RejectsControlBytes(t *testing.T) {
 		{
 			name:   "CR in hop address",
 			target: "target.internal:443",
-			hopMods: [2]func(*sesameproxy.ProxyHop){func(h *sesameproxy.ProxyHop) {
-				h.Address = &netaddr.NetAddr{Network: "tcp", Address: "proxy\r.internal:8080"}
+			hopMods: [2]func(*sesamepb.ProxyHop){func(h *sesamepb.ProxyHop) {
+				h.Address = &typepb.NetAddr{Network: "tcp", Address: "proxy\r.internal:8080"}
 			}},
 		},
 		{
 			name:   "LF in second hop address",
 			target: "target.internal:443",
-			hopMods: [2]func(*sesameproxy.ProxyHop){
+			hopMods: [2]func(*sesamepb.ProxyHop){
 				nil,
-				func(h *sesameproxy.ProxyHop) {
-					h.Address = &netaddr.NetAddr{Network: "tcp", Address: "proxy2.\ninternal:8080"}
+				func(h *sesamepb.ProxyHop) {
+					h.Address = &typepb.NetAddr{Network: "tcp", Address: "proxy2.\ninternal:8080"}
 				},
 			},
 		},
 		{
 			name:    "CRLF in auth_header injects a header line",
 			target:  "target.internal:443",
-			hopMods: [2]func(*sesameproxy.ProxyHop){func(h *sesameproxy.ProxyHop) { h.AuthHeader = "Bearer tok\r\nX-Injected: 1" }},
+			hopMods: [2]func(*sesamepb.ProxyHop){func(h *sesamepb.ProxyHop) { h.AuthHeader = "Bearer tok\r\nX-Injected: 1" }},
 		},
 		{
 			name:    "NUL in auth_header",
 			target:  "target.internal:443",
-			hopMods: [2]func(*sesameproxy.ProxyHop){func(h *sesameproxy.ProxyHop) { h.AuthHeader = "Basic abc\x00def" }},
+			hopMods: [2]func(*sesamepb.ProxyHop){func(h *sesamepb.ProxyHop) { h.AuthHeader = "Basic abc\x00def" }},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			hops := make([]*sesameproxy.ProxyHop, len(tc.hopMods))
+			hops := make([]*sesamepb.ProxyHop, len(tc.hopMods))
 			for i, mod := range tc.hopMods {
-				hop := &sesameproxy.ProxyHop{
-					Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
+				hop := &sesamepb.ProxyHop{
+					Type:    sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
 					Address: validAddr,
 				}
 				if mod != nil {
@@ -633,7 +632,7 @@ func TestExecuteProxyHops_RejectsControlBytes(t *testing.T) {
 			_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 				t.Fatal("dialer must not be called for a control-byte proxy field")
 				return nil, nil
-			}), &sesameproxy.ProxyOptions{Hops: hops}, "tcp", tc.target)
+			}), &sesamepb.ProxyOptions{Hops: hops}, "tcp", tc.target)
 			if err == nil {
 				t.Fatal("expected InvalidArgument for a control byte in a proxy handshake field")
 			}
@@ -649,8 +648,8 @@ func TestExecuteProxyHops_RejectsControlBytes(t *testing.T) {
 	// so assert on the code and the message.
 	_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 		return nil, errors.New("dial reached")
-	}), &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{{
-		Type:       sesameproxy.ProxyHop_HTTP_CONNECT,
+	}), &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{{
+		Type:       sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
 		Address:    validAddr,
 		AuthHeader: "Bearer valid-token",
 	}}}, "tcp", "target.internal:443")
@@ -671,15 +670,15 @@ func TestExecuteProxyHops_RejectsOversizedSocks5Domain(t *testing.T) {
 	// or the 255-byte boundary.
 	oversized := strings.Repeat("a", 256) + ".example:443"
 	exact255 := strings.Repeat("a", 250) + ".test:443"
-	socksHop := func(address string) *sesameproxy.ProxyHop {
-		return &sesameproxy.ProxyHop{
-			Type:    sesameproxy.ProxyHop_SOCKS5,
-			Address: &netaddr.NetAddr{Network: "tcp", Address: address},
+	socksHop := func(address string) *sesamepb.ProxyHop {
+		return &sesamepb.ProxyHop{
+			Type:    sesamepb.ProxyHop_TYPE_SOCKS5,
+			Address: &typepb.NetAddr{Network: "tcp", Address: address},
 		}
 	}
-	httpHop := &sesameproxy.ProxyHop{
-		Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
-		Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
+	httpHop := &sesamepb.ProxyHop{
+		Type:    sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
+		Address: &typepb.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
 	}
 
 	neverDial := dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -689,7 +688,7 @@ func TestExecuteProxyHops_RejectsOversizedSocks5Domain(t *testing.T) {
 
 	// (a) Oversized domain on a SOCKS5 hop's target (last hop).
 	_, _, err := ExecuteProxyHops(context.Background(), neverDial,
-		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{socksHop("proxy.internal:1080")}},
+		&sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{socksHop("proxy.internal:1080")}},
 		"tcp", oversized)
 	if err == nil || status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("expected InvalidArgument for a >255-byte SOCKS5 target domain, got %v", err)
@@ -704,7 +703,7 @@ func TestExecuteProxyHops_RejectsOversizedSocks5Domain(t *testing.T) {
 	_, _, err = ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 		return nil, errors.New("dial reached")
 	}),
-		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{httpHop}},
+		&sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{httpHop}},
 		"tcp", oversized)
 	if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
 		t.Fatalf("expected HTTP CONNECT to accept an oversized domain target and reach the dial, got %v", err)
@@ -714,7 +713,7 @@ func TestExecuteProxyHops_RejectsOversizedSocks5Domain(t *testing.T) {
 	_, _, err = ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 		return nil, errors.New("dial reached")
 	}),
-		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{socksHop("proxy.internal:1080")}},
+		&sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{socksHop("proxy.internal:1080")}},
 		"tcp", exact255)
 	if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
 		t.Fatalf("expected the 255-byte boundary to pass validation and reach the dial, got %v", err)
@@ -723,9 +722,9 @@ func TestExecuteProxyHops_RejectsOversizedSocks5Domain(t *testing.T) {
 	// (d) Chained case: an oversized NEXT-hop address as a SOCKS5
 	// hop's CONNECT target - rejected before any dialing.
 	_, _, err = ExecuteProxyHops(context.Background(), neverDial,
-		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{
+		&sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{
 			socksHop("proxy.internal:1080"),
-			{Type: sesameproxy.ProxyHop_SOCKS5, Address: &netaddr.NetAddr{Network: "tcp", Address: oversized}},
+			{Type: sesamepb.ProxyHop_TYPE_SOCKS5, Address: &typepb.NetAddr{Network: "tcp", Address: oversized}},
 		}},
 		"tcp", "target.internal:443")
 	if err == nil || status.Code(err) != codes.InvalidArgument {
@@ -737,7 +736,7 @@ func TestExecuteProxyHops_RejectsOversizedSocks5Domain(t *testing.T) {
 	_, _, err = ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 		return nil, errors.New("dial reached")
 	}),
-		&sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{socksHop("proxy.internal:1080")}},
+		&sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{socksHop("proxy.internal:1080")}},
 		"tcp", "[::1]:443")
 	if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
 		t.Fatalf("expected the IPv6-literal SOCKS5 target to pass validation and reach the dial, got %v", err)
@@ -761,7 +760,7 @@ func TestBuildTLSConfig_ServerNameHandling(t *testing.T) {
 		{"bare ipv6 literal", "::1", "::1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := BuildTLSConfig(&sesametls.TLSOptions{ServerName: tc.in}, "")
+			cfg, err := BuildTLSConfig(&sesamepb.TlsOptions{Sni: tc.in}, "")
 			if err != nil {
 				t.Fatalf("expected server_name %q to validate, got %v", tc.in, err)
 			}
@@ -778,7 +777,7 @@ func TestBuildTLSConfig_ServerNameHandling(t *testing.T) {
 		{"bracketed literal without port", "[::1]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := BuildTLSConfig(&sesametls.TLSOptions{ServerName: tc.in}, "")
+			_, err := BuildTLSConfig(&sesamepb.TlsOptions{Sni: tc.in}, "")
 			if err == nil || status.Code(err) != codes.InvalidArgument {
 				t.Fatalf("expected InvalidArgument for server_name %q, got %v", tc.in, err)
 			}
@@ -847,20 +846,20 @@ func TestExecuteProxyHops_RejectsPasswordWithoutUsername(t *testing.T) {
 	// and the configured password would never reach the proxy; the
 	// misconfiguration must be rejected before any dialing. A username
 	// with an empty password remains valid (RFC 1929 allows it).
-	validAddr := &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:1080"}
+	validAddr := &typepb.NetAddr{Network: "tcp", Address: "proxy.internal:1080"}
 
 	for _, tc := range []struct {
 		name string
-		hop  *sesameproxy.ProxyHop
+		hop  *sesamepb.ProxyHop
 	}{
-		{"socks5", &sesameproxy.ProxyHop{Type: sesameproxy.ProxyHop_SOCKS5, Address: validAddr, Password: "secret"}},
-		{"http connect", &sesameproxy.ProxyHop{Type: sesameproxy.ProxyHop_HTTP_CONNECT, Address: validAddr, Password: "secret"}},
+		{"socks5", &sesamepb.ProxyHop{Type: sesamepb.ProxyHop_TYPE_SOCKS5, Address: validAddr, Password: "secret"}},
+		{"http connect", &sesamepb.ProxyHop{Type: sesamepb.ProxyHop_TYPE_HTTP_CONNECT, Address: validAddr, Password: "secret"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 				t.Fatal("dialer must not be called for a password-only hop")
 				return nil, nil
-			}), &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{tc.hop}}, "tcp", "target.internal:443")
+			}), &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{tc.hop}}, "tcp", "target.internal:443")
 			if err == nil || status.Code(err) != codes.InvalidArgument {
 				t.Fatalf("expected InvalidArgument for a password-only hop, got %v", err)
 			}
@@ -874,8 +873,8 @@ func TestExecuteProxyHops_RejectsPasswordWithoutUsername(t *testing.T) {
 	// the dial stage is reached.
 	_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 		return nil, errors.New("dial reached")
-	}), &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{{
-		Type: sesameproxy.ProxyHop_SOCKS5, Address: validAddr, Username: "user", Password: "",
+	}), &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{{
+		Type: sesamepb.ProxyHop_TYPE_SOCKS5, Address: validAddr, Username: "user", Password: "",
 	}}}, "tcp", "target.internal:443")
 	if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
 		t.Fatalf("expected a username-only hop to reach the dial stage, got %v", err)
@@ -887,10 +886,10 @@ func TestExecuteProxyHops_RejectsMalformedAddresses(t *testing.T) {
 	// malformed client input: INVALID_ARGUMENT at the boundary (AIP-193)
 	// rather than an opaque failure from the dial path. Empty hop
 	// addresses keep their specific missing-address errors.
-	validHop := func() *sesameproxy.ProxyHop {
-		return &sesameproxy.ProxyHop{
-			Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
-			Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
+	validHop := func() *sesamepb.ProxyHop {
+		return &sesamepb.ProxyHop{
+			Type:    sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
+			Address: &typepb.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
 		}
 	}
 
@@ -903,7 +902,7 @@ func TestExecuteProxyHops_RejectsMalformedAddresses(t *testing.T) {
 	})
 
 	for _, target := range []string{"example.com", "::1", "host:80:90", "host:0", "host:65536", "host:+80", "host: 80", "host:"} {
-		_, _, err := ExecuteProxyHops(context.Background(), neverDial, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{validHop()}}, "tcp", target)
+		_, _, err := ExecuteProxyHops(context.Background(), neverDial, &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{validHop()}}, "tcp", target)
 		if err == nil || status.Code(err) != codes.InvalidArgument {
 			t.Fatalf("expected InvalidArgument for malformed target %q, got %v", target, err)
 		}
@@ -915,17 +914,17 @@ func TestExecuteProxyHops_RejectsMalformedAddresses(t *testing.T) {
 	}
 
 	// A malformed hop address is rejected before dialing.
-	_, _, err := ExecuteProxyHops(context.Background(), neverDial, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{{
-		Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
-		Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal"},
+	_, _, err := ExecuteProxyHops(context.Background(), neverDial, &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{{
+		Type:    sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
+		Address: &typepb.NetAddr{Network: "tcp", Address: "proxy.internal"},
 	}}}, "tcp", "target.internal:443")
 	if err == nil || status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("expected InvalidArgument for a malformed hop address, got %v", err)
 	}
 
 	// An empty hop address keeps its specific missing-address error.
-	_, _, err = ExecuteProxyHops(context.Background(), neverDial, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{{
-		Type: sesameproxy.ProxyHop_HTTP_CONNECT,
+	_, _, err = ExecuteProxyHops(context.Background(), neverDial, &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{{
+		Type: sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
 	}}}, "tcp", "target.internal:443")
 	if err == nil || status.Code(err) != codes.InvalidArgument || !strings.Contains(err.Error(), "first proxy hop missing address") {
 		t.Fatalf("expected the specific missing-address error for an empty hop address, got %v", err)
@@ -933,9 +932,9 @@ func TestExecuteProxyHops_RejectsMalformedAddresses(t *testing.T) {
 
 	// A missing middle-hop address is rejected before the first dial:
 	// the neverDial dialer proves validation precedes the side effect.
-	_, _, err = ExecuteProxyHops(context.Background(), neverDial, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{
-		{Type: sesameproxy.ProxyHop_HTTP_CONNECT, Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}},
-		{Type: sesameproxy.ProxyHop_HTTP_CONNECT},
+	_, _, err = ExecuteProxyHops(context.Background(), neverDial, &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{
+		{Type: sesamepb.ProxyHop_TYPE_HTTP_CONNECT, Address: &typepb.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}},
+		{Type: sesamepb.ProxyHop_TYPE_HTTP_CONNECT},
 	}}, "tcp", "target.internal:443")
 	if err == nil || status.Code(err) != codes.InvalidArgument || !strings.Contains(err.Error(), "proxy hop 1 missing address") {
 		t.Fatalf("expected the missing middle-hop address to be rejected before dialing, got %v", err)
@@ -944,7 +943,7 @@ func TestExecuteProxyHops_RejectsMalformedAddresses(t *testing.T) {
 	// Well-formed targets and hop addresses must still reach the dial
 	// stage.
 	for _, target := range []string{"target.internal:443", "127.0.0.1:1", "[::1]:443", "host:80"} {
-		_, _, err := ExecuteProxyHops(context.Background(), dialReached, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{validHop()}}, "tcp", target)
+		_, _, err := ExecuteProxyHops(context.Background(), dialReached, &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{validHop()}}, "tcp", target)
 		if err == nil || status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "dialing first proxy hop") {
 			t.Fatalf("expected target %q to pass validation and reach the dial stage, got %v", target, err)
 		}
@@ -955,9 +954,9 @@ func TestExecuteProxyHops_MapsDialErrorCodes(t *testing.T) {
 	// Raw dial errors surface with their canonical code (AIP-193) while
 	// keeping the first-hop message; status errors from a custom dialer
 	// pass through verbatim.
-	hop := &sesameproxy.ProxyHop{
-		Type:    sesameproxy.ProxyHop_HTTP_CONNECT,
-		Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
+	hop := &sesamepb.ProxyHop{
+		Type:    sesamepb.ProxyHop_TYPE_HTTP_CONNECT,
+		Address: &typepb.NetAddr{Network: "tcp", Address: "proxy.internal:8080"},
 	}
 
 	for _, tc := range []struct {
@@ -975,7 +974,7 @@ func TestExecuteProxyHops_MapsDialErrorCodes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, err := ExecuteProxyHops(context.Background(), dialerFunc(func(ctx context.Context, network, address string) (net.Conn, error) {
 				return nil, tc.err
-			}), &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{hop}}, "tcp", "target.internal:443")
+			}), &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{hop}}, "tcp", "target.internal:443")
 			if err == nil || status.Code(err) != tc.want || !strings.Contains(err.Error(), tc.wantMsg) {
 				t.Fatalf("expected %v (%q), got %v", tc.want, tc.wantMsg, err)
 			}
@@ -998,10 +997,10 @@ func TestProxyHandshakes_UnblockOnContextCancel(t *testing.T) {
 	// TypeScript reference's abort wiring.
 	for _, tc := range []struct {
 		name string
-		hop  *sesameproxy.ProxyHop
+		hop  *sesamepb.ProxyHop
 	}{
-		{"http connect", &sesameproxy.ProxyHop{Type: sesameproxy.ProxyHop_HTTP_CONNECT, Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}}},
-		{"socks5", &sesameproxy.ProxyHop{Type: sesameproxy.ProxyHop_SOCKS5, Address: &netaddr.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}}},
+		{"http connect", &sesamepb.ProxyHop{Type: sesamepb.ProxyHop_TYPE_HTTP_CONNECT, Address: &typepb.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}}},
+		{"socks5", &sesamepb.ProxyHop{Type: sesamepb.ProxyHop_TYPE_SOCKS5, Address: &typepb.NetAddr{Network: "tcp", Address: "proxy.internal:8080"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// A blackhole conn: the greeting/CONNECT is written, no
@@ -1027,7 +1026,7 @@ func TestProxyHandshakes_UnblockOnContextCancel(t *testing.T) {
 			}()
 
 			start := time.Now()
-			_, _, err := ExecuteProxyHops(ctx, &pipeDialer{conn: clientPipe}, &sesameproxy.ProxyOptions{Hops: []*sesameproxy.ProxyHop{tc.hop}}, "tcp", "target.internal:443")
+			_, _, err := ExecuteProxyHops(ctx, &pipeDialer{conn: clientPipe}, &sesamepb.ProxyOptions{Hops: []*sesamepb.ProxyHop{tc.hop}}, "tcp", "target.internal:443")
 			if err == nil {
 				t.Fatal("expected error from the cancelled handshake")
 			}

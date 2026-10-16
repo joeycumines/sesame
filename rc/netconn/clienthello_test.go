@@ -4,13 +4,13 @@ import (
 	"context"
 	cryptotls "crypto/tls"
 	"encoding/binary"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	"io"
 	"net"
 	"sync"
 	"testing"
 	"time"
 
-	sesametls "github.com/joeycumines/sesame/rc/tls"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -37,39 +37,39 @@ func TestApplyGoClientHelloSpec_FailsClosedOnUnhonorableDimensions(t *testing.T)
 
 	cases := []struct {
 		name         string
-		spec         *sesametls.ClientHelloSpec
+		spec         *sesamepb.ClientHelloSpec
 		effectiveMax uint16
 	}{
 		{"signature algorithms have no public API",
-			&sesametls.ClientHelloSpec{SignatureAlgorithms: []int32{0x0403}}, maxTLS13},
+			&sesamepb.ClientHelloSpec{SignatureAlgorithms: []int32{0x0403}}, maxTLS13},
 		{"extension list has no public API",
-			&sesametls.ClientHelloSpec{Extensions: []*sesametls.ClientHelloExtension{{Type: 43}}}, maxTLS13},
+			&sesamepb.ClientHelloSpec{Extensions: []*sesamepb.ClientHelloExtension{{Type: 43}}}, maxTLS13},
 		{"compression other than null",
-			&sesametls.ClientHelloSpec{CompressionMethods: []int32{1}}, maxTLS13},
+			&sesamepb.ClientHelloSpec{CompressionMethods: []int32{1}}, maxTLS13},
 		{"multi-method compression",
-			&sesametls.ClientHelloSpec{CompressionMethods: []int32{0, 1}}, maxTLS13},
+			&sesamepb.ClientHelloSpec{CompressionMethods: []int32{0, 1}}, maxTLS13},
 		{"session id omit sentinel",
-			&sesametls.ClientHelloSpec{SessionIdLength: -1}, maxTLS13},
+			&sesamepb.ClientHelloSpec{SessionIdLength: -1}, maxTLS13},
 		{"session id short length",
-			&sesametls.ClientHelloSpec{SessionIdLength: 16}, maxTLS13},
+			&sesamepb.ClientHelloSpec{SessionIdLength: 16}, maxTLS13},
 		{"legacy version pinned",
-			&sesametls.ClientHelloSpec{LegacyVersion: sesametls.TLSVersion_TLS_1_2}, maxTLS13},
+			&sesamepb.ClientHelloSpec{LegacyVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_2}, maxTLS13},
 		{"padding control",
-			&sesametls.ClientHelloSpec{PadToSize: 512}, maxTLS13},
+			&sesamepb.ClientHelloSpec{TargetSize: 512}, maxTLS13},
 		{"cipher suites with TLS1.3 max append fixed suites",
-			&sesametls.ClientHelloSpec{CipherSuites: []int32{0xc02b}}, maxTLS13},
+			&sesamepb.ClientHelloSpec{CipherSuites: []int32{0xc02b}}, maxTLS13},
 		{"cipher suites with sub-TLS1.2 max",
-			&sesametls.ClientHelloSpec{CipherSuites: []int32{0xc02b}}, maxTLS11},
+			&sesamepb.ClientHelloSpec{CipherSuites: []int32{0xc02b}}, maxTLS11},
 		{"cipher order reversed against engine preference",
-			&sesametls.ClientHelloSpec{CipherSuites: []int32{0x0035, 0x002f}}, maxTLS12},
+			&sesamepb.ClientHelloSpec{CipherSuites: []int32{0x0035, 0x002f}}, maxTLS12},
 		{"tls13-only cipher at tls12 max",
-			&sesametls.ClientHelloSpec{CipherSuites: []int32{0x1301}}, maxTLS12},
+			&sesamepb.ClientHelloSpec{CipherSuites: []int32{0x1301}}, maxTLS12},
 		{"group order reversed against engine preference",
-			&sesametls.ClientHelloSpec{SupportedGroups: []int32{23, 29}}, maxTLS13},
+			&sesamepb.ClientHelloSpec{SupportedGroups: []int32{23, 29}}, maxTLS13},
 		{"unknown group silently dropped by engine",
-			&sesametls.ClientHelloSpec{SupportedGroups: []int32{0x7a7a}}, maxTLS13},
+			&sesamepb.ClientHelloSpec{SupportedGroups: []int32{0x7a7a}}, maxTLS13},
 		{"post-quantum group below tls13",
-			&sesametls.ClientHelloSpec{SupportedGroups: []int32{4588, 29}}, maxTLS12},
+			&sesamepb.ClientHelloSpec{SupportedGroups: []int32{4588, 29}}, maxTLS12},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -90,7 +90,7 @@ func TestApplyGoClientHelloSpec_AppliesHonorableDimensions(t *testing.T) {
 	// BOTH the AES-hardware and no-AES-hardware tables, so these assertions
 	// are hardware-independent.
 	cfg := &cryptotls.Config{}
-	spec := &sesametls.ClientHelloSpec{
+	spec := &sesamepb.ClientHelloSpec{
 		CipherSuites:       []int32{0x002f, 0x0035},
 		SupportedGroups:    []int32{29, 23},
 		CompressionMethods: []int32{0},
@@ -109,7 +109,7 @@ func TestApplyGoClientHelloSpec_AppliesHonorableDimensions(t *testing.T) {
 
 func TestApplyGoClientHelloSpec_EmptySpecIsEngineDefault(t *testing.T) {
 	cfg := &cryptotls.Config{}
-	if err := ApplyGoClientHelloSpec(&sesametls.ClientHelloSpec{}, cfg, uint16(cryptotls.VersionTLS13)); err != nil {
+	if err := ApplyGoClientHelloSpec(&sesamepb.ClientHelloSpec{}, cfg, uint16(cryptotls.VersionTLS13)); err != nil {
 		t.Fatalf("empty spec must select engine defaults, got %v", err)
 	}
 	if cfg.CipherSuites != nil || cfg.CurvePreferences != nil {
@@ -121,13 +121,13 @@ func TestApplyGoClientHelloSpec_EmptySpecIsEngineDefault(t *testing.T) {
 }
 
 func TestVerifyAppliedClientHello(t *testing.T) {
-	spec := &sesametls.ClientHelloSpec{
+	spec := &sesamepb.ClientHelloSpec{
 		CipherSuites:    []int32{0xc02f},
 		SupportedGroups: []int32{29},
 		SessionIdLength: 32,
-		Extensions: []*sesametls.ClientHelloExtension{
-			{Type: 0, Body: &sesametls.ClientHelloExtension_Raw{Raw: []byte{1, 2, 3}}},
-			{Type: 16, Body: &sesametls.ClientHelloExtension_Auto{Auto: &sesametls.AutoExtensionBody{}}},
+		Extensions: []*sesamepb.ClientHelloExtension{
+			{Type: 0, Body: &sesamepb.ClientHelloExtension_Raw{Raw: []byte{1, 2, 3}}},
+			{Type: 16, Body: &sesamepb.ClientHelloExtension_Auto{Auto: &sesamepb.AutoExtensionBody{}}},
 		},
 	}
 
@@ -140,18 +140,18 @@ func TestVerifyAppliedClientHello(t *testing.T) {
 	if err := VerifyAppliedClientHello(nil, spec); err == nil {
 		t.Fatal("unrequested echo must fail closed")
 	}
-	if err := VerifyAppliedClientHello(spec, proto.Clone(spec).(*sesametls.ClientHelloSpec)); err != nil {
+	if err := VerifyAppliedClientHello(spec, proto.Clone(spec).(*sesamepb.ClientHelloSpec)); err != nil {
 		t.Fatalf("identical echo must verify: %v", err)
 	}
 
-	mutated := proto.Clone(spec).(*sesametls.ClientHelloSpec)
+	mutated := proto.Clone(spec).(*sesamepb.ClientHelloSpec)
 	mutated.SessionIdLength = 0
 	if err := VerifyAppliedClientHello(spec, mutated); err == nil {
 		t.Fatal("mutated scalar echo must fail closed")
 	}
 
-	mutatedRaw := proto.Clone(spec).(*sesametls.ClientHelloSpec)
-	mutatedRaw.Extensions[0].Body = &sesametls.ClientHelloExtension_Raw{Raw: []byte{1, 2, 4}}
+	mutatedRaw := proto.Clone(spec).(*sesamepb.ClientHelloSpec)
+	mutatedRaw.Extensions[0].Body = &sesamepb.ClientHelloExtension_Raw{Raw: []byte{1, 2, 4}}
 	if err := VerifyAppliedClientHello(spec, mutatedRaw); err == nil {
 		t.Fatal("mutated raw extension body must fail closed")
 	}
@@ -287,7 +287,7 @@ func TestGoClientHelloEmissionMatchesRequest(t *testing.T) {
 	// in BOTH the AES-hardware and no-AES-hardware tables, so the
 	// assertions are hardware-independent (same values as
 	// TestApplyGoClientHelloSpec_AppliesHonorableDimensions).
-	spec := &sesametls.ClientHelloSpec{
+	spec := &sesamepb.ClientHelloSpec{
 		CipherSuites:       []int32{0x002f, 0x0035},
 		SupportedGroups:    []int32{29, 23},
 		CompressionMethods: []int32{0},
@@ -302,9 +302,9 @@ func TestGoClientHelloEmissionMatchesRequest(t *testing.T) {
 		{name: "without alpn"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			opts := &sesametls.TLSOptions{
-				ServerName:    "example.com",
-				MaxVersion:    sesametls.TLSVersion_TLS_1_2,
+			opts := &sesamepb.TlsOptions{
+				Sni:           "example.com",
+				MaxVersion:    sesamepb.TlsVersion_TLS_VERSION_TLS_1_2,
 				ClientHello:   spec,
 				AlpnProtocols: tc.alpn,
 			}

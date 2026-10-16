@@ -3,8 +3,8 @@ import {create} from '@bufbuild/protobuf';
 import {Code, ConnectError} from '@connectrpc/connect';
 import {
   ClientHelloSpecSchema,
-  TLSVersion,
-} from '../src/gen/sesame/tls/v1alpha1/tls_pb';
+  TlsVersion,
+} from '../src/gen/sesame/v1alpha1/tls_pb';
 import {
   validateClientHelloSpec,
   assertBuiltinClientHelloHonorable,
@@ -112,7 +112,7 @@ describe('validateClientHelloSpec', () => {
   });
 
   it('rejects negative pad_to_size', () => {
-    const spec = create(ClientHelloSpecSchema, {padToSize: -1});
+    const spec = create(ClientHelloSpecSchema, {targetSize: -1});
     expect(() => validateClientHelloSpec(spec)).toThrow(ConnectError);
   });
 
@@ -200,13 +200,13 @@ describe('assertBuiltinClientHelloHonorable', () => {
 
   it('rejects non-unspecified legacyVersion', () => {
     const spec = create(ClientHelloSpecSchema, {
-      legacyVersion: TLSVersion.TLS_1_2,
+      legacyVersion: TlsVersion.TLS_1_2,
     });
     expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 
-  it('rejects non-zero padToSize', () => {
-    const spec = create(ClientHelloSpecSchema, {padToSize: 512});
+  it('rejects non-zero targetSize', () => {
+    const spec = create(ClientHelloSpecSchema, {targetSize: 512});
     expect(() => assertBuiltinClientHelloHonorable(spec)).toThrow(ConnectError);
   });
 });

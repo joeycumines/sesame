@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"slices"
 
-	sesametls "github.com/joeycumines/sesame/rc/tls"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	"golang.org/x/sys/cpu"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -120,8 +120,8 @@ func goHasAESGCMHardware() bool {
 
 // GoClientHelloCapabilities returns the honest capability advertisement for
 // the Go crypto/tls engine.
-func GoClientHelloCapabilities() *sesametls.ClientHelloCapabilities {
-	return &sesametls.ClientHelloCapabilities{
+func GoClientHelloCapabilities() *sesamepb.ClientHelloCapabilities {
+	return &sesamepb.ClientHelloCapabilities{
 		CustomCipherSuites:        true,  // exact-match only, TLS<=1.2 effective max
 		CustomSupportedGroups:     true,  // exact-match only
 		CustomSignatureAlgorithms: false, // no public API
@@ -137,7 +137,7 @@ func GoClientHelloCapabilities() *sesametls.ClientHelloCapabilities {
 
 // ValidateClientHelloSpec checks numeric ranges in the spec. Returns
 // INVALID_ARGUMENT on any violation. Call before any engine-specific logic.
-func ValidateClientHelloSpec(spec *sesametls.ClientHelloSpec) error {
+func ValidateClientHelloSpec(spec *sesamepb.ClientHelloSpec) error {
 	if spec == nil {
 		return nil
 	}
@@ -172,8 +172,8 @@ func ValidateClientHelloSpec(spec *sesametls.ClientHelloSpec) error {
 	if sid := spec.GetSessionIdLength(); sid < -1 || sid > 32 {
 		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: session_id_length out of range [-1, 32]: %d", sid)
 	}
-	if spec.GetPadToSize() < 0 {
-		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: pad_to_size must not be negative: %d", spec.GetPadToSize())
+	if spec.GetTargetSize() < 0 {
+		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: pad_to_size must not be negative: %d", spec.GetTargetSize())
 	}
 	return nil
 }
@@ -185,7 +185,7 @@ func ValidateClientHelloSpec(spec *sesametls.ClientHelloSpec) error {
 // effectiveMaxVersion is the resolved max TLS version (from opts or Go
 // default TLS1.3). It determines whether TLS 1.3 cipher suites would be
 // appended (making exact cipher match impossible).
-func ApplyGoClientHelloSpec(spec *sesametls.ClientHelloSpec, cfg *cryptotls.Config, effectiveMaxVersion uint16) error {
+func ApplyGoClientHelloSpec(spec *sesamepb.ClientHelloSpec, cfg *cryptotls.Config, effectiveMaxVersion uint16) error {
 	if spec == nil {
 		return nil
 	}
@@ -264,13 +264,13 @@ func ApplyGoClientHelloSpec(spec *sesametls.ClientHelloSpec, cfg *cryptotls.Conf
 	}
 
 	// --- legacy_version ---
-	if spec.GetLegacyVersion() != sesametls.TLSVersion_TLS_VERSION_UNSPECIFIED {
+	if spec.GetLegacyVersion() != sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED {
 		return status.Error(codes.FailedPrecondition,
 			"sesame/rc/netconn: Go crypto/tls always uses TLS 1.2 as the ClientHello legacy_version; cannot honor custom legacy_version")
 	}
 
 	// --- pad_to_size ---
-	if spec.GetPadToSize() != 0 {
+	if spec.GetTargetSize() != 0 {
 		return status.Error(codes.FailedPrecondition,
 			"sesame/rc/netconn: Go crypto/tls provides no ClientHello padding control; cannot honor pad_to_size")
 	}
@@ -333,7 +333,7 @@ func uint16SliceEqual(a []uint16, b []int32) bool {
 // VerifyAppliedClientHello diffs the requested ClientHelloSpec against the
 // server's applied_client_hello echo. Returns an error on mismatch (fail
 // closed). Both nil is valid (no spec requested).
-func VerifyAppliedClientHello(requested, applied *sesametls.ClientHelloSpec) error {
+func VerifyAppliedClientHello(requested, applied *sesamepb.ClientHelloSpec) error {
 	if requested == nil && applied == nil {
 		return nil
 	}
@@ -354,7 +354,7 @@ func VerifyAppliedClientHello(requested, applied *sesametls.ClientHelloSpec) err
 }
 
 // clientHelloSpecEqual performs a field-by-field comparison.
-func clientHelloSpecEqual(a, b *sesametls.ClientHelloSpec) bool {
+func clientHelloSpecEqual(a, b *sesamepb.ClientHelloSpec) bool {
 	if !int32SliceEqual(a.GetCipherSuites(), b.GetCipherSuites()) {
 		return false
 	}
@@ -373,7 +373,7 @@ func clientHelloSpecEqual(a, b *sesametls.ClientHelloSpec) bool {
 	if a.GetLegacyVersion() != b.GetLegacyVersion() {
 		return false
 	}
-	if a.GetPadToSize() != b.GetPadToSize() {
+	if a.GetTargetSize() != b.GetTargetSize() {
 		return false
 	}
 	// Extensions: compare type + body.

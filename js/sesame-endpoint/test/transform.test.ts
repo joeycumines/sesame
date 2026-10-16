@@ -12,9 +12,9 @@ import {
   ProxyHop_Type,
   ProxyHopSchema,
   ProxyOptionsSchema,
-} from '../src/gen/sesame/proxy/v1alpha1/proxy_pb';
+} from '../src/gen/sesame/v1alpha1/proxy_pb';
 import {NetAddr, NetAddrSchema} from '../src/gen/sesame/type/netaddr_pb';
-import {TLSOptionsSchema} from '../src/gen/sesame/tls/v1alpha1/tls_pb';
+import {TlsOptionsSchema} from '../src/gen/sesame/v1alpha1/tls_pb';
 
 describe('parseHostPort', () => {
   it('parses a host:port pair', () => {
@@ -399,7 +399,7 @@ describe('executeTLSHandshake abort and timeout wiring', () => {
     const ctrl = new AbortController();
     const pending = executeTLSHandshake(
       socket,
-      create(TLSOptionsSchema, {serverName: 'example.com'}),
+      create(TlsOptionsSchema, {sni: 'example.com'}),
       `127.0.0.1:${port}`,
       undefined,
       undefined,
@@ -440,7 +440,7 @@ describe('executeTLSHandshake abort and timeout wiring', () => {
     try {
       await executeTLSHandshake(
         socket,
-        create(TLSOptionsSchema, {serverName: 'example.com'}),
+        create(TlsOptionsSchema, {sni: 'example.com'}),
         `127.0.0.1:${port}`,
         undefined,
         undefined,

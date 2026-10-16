@@ -3,27 +3,28 @@ package netconn
 import (
 	"context"
 	"errors"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
 	"sync"
 	"testing"
 
 	"github.com/joeycumines/sesame/ionet"
-	"github.com/joeycumines/sesame/rc"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 )
 
 // mockNetConnStream scripts clientControlConn.readLoop interactions:
 // Recv pops scripted responses until exhausted (then recvErr), and Send
 // returns sendErr.
 type mockNetConnStream struct {
-	rc.RemoteControl_NetConnClient
+	sesamepb.RemoteControl_NetConnClient
 
 	mu      sync.Mutex
-	recv    []*rc.NetConnResponse
+	recv    []*sesamepb.NetConnResponse
 	recvErr error
 	sendErr error
 }
 
-func (m *mockNetConnStream) Recv() (*rc.NetConnResponse, error) {
+func (m *mockNetConnStream) Recv() (*sesamepb.NetConnResponse, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if len(m.recv) == 0 {
@@ -34,7 +35,7 @@ func (m *mockNetConnStream) Recv() (*rc.NetConnResponse, error) {
 	return msg, nil
 }
 
-func (m *mockNetConnStream) Send(*rc.NetConnRequest) error {
+func (m *mockNetConnStream) Send(*sesamepb.NetConnRequest) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.sendErr
@@ -42,7 +43,7 @@ func (m *mockNetConnStream) Send(*rc.NetConnRequest) error {
 
 // newReadLoopTestConn wires a clientControlConn around a scripted mock
 // stream for direct readLoop testing.
-func newReadLoopTestConn(t *testing.T, recv []*rc.NetConnResponse, recvErr, sendErr error) *clientControlConn {
+func newReadLoopTestConn(t *testing.T, recv []*sesamepb.NetConnResponse, recvErr, sendErr error) *clientControlConn {
 	t.Helper()
 	local, remote := ionet.Pipe()
 	_, localWriter := local.SendPipe()
@@ -59,7 +60,7 @@ func newReadLoopTestConn(t *testing.T, recv []*rc.NetConnResponse, recvErr, send
 		demuxLocalW:  localWriter,
 		demuxRemote:  remote,
 		inboundFC:    NewFlowController(1024),
-		pendingPings: make(map[int64]chan int64),
+		pendingPings: make(map[int64]chan *timestamppb.Timestamp),
 	}
 }
 
@@ -72,9 +73,9 @@ func newReadLoopTestConn(t *testing.T, recv []*rc.NetConnResponse, recvErr, send
 // response messages still buffered in transport, which lost the
 // target's post-FIN bytes in roughly 1% of runs under -race.
 func TestClientControlConn_ReadLoop_ToleratesWindowUpdateEOF(t *testing.T) {
-	cc := newReadLoopTestConn(t, []*rc.NetConnResponse{
-		{Data: &rc.NetConnResponse_Bytes{Bytes: []byte("PING")}},
-		{Data: &rc.NetConnResponse_Bytes{Bytes: []byte("FINAL")}},
+	cc := newReadLoopTestConn(t, []*sesamepb.NetConnResponse{
+		{Data: &sesamepb.NetConnResponse_Bytes{Bytes: []byte("PING")}},
+		{Data: &sesamepb.NetConnResponse_Bytes{Bytes: []byte("FINAL")}},
 	}, io.EOF, io.EOF)
 	go cc.readLoop(cc.ctx)
 
@@ -99,8 +100,8 @@ func TestClientControlConn_ReadLoop_ToleratesWindowUpdateEOF(t *testing.T) {
 // failure still surfaces to the app.
 func TestClientControlConn_ReadLoop_WindowUpdateRealErrorCloses(t *testing.T) {
 	sendErr := errors.New("sesame/rc/netconn: connection gone")
-	cc := newReadLoopTestConn(t, []*rc.NetConnResponse{
-		{Data: &rc.NetConnResponse_Bytes{Bytes: []byte("PING")}},
+	cc := newReadLoopTestConn(t, []*sesamepb.NetConnResponse{
+		{Data: &sesamepb.NetConnResponse_Bytes{Bytes: []byte("PING")}},
 	}, io.EOF, sendErr)
 	go cc.readLoop(cc.ctx)
 

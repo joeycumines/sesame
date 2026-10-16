@@ -4,23 +4,24 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
-import type { Any, Duration } from "@bufbuild/protobuf/wkt";
-import { file_google_protobuf_any, file_google_protobuf_duration } from "@bufbuild/protobuf/wkt";
+import { file_google_api_field_behavior } from "../../google/api/field_behavior_pb";
+import type { Duration, Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_duration, file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Status } from "../../google/rpc/status_pb";
 import { file_google_rpc_status } from "../../google/rpc/status_pb";
-import type { ProxyOptions, ProxyResult } from "../proxy/v1alpha1/proxy_pb";
-import { file_sesame_proxy_v1alpha1_proxy } from "../proxy/v1alpha1/proxy_pb";
-import type { ClientHelloCapabilities, TLSHandshakeResult, TLSOptions } from "../tls/v1alpha1/tls_pb";
-import { file_sesame_tls_v1alpha1_tls } from "../tls/v1alpha1/tls_pb";
 import type { NetAddr } from "../type/netaddr_pb";
 import { file_sesame_type_netaddr } from "../type/netaddr_pb";
+import type { ProxyOptions, ProxyResult } from "./proxy_pb";
+import { file_sesame_v1alpha1_proxy } from "./proxy_pb";
+import type { ClientHelloCapabilities, TlsHandshakeResult, TlsOptions } from "./tls_pb";
+import { file_sesame_v1alpha1_tls } from "./tls_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file sesame/v1alpha1/remotecontrol.proto.
  */
 export const file_sesame_v1alpha1_remotecontrol: GenFile = /*@__PURE__*/
-  fileDesc("CiNzZXNhbWUvdjFhbHBoYTEvcmVtb3RlY29udHJvbC5wcm90bxIPc2VzYW1lLnYxYWxwaGExIs0JCg5OZXRDb25uUmVxdWVzdBI0CgRkaWFsGAEgASgLMiQuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkRpYWxIABIPCgVieXRlcxgCIAEoDEgAEjoKB2NvbnRyb2wYAyABKAsyJy5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbEgAGqYCCgREaWFsEiUKB2FkZHJlc3MYASABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEioKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb24SLAoDdGxzGAMgASgLMh8uc2VzYW1lLnRscy52MWFscGhhMS5UTFNPcHRpb25zEjIKBXByb3h5GAQgASgLMiMuc2VzYW1lLnByb3h5LnYxYWxwaGExLlByb3h5T3B0aW9ucxJCCgxjYXBhYmlsaXRpZXMYBSABKAsyLC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ2FwYWJpbGl0aWVzEiUKB29wdGlvbnMYDyADKAsyFC5nb29nbGUucHJvdG9idWYuQW55Gv0ECgdDb250cm9sEkkKC3VwZ3JhZGVfdGxzGAEgASgLMjIuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuVXBncmFkZVRMU0gAEk0KDXdpbmRvd191cGRhdGUYAiABKAsyNC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbC5XaW5kb3dVcGRhdGVIABJHCgpoYWxmX2Nsb3NlGAMgASgLMjEuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuSGFsZkNsb3NlSAASPAoEcGluZxgEIAEoCzIsLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlBpbmdIABI+CgVyZXNldBgFIAEoCzItLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlJlc2V0SAASJgoGY3VzdG9tGA8gASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueUgAGlIKClVwZ3JhZGVUTFMSMAoHb3B0aW9ucxgBIAEoCzIfLnNlc2FtZS50bHMudjFhbHBoYTEuVExTT3B0aW9ucxISCgpyZXF1ZXN0X2lkGAIgASgDGiQKDFdpbmRvd1VwZGF0ZRIUCgxjcmVkaXRfYnl0ZXMYASABKAUaCwoJSGFsZkNsb3NlGisKBFBpbmcSCgoCaWQYASABKAMSFwoPdGltZXN0YW1wX25hbm9zGAIgASgDGisKBVJlc2V0EiIKBnJlYXNvbhgBIAEoCzISLmdvb2dsZS5ycGMuU3RhdHVzQggKBmFjdGlvbhqGAQoMQ2FwYWJpbGl0aWVzEh0KFXN1cHBvcnRzX2Zsb3dfY29udHJvbBgBIAEoCBIiChpzdXBwb3J0c19vcHBvcnR1bmlzdGljX3RscxgCIAEoCBIbChNpbml0aWFsX3dpbmRvd19zaXplGAMgASgFEhYKDm1heF9jaHVua19zaXplGAQgASgFQgYKBGRhdGEi/wsKD05ldENvbm5SZXNwb25zZRI1CgRjb25uGAEgASgLMiUuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db25uSAASDwoFYnl0ZXMYAiABKAxIABI7Cgdjb250cm9sGAMgASgLMiguc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sSAAasAIKBENvbm4SIwoFbG9jYWwYASABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEiQKBnJlbW90ZRgCIAEoCzIULnNlc2FtZS50eXBlLk5ldEFkZHISNAoDdGxzGAMgASgLMicuc2VzYW1lLnRscy52MWFscGhhMS5UTFNIYW5kc2hha2VSZXN1bHQSMQoFcHJveHkYBCABKAsyIi5zZXNhbWUucHJveHkudjFhbHBoYTEuUHJveHlSZXN1bHQSQwoMY2FwYWJpbGl0aWVzGAUgASgLMi0uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5DYXBhYmlsaXRpZXMSLwoRY3VzdG9tX2F0dHJpYnV0ZXMYDyADKAsyFC5nb29nbGUucHJvdG9idWYuQW55GtEGCgdDb250cm9sEkwKDHRsc191cGdyYWRlZBgBIAEoCzI0LnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5UTFNVcGdyYWRlZEgAElcKEnRsc191cGdyYWRlX2ZhaWxlZBgCIAEoCzI5LnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5UTFNVcGdyYWRlRmFpbGVkSAASTgoNd2luZG93X3VwZGF0ZRgDIAEoCzI1LnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5XaW5kb3dVcGRhdGVIABJICgpoYWxmX2Nsb3NlGAQgASgLMjIuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLkhhbGZDbG9zZUgAEj0KBHBvbmcYBSABKAsyLS5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuUG9uZ0gAEkMKB21ldHJpY3MYBiABKAsyMC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuTWV0cmljc0gAEiYKBmN1c3RvbRgPIAEoCzIULmdvb2dsZS5wcm90b2J1Zi5BbnlIABpaCgtUTFNVcGdyYWRlZBI3CgZyZXN1bHQYASABKAsyJy5zZXNhbWUudGxzLnYxYWxwaGExLlRMU0hhbmRzaGFrZVJlc3VsdBISCgpyZXF1ZXN0X2lkGAIgASgDGkkKEFRMU1VwZ3JhZGVGYWlsZWQSIQoFZXJyb3IYASABKAsyEi5nb29nbGUucnBjLlN0YXR1cxISCgpyZXF1ZXN0X2lkGAIgASgDGiQKDFdpbmRvd1VwZGF0ZRIUCgxjcmVkaXRfYnl0ZXMYASABKAUaCwoJSGFsZkNsb3NlGisKBFBvbmcSCgoCaWQYASABKAMSFwoPdGltZXN0YW1wX25hbm9zGAIgASgDGkkKB01ldHJpY3MSEgoKYnl0ZXNfc2VudBgBIAEoAxIWCg5ieXRlc19yZWNlaXZlZBgCIAEoAxISCgpydHRfbWlsbGlzGAMgASgFQgcKBWV2ZW50GtcBCgxDYXBhYmlsaXRpZXMSHQoVc3VwcG9ydHNfZmxvd19jb250cm9sGAEgASgIEiIKGnN1cHBvcnRzX29wcG9ydHVuaXN0aWNfdGxzGAIgASgIEhYKDm1heF9jaHVua19zaXplGAMgASgFEhsKE2luaXRpYWxfd2luZG93X3NpemUYBCABKAUSTwoZY2xpZW50X2hlbGxvX2NhcGFiaWxpdGllcxgFIAEoCzIsLnNlc2FtZS50bHMudjFhbHBoYTEuQ2xpZW50SGVsbG9DYXBhYmlsaXRpZXNCBgoEZGF0YTJjCg1SZW1vdGVDb250cm9sElIKB05ldENvbm4SHy5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QaIC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlIgAoATABQiJaIGdpdGh1Yi5jb20vam9leWN1bWluZXMvc2VzYW1lL3JjYgZwcm90bzM", [file_google_protobuf_any, file_google_protobuf_duration, file_google_rpc_status, file_sesame_proxy_v1alpha1_proxy, file_sesame_tls_v1alpha1_tls, file_sesame_type_netaddr]);
+  fileDesc("CiNzZXNhbWUvdjFhbHBoYTEvcmVtb3RlY29udHJvbC5wcm90bxIPc2VzYW1lLnYxYWxwaGExItEJCg5OZXRDb25uUmVxdWVzdBI0CgRkaWFsGAEgASgLMiQuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkRpYWxIABIPCgVieXRlcxgCIAEoDEgAEjoKB2NvbnRyb2wYAyABKAsyJy5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbEgAGo4CCgREaWFsEioKB2FkZHJlc3MYASABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyQgPgQQISLwoHdGltZW91dBgCIAEoCzIZLmdvb2dsZS5wcm90b2J1Zi5EdXJhdGlvbkID4EEBEi0KA3RscxgDIAEoCzIbLnNlc2FtZS52MWFscGhhMS5UbHNPcHRpb25zQgPgQQESMQoFcHJveHkYBCABKAsyHS5zZXNhbWUudjFhbHBoYTEuUHJveHlPcHRpb25zQgPgQQESRwoMY2FwYWJpbGl0aWVzGAUgASgLMiwuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNhcGFiaWxpdGllc0ID4EEBGoUFCgdDb250cm9sEkkKC3VwZ3JhZGVfdGxzGAEgASgLMjIuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuVXBncmFkZVRsc0gAEk0KDXdpbmRvd191cGRhdGUYAiABKAsyNC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QuQ29udHJvbC5XaW5kb3dVcGRhdGVIABJHCgpoYWxmX2Nsb3NlGAMgASgLMjEuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXF1ZXN0LkNvbnRyb2wuSGFsZkNsb3NlSAASPAoEcGluZxgEIAEoCzIsLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlBpbmdIABI+CgVyZXNldBgFIAEoCzItLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVxdWVzdC5Db250cm9sLlJlc2V0SAAaWAoKVXBncmFkZVRscxIxCgdvcHRpb25zGAEgASgLMhsuc2VzYW1lLnYxYWxwaGExLlRsc09wdGlvbnNCA+BBAhIXCgpyZXF1ZXN0X2lkGAIgASgDQgPgQQEaKQoMV2luZG93VXBkYXRlEhkKDGNyZWRpdF9ieXRlcxgBIAEoBUID4EEBGgsKCUhhbGZDbG9zZRpLCgRQaW5nEg8KAmlkGAEgASgDQgPgQQESMgoJc2VuZF90aW1lGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBGjAKBVJlc2V0EicKBnJlYXNvbhgBIAEoCzISLmdvb2dsZS5ycGMuU3RhdHVzQgPgQQFCCAoGYWN0aW9uGpoBCgxDYXBhYmlsaXRpZXMSIgoVc3VwcG9ydHNfZmxvd19jb250cm9sGAEgASgIQgPgQQESJwoac3VwcG9ydHNfb3Bwb3J0dW5pc3RpY190bHMYAiABKAhCA+BBARIgChNpbml0aWFsX3dpbmRvd19zaXplGAMgASgFQgPgQQESGwoObWF4X2NodW5rX3NpemUYBCABKAVCA+BBAUIGCgRkYXRhIs4LCg9OZXRDb25uUmVzcG9uc2USNQoEY29ubhgBIAEoCzIlLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29ubkgAEg8KBWJ5dGVzGAIgASgMSAASOwoHY29udHJvbBgDIAEoCzIoLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbEgAGvUBCgRDb25uEiMKBWxvY2FsGAEgASgLMhQuc2VzYW1lLnR5cGUuTmV0QWRkchIkCgZyZW1vdGUYAiABKAsyFC5zZXNhbWUudHlwZS5OZXRBZGRyEjAKA3RscxgDIAEoCzIjLnNlc2FtZS52MWFscGhhMS5UbHNIYW5kc2hha2VSZXN1bHQSKwoFcHJveHkYBCABKAsyHC5zZXNhbWUudjFhbHBoYTEuUHJveHlSZXN1bHQSQwoMY2FwYWJpbGl0aWVzGAUgASgLMi0uc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5DYXBhYmlsaXRpZXMa3wYKB0NvbnRyb2wSTAoMdGxzX3VwZ3JhZGVkGAEgASgLMjQuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLlRsc1VwZ3JhZGVkSAASVwoSdGxzX3VwZ3JhZGVfZmFpbGVkGAIgASgLMjkuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLlRsc1VwZ3JhZGVGYWlsZWRIABJOCg13aW5kb3dfdXBkYXRlGAMgASgLMjUuc2VzYW1lLnYxYWxwaGExLk5ldENvbm5SZXNwb25zZS5Db250cm9sLldpbmRvd1VwZGF0ZUgAEkgKCmhhbGZfY2xvc2UYBCABKAsyMi5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlLkNvbnRyb2wuSGFsZkNsb3NlSAASPQoEcG9uZxgFIAEoCzItLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5Qb25nSAASQwoHbWV0cmljcxgGIAEoCzIwLnNlc2FtZS52MWFscGhhMS5OZXRDb25uUmVzcG9uc2UuQ29udHJvbC5NZXRyaWNzSAAaVgoLVGxzVXBncmFkZWQSMwoGcmVzdWx0GAEgASgLMiMuc2VzYW1lLnYxYWxwaGExLlRsc0hhbmRzaGFrZVJlc3VsdBISCgpyZXF1ZXN0X2lkGAIgASgDGkkKEFRsc1VwZ3JhZGVGYWlsZWQSIQoFZXJyb3IYASABKAsyEi5nb29nbGUucnBjLlN0YXR1cxISCgpyZXF1ZXN0X2lkGAIgASgDGiQKDFdpbmRvd1VwZGF0ZRIUCgxjcmVkaXRfYnl0ZXMYASABKAUaCwoJSGFsZkNsb3NlGkEKBFBvbmcSCgoCaWQYASABKAMSLQoJc2VuZF90aW1lGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBptCgdNZXRyaWNzEhIKCmJ5dGVzX3NlbnQYASABKAMSFgoOYnl0ZXNfcmVjZWl2ZWQYAiABKAMSNgoTcm91bmRfdHJpcF9kdXJhdGlvbhgDIAEoCzIZLmdvb2dsZS5wcm90b2J1Zi5EdXJhdGlvbkIHCgVldmVudBrTAQoMQ2FwYWJpbGl0aWVzEh0KFXN1cHBvcnRzX2Zsb3dfY29udHJvbBgBIAEoCBIiChpzdXBwb3J0c19vcHBvcnR1bmlzdGljX3RscxgCIAEoCBIWCg5tYXhfY2h1bmtfc2l6ZRgDIAEoBRIbChNpbml0aWFsX3dpbmRvd19zaXplGAQgASgFEksKGWNsaWVudF9oZWxsb19jYXBhYmlsaXRpZXMYBSABKAsyKC5zZXNhbWUudjFhbHBoYTEuQ2xpZW50SGVsbG9DYXBhYmlsaXRpZXNCBgoEZGF0YTJjCg1SZW1vdGVDb250cm9sElIKB05ldENvbm4SHy5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlcXVlc3QaIC5zZXNhbWUudjFhbHBoYTEuTmV0Q29ublJlc3BvbnNlIgAoATABQmUKJWlvLmdpdGh1Yi5qb2V5Y3VtaW5lcy5zZXNhbWUudjFhbHBoYTFCElJlbW90ZWNvbnRyb2xQcm90b1ABWiZnaXRodWIuY29tL2pvZXljdW1pbmVzL3Nlc2FtZS9zZXNhbWVwYmIGcHJvdG8z", [file_google_api_field_behavior, file_google_protobuf_duration, file_google_protobuf_timestamp, file_google_rpc_status, file_sesame_type_netaddr, file_sesame_v1alpha1_proxy, file_sesame_v1alpha1_tls]);
 
 /**
  * NetConnRequest models a message sent from a RemoteControl.NetConn client to the server.
@@ -94,9 +95,9 @@ export type NetConnRequest_Dial = Message<"sesame.v1alpha1.NetConnRequest.Dial">
    * confirm it in NetConnResponse.Conn.tls; the client MUST abort on a
    * missing confirmation (fail closed).
    *
-   * @generated from field: sesame.tls.v1alpha1.TLSOptions tls = 3;
+   * @generated from field: sesame.v1alpha1.TlsOptions tls = 3;
    */
-  tls?: TLSOptions | undefined;
+  tls?: TlsOptions | undefined;
 
   /**
    * Egress proxy chaining configuration (OPTIONAL).
@@ -104,7 +105,7 @@ export type NetConnRequest_Dial = Message<"sesame.v1alpha1.NetConnRequest.Dial">
    * confirm it in NetConnResponse.Conn.proxy; the client MUST abort on a
    * missing or mismatched confirmation (fail closed).
    *
-   * @generated from field: sesame.proxy.v1alpha1.ProxyOptions proxy = 4;
+   * @generated from field: sesame.v1alpha1.ProxyOptions proxy = 4;
    */
   proxy?: ProxyOptions | undefined;
 
@@ -116,16 +117,6 @@ export type NetConnRequest_Dial = Message<"sesame.v1alpha1.NetConnRequest.Dial">
    * @generated from field: sesame.v1alpha1.NetConnRequest.Capabilities capabilities = 5;
    */
   capabilities?: NetConnRequest_Capabilities | undefined;
-
-  /**
-   * Extensible options for proprietary or third-party middleware plugins.
-   * Implementations MUST ignore payloads whose type_url they do not
-   * recognize; plugin types SHOULD be namespaced under a vendor prefix
-   * to avoid collisions.
-   *
-   * @generated from field: repeated google.protobuf.Any options = 15;
-   */
-  options: Any[];
 };
 
 /**
@@ -150,9 +141,9 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
      * carry options; the server rejects an options-less upgrade with
      * INVALID_ARGUMENT.
      *
-     * @generated from field: sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS upgrade_tls = 1;
+     * @generated from field: sesame.v1alpha1.NetConnRequest.Control.UpgradeTls upgrade_tls = 1;
      */
-    value: NetConnRequest_Control_UpgradeTLS;
+    value: NetConnRequest_Control_UpgradeTls;
     case: "upgradeTls";
   } | {
     /**
@@ -178,7 +169,7 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
     case: "halfClose";
   } | {
     /**
-     * Liveness probe. The server MUST echo id and timestamp_nanos
+     * Liveness probe. The server MUST echo id and send_time
      * verbatim in Control.pong.
      *
      * @generated from field: sesame.v1alpha1.NetConnRequest.Control.Ping ping = 4;
@@ -194,15 +185,6 @@ export type NetConnRequest_Control = Message<"sesame.v1alpha1.NetConnRequest.Con
      */
     value: NetConnRequest_Control_Reset;
     case: "reset";
-  } | {
-    /**
-     * Arbitrary plugin extension command. Implementations MUST ignore
-     * payloads whose type_url they do not recognize.
-     *
-     * @generated from field: google.protobuf.Any custom = 15;
-     */
-    value: Any;
-    case: "custom";
   } | { case: undefined; value?: undefined };
 };
 
@@ -214,20 +196,22 @@ export const NetConnRequest_ControlSchema: GenMessage<NetConnRequest_Control> = 
   messageDesc(file_sesame_v1alpha1_remotecontrol, 0, 1);
 
 /**
- * @generated from message sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS
+ * UpgradeTls commands an opportunistic in-stream TLS upgrade.
+ *
+ * @generated from message sesame.v1alpha1.NetConnRequest.Control.UpgradeTls
  */
-export type NetConnRequest_Control_UpgradeTLS = Message<"sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS"> & {
+export type NetConnRequest_Control_UpgradeTls = Message<"sesame.v1alpha1.NetConnRequest.Control.UpgradeTls"> & {
   /**
    * TLS configuration for the upgrade (REQUIRED).
    *
-   * @generated from field: sesame.tls.v1alpha1.TLSOptions options = 1;
+   * @generated from field: sesame.v1alpha1.TlsOptions options = 1;
    */
-  options?: TLSOptions | undefined;
+  options?: TlsOptions | undefined;
 
   /**
    * Per-call correlation ID, echoed verbatim by the server in
-   * whichever result it emits for this request (TLSUpgraded or
-   * TLSUpgradeFailed) - the Ping precedent: the server MUST NOT
+   * whichever result it emits for this request (TlsUpgraded or
+   * TlsUpgradeFailed) - the Ping precedent: the server MUST NOT
    * substitute its own value. 0 means unset/legacy. A client that
    * tags its calls SHOULD treat a result whose request_id does not
    * match its pending call as unsolicited and fail closed: with no
@@ -240,13 +224,15 @@ export type NetConnRequest_Control_UpgradeTLS = Message<"sesame.v1alpha1.NetConn
 };
 
 /**
- * Describes the message sesame.v1alpha1.NetConnRequest.Control.UpgradeTLS.
- * Use `create(NetConnRequest_Control_UpgradeTLSSchema)` to create a new message.
+ * Describes the message sesame.v1alpha1.NetConnRequest.Control.UpgradeTls.
+ * Use `create(NetConnRequest_Control_UpgradeTlsSchema)` to create a new message.
  */
-export const NetConnRequest_Control_UpgradeTLSSchema: GenMessage<NetConnRequest_Control_UpgradeTLS> = /*@__PURE__*/
+export const NetConnRequest_Control_UpgradeTlsSchema: GenMessage<NetConnRequest_Control_UpgradeTls> = /*@__PURE__*/
   messageDesc(file_sesame_v1alpha1_remotecontrol, 0, 1, 0);
 
 /**
+ * WindowUpdate replenishes the peer's flow control window.
+ *
  * @generated from message sesame.v1alpha1.NetConnRequest.Control.WindowUpdate
  */
 export type NetConnRequest_Control_WindowUpdate = Message<"sesame.v1alpha1.NetConnRequest.Control.WindowUpdate"> & {
@@ -269,6 +255,8 @@ export const NetConnRequest_Control_WindowUpdateSchema: GenMessage<NetConnReques
   messageDesc(file_sesame_v1alpha1_remotecontrol, 0, 1, 1);
 
 /**
+ * HalfClose signals a unilateral write-side connection close.
+ *
  * @generated from message sesame.v1alpha1.NetConnRequest.Control.HalfClose
  */
 export type NetConnRequest_Control_HalfClose = Message<"sesame.v1alpha1.NetConnRequest.Control.HalfClose"> & {
@@ -282,6 +270,8 @@ export const NetConnRequest_Control_HalfCloseSchema: GenMessage<NetConnRequest_C
   messageDesc(file_sesame_v1alpha1_remotecontrol, 0, 1, 2);
 
 /**
+ * Ping is a liveness probe, echoed by the server as Pong.
+ *
  * @generated from message sesame.v1alpha1.NetConnRequest.Control.Ping
  */
 export type NetConnRequest_Control_Ping = Message<"sesame.v1alpha1.NetConnRequest.Control.Ping"> & {
@@ -293,13 +283,13 @@ export type NetConnRequest_Control_Ping = Message<"sesame.v1alpha1.NetConnReques
   id: bigint;
 
   /**
-   * Client-originated Unix epoch nanoseconds, echoed verbatim. The
-   * server MUST NOT substitute its own clock; RTT SHOULD be computed
-   * from local send/receive times, not from the echoed value.
+   * Client-originated send time, echoed verbatim. The server MUST NOT
+   * substitute its own clock; RTT SHOULD be computed from local
+   * send/receive times, not from the echoed value.
    *
-   * @generated from field: int64 timestamp_nanos = 2;
+   * @generated from field: google.protobuf.Timestamp send_time = 2;
    */
-  timestampNanos: bigint;
+  sendTime?: Timestamp | undefined;
 };
 
 /**
@@ -310,6 +300,8 @@ export const NetConnRequest_Control_PingSchema: GenMessage<NetConnRequest_Contro
   messageDesc(file_sesame_v1alpha1_remotecontrol, 0, 1, 3);
 
 /**
+ * Reset is an abrupt stream reset or cancellation.
+ *
  * @generated from message sesame.v1alpha1.NetConnRequest.Control.Reset
  */
 export type NetConnRequest_Control_Reset = Message<"sesame.v1alpha1.NetConnRequest.Control.Reset"> & {
@@ -448,16 +440,16 @@ export type NetConnResponse_Conn = Message<"sesame.v1alpha1.NetConnResponse.Conn
    * Handshake state if TLS termination was executed during Dial.
    * MUST be present iff Dial.tls was present (fail closed on violation).
    *
-   * @generated from field: sesame.tls.v1alpha1.TLSHandshakeResult tls = 3;
+   * @generated from field: sesame.v1alpha1.TlsHandshakeResult tls = 3;
    */
-  tls?: TLSHandshakeResult | undefined;
+  tls?: TlsHandshakeResult | undefined;
 
   /**
    * Confirmation if proxy chaining was executed during Dial.
    * MUST be present iff Dial.proxy carried hops (fail closed on
    * violation).
    *
-   * @generated from field: sesame.proxy.v1alpha1.ProxyResult proxy = 4;
+   * @generated from field: sesame.v1alpha1.ProxyResult proxy = 4;
    */
   proxy?: ProxyResult | undefined;
 
@@ -467,14 +459,6 @@ export type NetConnResponse_Conn = Message<"sesame.v1alpha1.NetConnResponse.Conn
    * @generated from field: sesame.v1alpha1.NetConnResponse.Capabilities capabilities = 5;
    */
   capabilities?: NetConnResponse_Capabilities | undefined;
-
-  /**
-   * Extensible connection metadata. Implementations MUST ignore
-   * payloads whose type_url they do not recognize.
-   *
-   * @generated from field: repeated google.protobuf.Any custom_attributes = 15;
-   */
-  customAttributes: Any[];
 };
 
 /**
@@ -495,21 +479,21 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
    */
   event: {
     /**
-     * Notification that an in-stream UpgradeTLS command has completed.
+     * Notification that an in-stream UpgradeTls command has completed.
      *
-     * @generated from field: sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded tls_upgraded = 1;
+     * @generated from field: sesame.v1alpha1.NetConnResponse.Control.TlsUpgraded tls_upgraded = 1;
      */
-    value: NetConnResponse_Control_TLSUpgraded;
+    value: NetConnResponse_Control_TlsUpgraded;
     case: "tlsUpgraded";
   } | {
     /**
-     * Notification that an in-stream UpgradeTLS command has failed.
+     * Notification that an in-stream UpgradeTls command has failed.
      * The server terminates the stream after emitting it; it MUST NOT
      * continue in cleartext.
      *
-     * @generated from field: sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed tls_upgrade_failed = 2;
+     * @generated from field: sesame.v1alpha1.NetConnResponse.Control.TlsUpgradeFailed tls_upgrade_failed = 2;
      */
-    value: NetConnResponse_Control_TLSUpgradeFailed;
+    value: NetConnResponse_Control_TlsUpgradeFailed;
     case: "tlsUpgradeFailed";
   } | {
     /**
@@ -538,7 +522,7 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
     case: "halfClose";
   } | {
     /**
-     * Response to a client Ping, echoing id and timestamp_nanos
+     * Response to a client Ping, echoing id and send_time
      * verbatim.
      *
      * @generated from field: sesame.v1alpha1.NetConnResponse.Control.Pong pong = 5;
@@ -555,15 +539,6 @@ export type NetConnResponse_Control = Message<"sesame.v1alpha1.NetConnResponse.C
      */
     value: NetConnResponse_Control_Metrics;
     case: "metrics";
-  } | {
-    /**
-     * Arbitrary plugin extension event. Implementations MUST ignore
-     * payloads whose type_url they do not recognize.
-     *
-     * @generated from field: google.protobuf.Any custom = 15;
-     */
-    value: Any;
-    case: "custom";
   } | { case: undefined; value?: undefined };
 };
 
@@ -575,15 +550,17 @@ export const NetConnResponse_ControlSchema: GenMessage<NetConnResponse_Control> 
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1);
 
 /**
- * @generated from message sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded
+ * TlsUpgraded notifies that an in-stream TLS upgrade completed.
+ *
+ * @generated from message sesame.v1alpha1.NetConnResponse.Control.TlsUpgraded
  */
-export type NetConnResponse_Control_TLSUpgraded = Message<"sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded"> & {
+export type NetConnResponse_Control_TlsUpgraded = Message<"sesame.v1alpha1.NetConnResponse.Control.TlsUpgraded"> & {
   /**
    * Negotiated TLS session state.
    *
-   * @generated from field: sesame.tls.v1alpha1.TLSHandshakeResult result = 1;
+   * @generated from field: sesame.v1alpha1.TlsHandshakeResult result = 1;
    */
-  result?: TLSHandshakeResult | undefined;
+  result?: TlsHandshakeResult | undefined;
 
   /**
    * The request_id of the upgrade_tls this result belongs to,
@@ -595,16 +572,18 @@ export type NetConnResponse_Control_TLSUpgraded = Message<"sesame.v1alpha1.NetCo
 };
 
 /**
- * Describes the message sesame.v1alpha1.NetConnResponse.Control.TLSUpgraded.
- * Use `create(NetConnResponse_Control_TLSUpgradedSchema)` to create a new message.
+ * Describes the message sesame.v1alpha1.NetConnResponse.Control.TlsUpgraded.
+ * Use `create(NetConnResponse_Control_TlsUpgradedSchema)` to create a new message.
  */
-export const NetConnResponse_Control_TLSUpgradedSchema: GenMessage<NetConnResponse_Control_TLSUpgraded> = /*@__PURE__*/
+export const NetConnResponse_Control_TlsUpgradedSchema: GenMessage<NetConnResponse_Control_TlsUpgraded> = /*@__PURE__*/
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1, 0);
 
 /**
- * @generated from message sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed
+ * TlsUpgradeFailed notifies that an in-stream TLS upgrade failed.
+ *
+ * @generated from message sesame.v1alpha1.NetConnResponse.Control.TlsUpgradeFailed
  */
-export type NetConnResponse_Control_TLSUpgradeFailed = Message<"sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed"> & {
+export type NetConnResponse_Control_TlsUpgradeFailed = Message<"sesame.v1alpha1.NetConnResponse.Control.TlsUpgradeFailed"> & {
   /**
    * Failure detail. code is a canonical google.rpc.Code.
    *
@@ -622,13 +601,15 @@ export type NetConnResponse_Control_TLSUpgradeFailed = Message<"sesame.v1alpha1.
 };
 
 /**
- * Describes the message sesame.v1alpha1.NetConnResponse.Control.TLSUpgradeFailed.
- * Use `create(NetConnResponse_Control_TLSUpgradeFailedSchema)` to create a new message.
+ * Describes the message sesame.v1alpha1.NetConnResponse.Control.TlsUpgradeFailed.
+ * Use `create(NetConnResponse_Control_TlsUpgradeFailedSchema)` to create a new message.
  */
-export const NetConnResponse_Control_TLSUpgradeFailedSchema: GenMessage<NetConnResponse_Control_TLSUpgradeFailed> = /*@__PURE__*/
+export const NetConnResponse_Control_TlsUpgradeFailedSchema: GenMessage<NetConnResponse_Control_TlsUpgradeFailed> = /*@__PURE__*/
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1, 1);
 
 /**
+ * WindowUpdate replenishes the peer's flow control window.
+ *
  * @generated from message sesame.v1alpha1.NetConnResponse.Control.WindowUpdate
  */
 export type NetConnResponse_Control_WindowUpdate = Message<"sesame.v1alpha1.NetConnResponse.Control.WindowUpdate"> & {
@@ -651,6 +632,8 @@ export const NetConnResponse_Control_WindowUpdateSchema: GenMessage<NetConnRespo
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1, 2);
 
 /**
+ * HalfClose signals an upstream write-side closure.
+ *
  * @generated from message sesame.v1alpha1.NetConnResponse.Control.HalfClose
  */
 export type NetConnResponse_Control_HalfClose = Message<"sesame.v1alpha1.NetConnResponse.Control.HalfClose"> & {
@@ -664,6 +647,8 @@ export const NetConnResponse_Control_HalfCloseSchema: GenMessage<NetConnResponse
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1, 3);
 
 /**
+ * Pong is the server's response to a client Ping.
+ *
  * @generated from message sesame.v1alpha1.NetConnResponse.Control.Pong
  */
 export type NetConnResponse_Control_Pong = Message<"sesame.v1alpha1.NetConnResponse.Control.Pong"> & {
@@ -675,12 +660,11 @@ export type NetConnResponse_Control_Pong = Message<"sesame.v1alpha1.NetConnRespo
   id: bigint;
 
   /**
-   * Client-originated Unix epoch nanoseconds, echoed verbatim from
-   * the Ping.
+   * Client-originated send time, echoed verbatim from the Ping.
    *
-   * @generated from field: int64 timestamp_nanos = 2;
+   * @generated from field: google.protobuf.Timestamp send_time = 2;
    */
-  timestampNanos: bigint;
+  sendTime?: Timestamp | undefined;
 };
 
 /**
@@ -691,6 +675,8 @@ export const NetConnResponse_Control_PongSchema: GenMessage<NetConnResponse_Cont
   messageDesc(file_sesame_v1alpha1_remotecontrol, 1, 1, 4);
 
 /**
+ * Metrics carries advisory diagnostics for the stream.
+ *
  * @generated from message sesame.v1alpha1.NetConnResponse.Control.Metrics
  */
 export type NetConnResponse_Control_Metrics = Message<"sesame.v1alpha1.NetConnResponse.Control.Metrics"> & {
@@ -709,11 +695,11 @@ export type NetConnResponse_Control_Metrics = Message<"sesame.v1alpha1.NetConnRe
   bytesReceived: bigint;
 
   /**
-   * Round-trip time estimate in milliseconds, advisory.
+   * Round-trip time estimate, advisory.
    *
-   * @generated from field: int32 rtt_millis = 3;
+   * @generated from field: google.protobuf.Duration round_trip_duration = 3;
    */
-  rttMillis: number;
+  roundTripDuration?: Duration | undefined;
 };
 
 /**
@@ -769,9 +755,9 @@ export type NetConnResponse_Capabilities = Message<"sesame.v1alpha1.NetConnRespo
    * Decomposed ClientHello capabilities the active TLS engine can
    * honour, advisory: a pre-dial hint only. The server MUST still fail
    * closed per-request on any dimension it cannot apply, and clients
-   * MUST verify TLSHandshakeResult.applied_client_hello regardless.
+   * MUST verify TlsHandshakeResult.applied_client_hello regardless.
    *
-   * @generated from field: sesame.tls.v1alpha1.ClientHelloCapabilities client_hello_capabilities = 5;
+   * @generated from field: sesame.v1alpha1.ClientHelloCapabilities client_hello_capabilities = 5;
    */
   clientHelloCapabilities?: ClientHelloCapabilities | undefined;
 };
@@ -829,8 +815,8 @@ export const RemoteControl: GenService<{
    * - Consent: a client that sends no Dial.capabilities opts out of in-stream control entirely. The server MUST NOT
    *   honor control messages from such a client and MUST treat them as the end of the request stream (as in
    *   termination flow i).
-   * - Forward compatibility: implementations MUST ignore control messages, capabilities, and Any payloads whose type
-   *   they do not recognize. A recognized control message carrying an invalid payload (e.g. a negative
+   * - Forward compatibility: implementations MUST ignore control messages, capabilities, and fields they do not
+   *   recognize. A recognized control message carrying an invalid payload (e.g. a negative
    *   window_update.credit_bytes) is a protocol violation, not an unknown message, and MUST be rejected per its own
    *   rule.
    * - Upgrade lifecycle: upgrade_tls MUST carry options (otherwise INVALID_ARGUMENT). The server processes control

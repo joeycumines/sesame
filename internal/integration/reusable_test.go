@@ -12,7 +12,7 @@ import (
 	"github.com/joeycumines/sesame/internal/testutil"
 	"github.com/joeycumines/sesame/stream"
 	grpctun "github.com/joeycumines/sesame/tun/grpc"
-	"github.com/joeycumines/sesame/type/grpctunnel"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -43,7 +43,7 @@ func TestReusable_RC_NetConn_nettest(t *testing.T) {
 	}
 }
 
-// TestReusable_Tunnel_RC_NetConn exercises RemoteControl client dialing and data exchange over a grpctunnel.
+// TestReusable_Tunnel_RC_NetConn exercises RemoteControl client dialing and data exchange over a typepb.
 func TestReusable_Tunnel_RC_NetConn(t *testing.T) {
 	skipUnlessIntegration(t)
 
@@ -65,8 +65,8 @@ func makeTunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.ClientCo
 	return func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
 		svc := grpctun.TunnelServer{NoReverseTunnels: true}
 		fn(&svc)
-		cc := ccFactory(func(h testutil.GRPCServer) { grpctunnel.RegisterTunnelServiceServer(h, &svc) })
-		st, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+		cc := ccFactory(func(h testutil.GRPCServer) { typepb.RegisterTunnelServiceServer(h, &svc) })
+		st, err := typepb.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
 		if err != nil {
 			panic(err)
 		}
@@ -87,8 +87,8 @@ func makeReverseTunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.C
 			default:
 			}
 		}}
-		cc := ccFactory(func(h testutil.GRPCServer) { grpctunnel.RegisterTunnelServiceServer(h, &svc) })
-		st, err := grpctunnel.NewTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
+		cc := ccFactory(func(h testutil.GRPCServer) { typepb.RegisterTunnelServiceServer(h, &svc) })
+		st, err := typepb.NewTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
 		if err != nil {
 			panic(err)
 		}

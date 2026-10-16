@@ -5,19 +5,18 @@ import (
 	"net"
 	"testing"
 
-	"github.com/joeycumines/sesame/rc"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 )
 
 // fakeUpgradeStream records the TlsUpgraded response handleUpgradeTLS
 // emits; any other use panics via the nil embedded interface.
 type fakeUpgradeStream struct {
-	rc.RemoteControl_NetConnServer
+	sesamepb.RemoteControl_NetConnServer
 
-	sent []*rc.NetConnResponse
+	sent []*sesamepb.NetConnResponse
 }
 
-func (f *fakeUpgradeStream) Send(resp *rc.NetConnResponse) error {
+func (f *fakeUpgradeStream) Send(resp *sesamepb.NetConnResponse) error {
 	f.sent = append(f.sent, resp)
 	return nil
 }
@@ -28,9 +27,9 @@ type fixedUpgrader struct {
 	seen net.Conn
 }
 
-func (p *fixedUpgrader) Handshake(_ context.Context, rawConn net.Conn, _ *sesametls.TLSOptions) (net.Conn, *sesametls.TLSHandshakeResult, error) {
+func (p *fixedUpgrader) Handshake(_ context.Context, rawConn net.Conn, _ *sesamepb.TlsOptions) (net.Conn, *sesamepb.TlsHandshakeResult, error) {
 	p.seen = rawConn
-	return p.conn, &sesametls.TLSHandshakeResult{}, nil
+	return p.conn, &sesamepb.TlsHandshakeResult{}, nil
 }
 
 // TestHandleUpgradeTLS_SwapBeforeResumeSignal pins the ordering of the
@@ -69,7 +68,7 @@ func TestHandleUpgradeTLS_SwapBeforeResumeSignal(t *testing.T) {
 
 	// request_id 0 exercises the id-less legacy path: the server must
 	// echo it verbatim.
-	if err := s.handleUpgradeTLS(context.Background(), &sesametls.TLSOptions{ServerName: "upgrade.internal"}, 0); err != nil {
+	if err := s.handleUpgradeTLS(context.Background(), &sesamepb.TlsOptions{Sni: "upgrade.internal"}, 0); err != nil {
 		t.Fatalf("handleUpgradeTLS failed: %v", err)
 	}
 	if provider.seen != rawConn {

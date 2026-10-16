@@ -6,50 +6,50 @@ import {
   ClientHelloCapabilities,
   ClientHelloCapabilitiesSchema,
   ClientHelloSpec,
-  TLSHandshakeResult,
-  TLSHandshakeResultSchema,
-  TLSOptions,
-  TLSVersion,
-} from '../gen/sesame/tls/v1alpha1/tls_pb';
+  TlsHandshakeResult,
+  TlsHandshakeResultSchema,
+  TlsOptions,
+  TlsVersion,
+} from '../gen/sesame/v1alpha1/tls_pb';
 import {
   ProxyHop,
   ProxyHop_Type,
   ProxyOptions,
   ProxyResult,
   ProxyResultSchema,
-} from '../gen/sesame/proxy/v1alpha1/proxy_pb';
+} from '../gen/sesame/v1alpha1/proxy_pb';
 import {NetAddr, NetAddrSchema} from '../gen/sesame/type/netaddr_pb';
 import {ServerSecrets} from '../config';
 
-export function protoToTLSVersion(
-  v: TLSVersion,
+export function protoToTlsVersion(
+  v: TlsVersion,
 ): tls.SecureVersion | undefined {
   switch (v) {
-    case TLSVersion.TLS_1_0:
+    case TlsVersion.TLS_1_0:
       return 'TLSv1';
-    case TLSVersion.TLS_1_1:
+    case TlsVersion.TLS_1_1:
       return 'TLSv1.1';
-    case TLSVersion.TLS_1_2:
+    case TlsVersion.TLS_1_2:
       return 'TLSv1.2';
-    case TLSVersion.TLS_1_3:
+    case TlsVersion.TLS_1_3:
       return 'TLSv1.3';
     default:
       return undefined;
   }
 }
 
-export function tlsVersionToProto(v: string | null | undefined): TLSVersion {
+export function tlsVersionToProto(v: string | null | undefined): TlsVersion {
   switch (v) {
     case 'TLSv1':
-      return TLSVersion.TLS_1_0;
+      return TlsVersion.TLS_1_0;
     case 'TLSv1.1':
-      return TLSVersion.TLS_1_1;
+      return TlsVersion.TLS_1_1;
     case 'TLSv1.2':
-      return TLSVersion.TLS_1_2;
+      return TlsVersion.TLS_1_2;
     case 'TLSv1.3':
-      return TLSVersion.TLS_1_3;
+      return TlsVersion.TLS_1_3;
     default:
-      return TLSVersion.TLS_VERSION_UNSPECIFIED;
+      return TlsVersion.UNSPECIFIED;
   }
 }
 
@@ -122,7 +122,7 @@ export function createNetAddrFromSocket(
 
 export interface TLSExecutionResult {
   readonly tlsSocket: tls.TLSSocket;
-  readonly result: TLSHandshakeResult;
+  readonly result: TlsHandshakeResult;
 }
 
 // TLSProvider mirrors the Go rc/netconn.TLSProvider contract: a custom
@@ -133,7 +133,7 @@ export interface TLSExecutionResult {
 export interface TLSProvider {
   handshake(
     socket: net.Socket,
-    opts: TLSOptions,
+    opts: TlsOptions,
     defaultServerName: string,
     fallbackSecrets?: ServerSecrets,
     signal?: AbortSignal,
@@ -199,9 +199,9 @@ export function validateClientHelloSpec(
       Code.InvalidArgument,
     );
   }
-  if (spec.padToSize < 0) {
+  if (spec.targetSize < 0) {
     throw new ConnectError(
-      `sesame/rc/netconn: pad_to_size must not be negative: ${spec.padToSize}`,
+      `sesame/rc/netconn: target_size must not be negative: ${spec.targetSize}`,
       Code.InvalidArgument,
     );
   }
@@ -258,14 +258,14 @@ export function assertBuiltinClientHelloHonorable(
     );
   }
   // legacyVersion: must be UNSPECIFIED (engine default).
-  if (spec.legacyVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED) {
+  if (spec.legacyVersion !== TlsVersion.UNSPECIFIED) {
     throw new ConnectError(
       'sesame/rc/netconn: builtin engine cannot honor client_hello.legacy_version; custom TLSProvider required',
       Code.FailedPrecondition,
     );
   }
-  // padToSize: must be 0 (no padding).
-  if (spec.padToSize !== 0) {
+  // targetSize: must be 0 (no padding).
+  if (spec.targetSize !== 0) {
     throw new ConnectError(
       'sesame/rc/netconn: builtin engine cannot honor client_hello.pad_to_size; custom TLSProvider required',
       Code.FailedPrecondition,
@@ -333,7 +333,7 @@ export const HANDSHAKE_FALLBACK_TIMEOUT_MS = 30_000;
 
 export async function executeTLSHandshake(
   socket: net.Socket,
-  opts: TLSOptions,
+  opts: TlsOptions,
   defaultServerName: string,
   fallbackSecrets?: ServerSecrets,
   provider?: TLSProvider,
@@ -342,10 +342,10 @@ export async function executeTLSHandshake(
 ): Promise<TLSExecutionResult> {
   // Version-range validation at the API boundary, matching the Go
   // reference: a floor above its ceiling can never negotiate.
-  // TLSVersion values are monotonic, so the enum compares directly.
+  // TlsVersion values are monotonic, so the enum compares directly.
   if (
-    opts.minVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED &&
-    opts.maxVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED &&
+    opts.minVersion !== TlsVersion.UNSPECIFIED &&
+    opts.maxVersion !== TlsVersion.UNSPECIFIED &&
     opts.minVersion > opts.maxVersion
   ) {
     throw new ConnectError(
@@ -373,16 +373,16 @@ export async function executeTLSHandshake(
   // Builtin engine: fail closed on any non-default spec dimension.
   assertBuiltinClientHelloHonorable(opts.clientHello);
 
-  let serverName = opts.serverName || defaultServerName;
+  let sni = opts.sni || defaultServerName;
   // A bare IPv6 literal is already a valid SNI value; only strip a port when
   // the value is a bracketed literal or a name:port pair.
-  if (serverName.includes(':') && !net.isIPv6(serverName)) {
-    serverName = parseHostPort(serverName).host;
+  if (sni.includes(':') && !net.isIPv6(sni)) {
+    sni = parseHostPort(sni).host;
   }
 
   const tlsConnectOptions: tls.ConnectionOptions = {
     socket,
-    servername: serverName,
+    servername: sni,
     rejectUnauthorized: !opts.insecureSkipVerify,
   };
 
@@ -391,11 +391,11 @@ export async function executeTLSHandshake(
     tlsConnectOptions.ALPNProtocols = [...opts.alpnProtocols];
   }
 
-  const minVer = protoToTLSVersion(opts.minVersion);
+  const minVer = protoToTlsVersion(opts.minVersion);
   if (minVer) {
     tlsConnectOptions.minVersion = minVer;
   }
-  const maxVer = protoToTLSVersion(opts.maxVersion);
+  const maxVer = protoToTlsVersion(opts.maxVersion);
   if (maxVer) {
     tlsConnectOptions.maxVersion = maxVer;
   }
@@ -478,11 +478,11 @@ export async function executeTLSHandshake(
       const proto = tlsSocket.alpnProtocol;
       const negotiatedProtocol = typeof proto === 'string' ? proto : '';
 
-      const result = create(TLSHandshakeResultSchema, {
+      const result = create(TlsHandshakeResultSchema, {
         negotiatedProtocol,
         cipherSuite: ianaCipherSuite(tlsSocket),
         tlsVersion: tlsVersionToProto(tlsSocket.getProtocol()),
-        serverName,
+        sni,
         peerCertificates,
         appliedClientHello: opts.clientHello,
       });

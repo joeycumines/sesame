@@ -14,9 +14,8 @@ import (
 	"time"
 
 	cryptotls "crypto/tls"
-	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -103,8 +102,8 @@ func TestClientServer_SesameEndpoint_Interop(t *testing.T) {
 	defer cc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(cc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(cc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -244,13 +243,13 @@ func TestClientServer_SesameEndpoint_TLS_Interop(t *testing.T) {
 	defer cc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(cc),
-		TLS: &sesametls.TLSOptions{
-			ServerName:         "localhost",
+		API: sesamepb.NewRemoteControlClient(cc),
+		TLS: &sesamepb.TlsOptions{
+			Sni:                "localhost",
 			AlpnProtocols:      []string{"test-interop"},
 			InsecureSkipVerify: true,
 		},
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -274,7 +273,7 @@ func TestClientServer_SesameEndpoint_TLS_Interop(t *testing.T) {
 		t.Fatalf("expected ConnTransformResult, got %T", conn)
 	}
 
-	tlsResult := transformRes.TLSHandshakeResult()
+	tlsResult := transformRes.TlsHandshakeResult()
 	if tlsResult == nil {
 		t.Fatal("expected non-nil TLS handshake result in Conn")
 	}
@@ -390,8 +389,8 @@ func TestClientServer_SesameEndpoint_STARTTLS_Interop(t *testing.T) {
 	defer cc.Close()
 
 	client := netconn.Client{
-		API: rc.NewRemoteControlClient(cc),
-		Capabilities: &rc.NetConnRequest_Capabilities{
+		API: sesamepb.NewRemoteControlClient(cc),
+		Capabilities: &sesamepb.NetConnRequest_Capabilities{
 			SupportsOpportunisticTls: true,
 			SupportsFlowControl:      true,
 		},
@@ -424,17 +423,17 @@ func TestClientServer_SesameEndpoint_STARTTLS_Interop(t *testing.T) {
 		t.Fatalf("unexpected cleartext response: %q", string(clearBuf))
 	}
 
-	// 2. Perform in-stream UpgradeTLS
+	// 2. Perform in-stream UpgradeTls
 	upgradeCtx, upgradeCancel := context.WithTimeout(ctx, 3*time.Second)
 	defer upgradeCancel()
 
-	res, err := inStreamConn.UpgradeTLS(upgradeCtx, &sesametls.TLSOptions{
-		ServerName:         "localhost",
+	res, err := inStreamConn.UpgradeTls(upgradeCtx, &sesamepb.TlsOptions{
+		Sni:                "localhost",
 		AlpnProtocols:      []string{"starttls-interop"},
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
-		t.Fatalf("UpgradeTLS failed: %v", err)
+		t.Fatalf("UpgradeTls failed: %v", err)
 	}
 	if res == nil || res.GetNegotiatedProtocol() != "starttls-interop" {
 		t.Fatalf("unexpected TLS result after upgrade: %+v", res)

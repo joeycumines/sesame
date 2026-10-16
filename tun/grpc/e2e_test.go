@@ -7,12 +7,11 @@ import (
 	"github.com/joeycumines/sesame/internal/grpctest"
 	"github.com/joeycumines/sesame/internal/pipelistener"
 	"github.com/joeycumines/sesame/internal/testutil"
-	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	"github.com/joeycumines/sesame/stream"
 	grpctun "github.com/joeycumines/sesame/tun/grpc"
-	"github.com/joeycumines/sesame/type/grpctunnel"
-	"github.com/joeycumines/sesame/type/netaddr"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"golang.org/x/exp/maps"
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
@@ -76,8 +75,8 @@ func reverseTunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.Clien
 			default:
 			}
 		}}
-		cc := ccFactory(func(h testutil.GRPCServer) { grpctunnel.RegisterTunnelServiceServer(h, &svc) })
-		st, err := grpctunnel.NewTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
+		cc := ccFactory(func(h testutil.GRPCServer) { typepb.RegisterTunnelServiceServer(h, &svc) })
+		st, err := typepb.NewTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
 		if err != nil {
 			panic(err)
 		}
@@ -137,8 +136,8 @@ func tunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.ClientConnFa
 	return func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
 		svc := grpctun.TunnelServer{NoReverseTunnels: true}
 		fn(&svc)
-		cc := ccFactory(func(h testutil.GRPCServer) { grpctunnel.RegisterTunnelServiceServer(h, &svc) })
-		st, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+		cc := ccFactory(func(h testutil.GRPCServer) { typepb.RegisterTunnelServiceServer(h, &svc) })
+		st, err := typepb.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
 		if err != nil {
 			panic(err)
 		}
@@ -255,9 +254,9 @@ func Test_largeMessage(t *testing.T) {
 						}
 					}
 					var extra string
-					if msg, ok := msg.(*grpctunnel.ServerToClient); ok {
+					if msg, ok := msg.(*typepb.OpenTunnelResponse); ok {
 						switch frame := msg.GetFrame().(type) {
-						case *grpctunnel.ServerToClient_Message:
+						case *typepb.OpenTunnelResponse_Message:
 							extra = fmt.Sprintf(` s2c_message=%d/%d`, len(frame.Message.GetData()), frame.Message.GetSize())
 							if remainingMsg != 0 {
 								t.Error(`never finished previous message`, remainingMsg)
@@ -277,7 +276,7 @@ func Test_largeMessage(t *testing.T) {
 								t.Error(`unexpectedly large message`, frame.Message.GetSize())
 							}
 
-						case *grpctunnel.ServerToClient_MessageData:
+						case *typepb.OpenTunnelResponse_MessageData:
 							extra = fmt.Sprintf(` s2c_message_data=%d`, len(frame.MessageData))
 							if v := atomic.AddInt32(&remainingMsg, -int32(len(frame.MessageData))); v < 0 {
 								t.Error(`bad remainingMsg`, v)
@@ -351,9 +350,9 @@ func Test_largeMessage(t *testing.T) {
 
 	local, remote := net.Pipe()
 	dialer := mockDialer{dialContext: func(ctx context.Context, network, address string) (net.Conn, error) { return local, nil }}
-	rcServer := netconn.Server{Dialer: func(*rc.NetConnRequest_Dial) (netconn.Dialer, error) { return &dialer, nil }}
-	rcConn := factory(func(h testutil.GRPCServer) { rc.RegisterRemoteControlServer(h, &rcServer) })
-	rcClient := netconn.Client{API: rc.NewRemoteControlClient(rcConn)}
+	rcServer := netconn.Server{Dialer: func(*sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) { return &dialer, nil }}
+	rcConn := factory(func(h testutil.GRPCServer) { sesamepb.RegisterRemoteControlServer(h, &rcServer) })
+	rcClient := netconn.Client{API: sesamepb.NewRemoteControlClient(rcConn)}
 	c1, c2 := func() (net.Conn, net.Conn) {
 		// The dial target must be a valid host:port: the server validates the
 		// request at the boundary (validateDialRequest). The mock dialer
@@ -463,10 +462,10 @@ func Test_multiplex(t *testing.T) {
 				}}
 			)
 
-			rcServer := netconn.Server{Dialer: func(*rc.NetConnRequest_Dial) (netconn.Dialer, error) { return &dialer, nil }}
-			rcConn := factory(func(h testutil.GRPCServer) { rc.RegisterRemoteControlServer(h, &rcServer) })
+			rcServer := netconn.Server{Dialer: func(*sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) { return &dialer, nil }}
+			rcConn := factory(func(h testutil.GRPCServer) { sesamepb.RegisterRemoteControlServer(h, &rcServer) })
 			defer rcConn.Close()
-			rcClient := netconn.Client{API: rc.NewRemoteControlClient(rcConn)}
+			rcClient := netconn.Client{API: sesamepb.NewRemoteControlClient(rcConn)}
 			pipeFactory := func() (net.Conn, net.Conn) {
 				address, c2 := newPipe()
 				c1, err := rcClient.DialContext(context.Background(), ``, address)
@@ -522,7 +521,7 @@ func Test_clientCancel(t *testing.T) {
 			conn = &debugClientConnSends{
 				clientConnCloserI: conn,
 				hook: func(msg any) {
-					if _, ok := msg.(*grpctunnel.ClientToServer).GetFrame().(*grpctunnel.ClientToServer_Cancel); ok {
+					if _, ok := msg.(*typepb.OpenTunnelRequest).GetFrame().(*typepb.OpenTunnelRequest_Cancel); ok {
 						cin <- struct{}{}
 						<-cout
 					}
@@ -546,9 +545,9 @@ func Test_clientCancel(t *testing.T) {
 		dialerCtxCh <- ctx
 		return local, nil
 	}}
-	rcServer := netconn.Server{Dialer: func(*rc.NetConnRequest_Dial) (netconn.Dialer, error) { return &dialer, nil }}
-	rcConn := factory(func(h testutil.GRPCServer) { rc.RegisterRemoteControlServer(h, &rcServer) })
-	rcStub := rc.NewRemoteControlClient(rcConn)
+	rcServer := netconn.Server{Dialer: func(*sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) { return &dialer, nil }}
+	rcConn := factory(func(h testutil.GRPCServer) { sesamepb.RegisterRemoteControlServer(h, &rcServer) })
+	rcStub := sesamepb.NewRemoteControlClient(rcConn)
 	rcStream, err := rcStub.NetConn(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -556,8 +555,8 @@ func Test_clientCancel(t *testing.T) {
 
 	// The dial request must carry a valid host:port target: the server
 	// rejects malformed input at the boundary (validateDialRequest).
-	if err := rcStream.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Dial_{Dial: &rc.NetConnRequest_Dial{
-		Address: &netaddr.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
+	if err := rcStream.Send(&sesamepb.NetConnRequest{Data: &sesamepb.NetConnRequest_Dial_{Dial: &sesamepb.NetConnRequest_Dial{
+		Address: &typepb.NetAddr{Network: "tcp", Address: "127.0.0.1:1"},
 	}}}); err != nil {
 		t.Fatal(err)
 	}

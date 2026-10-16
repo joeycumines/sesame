@@ -10,8 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/joeycumines/sesame/rc"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -36,9 +35,9 @@ type (
 
 	// ServerControlHandler handles in-stream control demultiplexing for the server.
 	serverControlState struct {
-		stream            rc.RemoteControl_NetConnServer
-		serverCaps        *rc.NetConnResponse_Capabilities
-		clientCaps        *rc.NetConnRequest_Capabilities
+		stream            sesamepb.RemoteControl_NetConnServer
+		serverCaps        *sesamepb.NetConnResponse_Capabilities
+		clientCaps        *sesamepb.NetConnRequest_Capabilities
 		tlsProvider       TLSProvider
 		defaultServerName string
 
@@ -195,10 +194,10 @@ func (fc *FlowController) Close() {
 // RunServerDemux executes the active bidirectional message loop for a connection with in-stream control support.
 func RunServerDemux(
 	ctx context.Context,
-	stream rc.RemoteControl_NetConnServer,
+	stream sesamepb.RemoteControl_NetConnServer,
 	conn net.Conn,
-	serverCaps *rc.NetConnResponse_Capabilities,
-	clientCaps *rc.NetConnRequest_Capabilities,
+	serverCaps *sesamepb.NetConnResponse_Capabilities,
+	clientCaps *sesamepb.NetConnRequest_Capabilities,
 	tlsProvider TLSProvider,
 	defaultServerName string,
 ) error {
@@ -321,8 +320,8 @@ func RunServerDemux(
 					rem = rem[sendLen:]
 
 					s.sendMu.Lock()
-					sendErr := stream.Send(&rc.NetConnResponse{
-						Data: &rc.NetConnResponse_Bytes{Bytes: chunk},
+					sendErr := stream.Send(&sesamepb.NetConnResponse{
+						Data: &sesamepb.NetConnResponse_Bytes{Bytes: chunk},
 					})
 					s.sendMu.Unlock()
 
@@ -338,11 +337,11 @@ func RunServerDemux(
 					// Connection reached EOF
 					if clientCaps.GetSupportsFlowControl() || clientCaps.GetSupportsOpportunisticTls() {
 						s.sendMu.Lock()
-						_ = stream.Send(&rc.NetConnResponse{
-							Data: &rc.NetConnResponse_Control_{
-								Control: &rc.NetConnResponse_Control{
-									Event: &rc.NetConnResponse_Control_HalfClose_{
-										HalfClose: &rc.NetConnResponse_Control_HalfClose{},
+						_ = stream.Send(&sesamepb.NetConnResponse{
+							Data: &sesamepb.NetConnResponse_Control_{
+								Control: &sesamepb.NetConnResponse_Control{
+									Event: &sesamepb.NetConnResponse_Control_HalfClose_{
+										HalfClose: &sesamepb.NetConnResponse_Control_HalfClose{},
 									},
 								},
 							},
@@ -381,7 +380,7 @@ func RunServerDemux(
 			}
 
 			switch data := msg.GetData().(type) {
-			case *rc.NetConnRequest_Bytes:
+			case *sesamepb.NetConnRequest_Bytes:
 				s.connMu.RLock()
 				c := s.activeConn
 				s.connMu.RUnlock()
@@ -431,11 +430,11 @@ func RunServerDemux(
 					// Return inbound credit to the client after draining.
 					if s.inboundFC != nil {
 						s.sendMu.Lock()
-						_ = stream.Send(&rc.NetConnResponse{
-							Data: &rc.NetConnResponse_Control_{
-								Control: &rc.NetConnResponse_Control{
-									Event: &rc.NetConnResponse_Control_WindowUpdate_{
-										WindowUpdate: &rc.NetConnResponse_Control_WindowUpdate{
+						_ = stream.Send(&sesamepb.NetConnResponse{
+							Data: &sesamepb.NetConnResponse_Control_{
+								Control: &sesamepb.NetConnResponse_Control{
+									Event: &sesamepb.NetConnResponse_Control_WindowUpdate_{
+										WindowUpdate: &sesamepb.NetConnResponse_Control_WindowUpdate{
 											CreditBytes: int32(len(data.Bytes)),
 										},
 									},
@@ -446,14 +445,14 @@ func RunServerDemux(
 					}
 				}
 
-			case *rc.NetConnRequest_Control_:
+			case *sesamepb.NetConnRequest_Control_:
 				ctl := data.Control
 				if ctl == nil {
 					continue
 				}
 
 				switch action := ctl.GetAction().(type) {
-				case *rc.NetConnRequest_Control_UpgradeTls:
+				case *sesamepb.NetConnRequest_Control_UpgradeTls_:
 					// NOTE (upgrade-vs-window): runs inline so this loop
 					// keeps servicing windowUpdate only between control
 					// messages. A socket reader blocked on an exhausted
@@ -488,7 +487,7 @@ func RunServerDemux(
 						return
 					}
 
-				case *rc.NetConnRequest_Control_WindowUpdate_:
+				case *sesamepb.NetConnRequest_Control_WindowUpdate_:
 					// Negative credit is a protocol violation, not an
 					// unknown message: fail closed regardless of whether
 					// flow control is active, per the schema's
@@ -501,7 +500,7 @@ func RunServerDemux(
 						s.outboundFC.AddCredit(action.WindowUpdate.GetCreditBytes())
 					}
 
-				case *rc.NetConnRequest_Control_HalfClose_:
+				case *sesamepb.NetConnRequest_Control_HalfClose_:
 					// Termination flow (d): the server MUST close only its
 					// write side to the target. A transport that cannot
 					// half-close cannot fulfill the contract, and silently
@@ -523,15 +522,15 @@ func RunServerDemux(
 						return
 					}
 
-				case *rc.NetConnRequest_Control_Ping_:
+				case *sesamepb.NetConnRequest_Control_Ping_:
 					s.sendMu.Lock()
-					_ = stream.Send(&rc.NetConnResponse{
-						Data: &rc.NetConnResponse_Control_{
-							Control: &rc.NetConnResponse_Control{
-								Event: &rc.NetConnResponse_Control_Pong_{
-									Pong: &rc.NetConnResponse_Control_Pong{
-										Id:             action.Ping.GetId(),
-										TimestampNanos: action.Ping.GetTimestampNanos(),
+					_ = stream.Send(&sesamepb.NetConnResponse{
+						Data: &sesamepb.NetConnResponse_Control_{
+							Control: &sesamepb.NetConnResponse_Control{
+								Event: &sesamepb.NetConnResponse_Control_Pong_{
+									Pong: &sesamepb.NetConnResponse_Control_Pong{
+										Id:       action.Ping.GetId(),
+										SendTime: action.Ping.GetSendTime(),
 									},
 								},
 							},
@@ -539,7 +538,7 @@ func RunServerDemux(
 					})
 					s.sendMu.Unlock()
 
-				case *rc.NetConnRequest_Control_Reset_:
+				case *sesamepb.NetConnRequest_Control_Reset_:
 					// Termination flow iv: propagate the client's reason
 					// code as the gRPC status code (out-of-range values
 					// map to CANCELLED, matching the TS endpoint's
@@ -574,7 +573,7 @@ func rpcStatusCode(code int32) codes.Code {
 	return codes.Canceled
 }
 
-func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesametls.TLSOptions, requestID int64) error {
+func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesamepb.TlsOptions, requestID int64) error {
 	// 1. Pause outbound reader
 	s.connMu.RLock()
 	c := s.activeConn
@@ -611,11 +610,11 @@ func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesamet
 		// On upgrade failure, send TlsUpgradeFailed and terminate (never fallback to cleartext)
 		st, _ := grpcstatus.FromError(err)
 		s.sendMu.Lock()
-		_ = s.stream.Send(&rc.NetConnResponse{
-			Data: &rc.NetConnResponse_Control_{
-				Control: &rc.NetConnResponse_Control{
-					Event: &rc.NetConnResponse_Control_TlsUpgradeFailed{
-						TlsUpgradeFailed: &rc.NetConnResponse_Control_TLSUpgradeFailed{
+		_ = s.stream.Send(&sesamepb.NetConnResponse{
+			Data: &sesamepb.NetConnResponse_Control_{
+				Control: &sesamepb.NetConnResponse_Control{
+					Event: &sesamepb.NetConnResponse_Control_TlsUpgradeFailed_{
+						TlsUpgradeFailed: &sesamepb.NetConnResponse_Control_TlsUpgradeFailed{
 							Error: &status.Status{
 								Code:    int32(st.Code()),
 								Message: st.Message(),
@@ -632,11 +631,11 @@ func (s *serverControlState) handleUpgradeTLS(ctx context.Context, opts *sesamet
 
 	// 3. Send TlsUpgraded response
 	s.sendMu.Lock()
-	sendErr := s.stream.Send(&rc.NetConnResponse{
-		Data: &rc.NetConnResponse_Control_{
-			Control: &rc.NetConnResponse_Control{
-				Event: &rc.NetConnResponse_Control_TlsUpgraded{
-					TlsUpgraded: &rc.NetConnResponse_Control_TLSUpgraded{
+	sendErr := s.stream.Send(&sesamepb.NetConnResponse{
+		Data: &sesamepb.NetConnResponse_Control_{
+			Control: &sesamepb.NetConnResponse_Control{
+				Event: &sesamepb.NetConnResponse_Control_TlsUpgraded_{
+					TlsUpgraded: &sesamepb.NetConnResponse_Control_TlsUpgraded{
 						Result:    result,
 						RequestId: requestID,
 					},

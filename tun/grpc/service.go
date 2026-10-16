@@ -17,14 +17,14 @@ package grpc
 import (
 	"context"
 	"github.com/fullstorydev/grpchan"
-	"github.com/joeycumines/sesame/type/grpctunnel"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"sync"
 )
 
-// TunnelServer provides an implementation for grpctunnel.TunnelServiceServer.
+// TunnelServer provides an implementation for typepb.TunnelServiceServer.
 // You can register handlers with it, and it will then expose those handlers
 // for incoming tunnels. If no handlers are registered, the server will reply
 // to OpenTunnel requests with an "Unimplemented" error code. The server may
@@ -65,9 +65,9 @@ type TunnelServer struct {
 	unimplementedTunnelServiceServer
 }
 
-type unimplementedTunnelServiceServer = grpctunnel.UnimplementedTunnelServiceServer
+type unimplementedTunnelServiceServer = typepb.UnimplementedTunnelServiceServer
 
-var _ grpctunnel.TunnelServiceServer = (*TunnelServer)(nil)
+var _ typepb.TunnelServiceServer = (*TunnelServer)(nil)
 var _ grpc.ServiceRegistrar = (*TunnelServer)(nil)
 
 func (s *TunnelServer) RegisterService(desc *grpc.ServiceDesc, srv interface{}) {
@@ -81,7 +81,7 @@ func (s *TunnelServer) GetServiceInfo() map[string]grpc.ServiceInfo {
 	return s.handlers.GetServiceInfo()
 }
 
-func (s *TunnelServer) OpenTunnel(stream grpctunnel.TunnelService_OpenTunnelServer) error {
+func (s *TunnelServer) OpenTunnel(stream typepb.TunnelService_OpenTunnelServer) error {
 	if len(s.handlers) == 0 {
 		return status.Error(codes.Unimplemented, "forward tunnels not supported")
 	}
@@ -95,7 +95,7 @@ func (s *TunnelServer) OpenTunnel(stream grpctunnel.TunnelService_OpenTunnelServ
 	return ServeTunnel(options...)
 }
 
-func (s *TunnelServer) OpenReverseTunnel(stream grpctunnel.TunnelService_OpenReverseTunnelServer) error {
+func (s *TunnelServer) OpenReverseTunnel(stream typepb.TunnelService_OpenReverseTunnelServer) error {
 	if s.NoReverseTunnels {
 		return status.Error(codes.Unimplemented, "reverse tunnels not supported")
 	}

@@ -9,17 +9,15 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	grpcstream "github.com/joeycumines/sesame/grpc"
-	"github.com/joeycumines/sesame/rc"
-	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	streamutil "github.com/joeycumines/sesame/stream"
-	"github.com/joeycumines/sesame/type/netaddr"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type (
-	// Server implements rc.RemoteControlServer's NetConn method.
+	// Server implements sesamepb.RemoteControlServer's NetConn method.
 	Server struct {
 		Dialer DialerFactory
 		// Capabilities advertises the server's support matrix. When nil,
@@ -34,20 +32,20 @@ type (
 		// messages its gRPC stack refuses to receive. The handler cannot
 		// discover the host's configured limit, so correctness here is
 		// the operator's responsibility.
-		Capabilities *rc.NetConnResponse_Capabilities
+		Capabilities *sesamepb.NetConnResponse_Capabilities
 		TLSProvider  TLSProvider
 		//lint:ignore U1000 it is actually used
 		unimplementedRemoteControlServer
 	}
 
-	// ServerAPI models a subset of rc.RemoteControlServer, as implemented by Server.
+	// ServerAPI models a subset of sesamepb.RemoteControlServer, as implemented by Server.
 	ServerAPI interface {
-		NetConn(stream rc.RemoteControl_NetConnServer) error
+		NetConn(stream sesamepb.RemoteControl_NetConnServer) error
 	}
 
 	// DialerFactory prepares a Dialer based on a dial request.
 	// See also DefaultDialer.
-	DialerFactory func(req *rc.NetConnRequest_Dial) (Dialer, error)
+	DialerFactory func(req *sesamepb.NetConnRequest_Dial) (Dialer, error)
 
 	// Dialer models an implementation like net.Dialer.
 	// See also DialerFactory.
@@ -56,7 +54,7 @@ type (
 	}
 
 	//lint:ignore U1000 it is actually used
-	unimplementedRemoteControlServer = rc.UnimplementedRemoteControlServer
+	unimplementedRemoteControlServer = sesamepb.UnimplementedRemoteControlServer
 )
 
 var (
@@ -65,11 +63,11 @@ var (
 
 	// compile time assertions
 
-	_ rc.RemoteControlServer = (*Server)(nil)
-	_ ServerAPI              = (*Server)(nil)
+	_ sesamepb.RemoteControlServer = (*Server)(nil)
+	_ ServerAPI                    = (*Server)(nil)
 )
 
-func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
+func (x *Server) NetConn(stream sesamepb.RemoteControl_NetConnServer) error {
 	ctx, cancel := context.WithCancel(stream.Context())
 	defer cancel()
 
@@ -106,8 +104,8 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 	// factory-provided dialer handles the actual dial operation (with optional proxy chaining)
 	var (
 		conn        net.Conn
-		proxyResult *sesameproxy.ProxyResult
-		tlsResult   *sesametls.TLSHandshakeResult
+		proxyResult *sesamepb.ProxyResult
+		tlsResult   *sesamepb.TlsHandshakeResult
 	)
 
 	targetNet := dialReq.GetAddress().GetNetwork()
@@ -150,7 +148,7 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 
 	serverCaps := x.Capabilities
 	if serverCaps == nil {
-		serverCaps = &rc.NetConnResponse_Capabilities{
+		serverCaps = &sesamepb.NetConnResponse_Capabilities{
 			SupportsFlowControl:      true,
 			SupportsOpportunisticTls: true,
 			MaxChunkSize:             DefaultChunkSize,
@@ -159,7 +157,7 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 		}
 	}
 
-	serverCaps = proto.Clone(serverCaps).(*rc.NetConnResponse_Capabilities)
+	serverCaps = proto.Clone(serverCaps).(*sesamepb.NetConnResponse_Capabilities)
 	if serverCaps.GetInitialWindowSize() == 0 {
 		serverCaps.InitialWindowSize = DefaultInitialWindowSize
 	}
@@ -168,9 +166,9 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 	}
 
 	// 2. NetConnResponse.conn
-	sendErr := stream.Send(&rc.NetConnResponse{Data: &rc.NetConnResponse_Conn_{Conn: &rc.NetConnResponse_Conn{
-		Local:        netaddr.New(conn.LocalAddr()),
-		Remote:       netaddr.New(conn.RemoteAddr()),
+	sendErr := stream.Send(&sesamepb.NetConnResponse{Data: &sesamepb.NetConnResponse_Conn_{Conn: &sesamepb.NetConnResponse_Conn{
+		Local:        typepb.New(conn.LocalAddr()),
+		Remote:       typepb.New(conn.RemoteAddr()),
 		Tls:          tlsResult,
 		Proxy:        proxyResult,
 		Capabilities: serverCaps,
@@ -207,7 +205,7 @@ func (x *Server) NetConn(stream rc.RemoteControl_NetConnServer) error {
 	return nil
 }
 
-func (x *Server) dial(req *rc.NetConnRequest_Dial) (Dialer, error) {
+func (x *Server) dial(req *sesamepb.NetConnRequest_Dial) (Dialer, error) {
 	if x.Dialer != nil {
 		return x.Dialer(req)
 	}
@@ -222,7 +220,7 @@ func (x *Server) dial(req *rc.NetConnRequest_Dial) (Dialer, error) {
 // surfacing later as opaque errors from the dial path. Mirrors the
 // boundary checks of the TypeScript reference's netConn handler, which
 // has always required a host:port target.
-func validateDialRequest(req *rc.NetConnRequest_Dial) error {
+func validateDialRequest(req *sesamepb.NetConnRequest_Dial) error {
 	// Negative window/chunk values are malformed input, and rejecting
 	// them before any dialing or stream output keeps the failure cheap
 	// and precise.
@@ -254,20 +252,20 @@ func validateDialRequest(req *rc.NetConnRequest_Dial) error {
 	return validateHostPort(req.GetAddress().GetAddress(), "target address")
 }
 
-func defaultDialer(req *rc.NetConnRequest_Dial) (Dialer, error) {
+func defaultDialer(req *sesamepb.NetConnRequest_Dial) (Dialer, error) {
 	return &net.Dialer{
 		Timeout: req.GetTimeout().AsDuration(),
 	}, nil
 }
 
-func newStreamServerReader(stream rc.RemoteControl_NetConnServer) *grpcstream.Reader {
+func newStreamServerReader(stream sesamepb.RemoteControl_NetConnServer) *grpcstream.Reader {
 	return &grpcstream.Reader{
 		Stream: stream,
 		Factory: grpcstream.NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
-			var msg rc.NetConnRequest
+			var msg sesamepb.NetConnRequest
 			value = &msg
 			chunk = func() ([]byte, bool) {
-				if v, ok := msg.GetData().(*rc.NetConnRequest_Bytes); ok {
+				if v, ok := msg.GetData().(*sesamepb.NetConnRequest_Bytes); ok {
 					return v.Bytes, true
 				}
 				return nil, false
@@ -277,9 +275,9 @@ func newStreamServerReader(stream rc.RemoteControl_NetConnServer) *grpcstream.Re
 	}
 }
 
-func newStreamServerWriter(stream rc.RemoteControl_NetConnServer) io.Writer {
+func newStreamServerWriter(stream sesamepb.RemoteControl_NetConnServer) io.Writer {
 	return streamutil.ChunkWriter(func(b []byte) (int, error) {
-		if err := stream.Send(&rc.NetConnResponse{Data: &rc.NetConnResponse_Bytes{Bytes: b}}); err != nil {
+		if err := stream.Send(&sesamepb.NetConnResponse{Data: &sesamepb.NetConnResponse_Bytes{Bytes: b}}); err != nil {
 			return 0, err
 		}
 		return len(b), nil

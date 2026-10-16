@@ -9,18 +9,18 @@ import {
   NetConnResponse_ConnSchema,
   NetConnResponse_CapabilitiesSchema,
   NetConnResponse_ControlSchema,
-  NetConnResponse_Control_TLSUpgradedSchema,
-  NetConnResponse_Control_TLSUpgradeFailedSchema,
+  NetConnResponse_Control_TlsUpgradedSchema,
+  NetConnResponse_Control_TlsUpgradeFailedSchema,
   NetConnResponse_Control_WindowUpdateSchema,
   NetConnResponse_Control_HalfCloseSchema,
   NetConnResponse_Control_PongSchema,
 } from '../gen/sesame/v1alpha1/remotecontrol_pb';
 import {
-  TLSHandshakeResult,
-  TLSOptions,
-  TLSVersion,
-} from '../gen/sesame/tls/v1alpha1/tls_pb';
-import {ProxyResult} from '../gen/sesame/proxy/v1alpha1/proxy_pb';
+  TlsHandshakeResult,
+  TlsOptions,
+  TlsVersion,
+} from '../gen/sesame/v1alpha1/tls_pb';
+import {ProxyResult} from '../gen/sesame/v1alpha1/proxy_pb';
 import {StatusSchema} from '../gen/google/rpc/status_pb';
 import {ServerConfig} from '../config';
 import {FlowController} from './flowcontrol';
@@ -211,11 +211,11 @@ export function createRemoteControlService(
           assertBuiltinClientHelloHonorable(dialReq.tls.clientHello);
         }
         // Version-range validation at the API boundary, before any dialing:
-        // a floor above its ceiling can never negotiate. TLSVersion values
+        // a floor above its ceiling can never negotiate. TlsVersion values
         // are monotonic, so the enum compares directly.
         if (
-          dialReq.tls.minVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED &&
-          dialReq.tls.maxVersion !== TLSVersion.TLS_VERSION_UNSPECIFIED &&
+          dialReq.tls.minVersion !== TlsVersion.UNSPECIFIED &&
+          dialReq.tls.maxVersion !== TlsVersion.UNSPECIFIED &&
           dialReq.tls.minVersion > dialReq.tls.maxVersion
         ) {
           throw new ConnectError(
@@ -231,7 +231,7 @@ export function createRemoteControlService(
       // default applies.
       let activeSocket: net.Socket;
       let proxyResult: ProxyResult | undefined;
-      let tlsResult: TLSHandshakeResult | undefined;
+      let tlsResult: TlsHandshakeResult | undefined;
       const requestedTimeoutMs =
         dialReq.timeout !== undefined ? durationMs(dialReq.timeout) : 0;
       // A negative timeout is malformed input, not "unset": reject it
@@ -355,7 +355,6 @@ export function createRemoteControlService(
             tls: tlsResult,
             proxy: proxyResult,
             capabilities: serverCaps,
-            customAttributes: [],
           }),
         },
       });
@@ -534,7 +533,7 @@ export function createRemoteControlService(
 
       // In-stream TLS Upgrade handler
       const handleUpgradeTLS = async (
-        opts: TLSOptions | undefined,
+        opts: TlsOptions | undefined,
         requestId: bigint,
       ) => {
         if (!opts) {
@@ -580,7 +579,7 @@ export function createRemoteControlService(
                 value: create(NetConnResponse_ControlSchema, {
                   event: {
                     case: 'tlsUpgraded',
-                    value: create(NetConnResponse_Control_TLSUpgradedSchema, {
+                    value: create(NetConnResponse_Control_TlsUpgradedSchema, {
                       result,
                       requestId,
                     }),
@@ -601,7 +600,7 @@ export function createRemoteControlService(
                   event: {
                     case: 'tlsUpgradeFailed',
                     value: create(
-                      NetConnResponse_Control_TLSUpgradeFailedSchema,
+                      NetConnResponse_Control_TlsUpgradeFailedSchema,
                       {
                         error: create(StatusSchema, {
                           code: errCode,
@@ -747,7 +746,7 @@ export function createRemoteControlService(
                           case: 'pong',
                           value: create(NetConnResponse_Control_PongSchema, {
                             id: ctl.action.value.id,
-                            timestampNanos: ctl.action.value.timestampNanos,
+                            sendTime: ctl.action.value.sendTime,
                           }),
                         },
                       }),

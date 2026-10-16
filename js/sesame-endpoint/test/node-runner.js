@@ -18,12 +18,12 @@ const { createClient, Code, ConnectError } = require('@connectrpc/connect');
     NetConnRequestSchema,
     NetConnRequest_DialSchema,
     NetConnRequest_ControlSchema,
-    NetConnRequest_Control_UpgradeTLSSchema,
+    NetConnRequest_Control_UpgradeTlsSchema,
     NetConnRequest_Control_ResetSchema,
     NetConnRequest_Control_HalfCloseSchema,
     NetConnRequest_Control_PingSchema,
     NetConnRequest_CapabilitiesSchema,
-    TLSOptionsSchema,
+    TlsOptionsSchema,
     NetAddrSchema,
     ClientHelloSpecSchema,
     ProxyOptionsSchema,
@@ -154,8 +154,8 @@ async function run() {
       case: 'dial',
       value: create(NetConnRequest_DialSchema, {
         address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tlsPort}` }),
-        tls: create(TLSOptionsSchema, {
-          serverName: 'localhost',
+        tls: create(TlsOptionsSchema, {
+          sni: 'localhost',
           alpnProtocols: ['test-node'],
           insecureSkipVerify: true,
         }),
@@ -231,8 +231,8 @@ async function run() {
       case: 'dial',
       value: create(NetConnRequest_DialSchema, {
         address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tlsPort}` }),
-        tls: create(TLSOptionsSchema, {
-          serverName: 'localhost',
+        tls: create(TlsOptionsSchema, {
+          sni: 'localhost',
           insecureSkipVerify: true,
           clientHello: create(ClientHelloSpecSchema, {
             signatureAlgorithms: [0x0403],
@@ -279,7 +279,7 @@ async function run() {
       value: create(NetConnRequest_ControlSchema, {
         action: {
           case: 'upgradeTls',
-          value: create(NetConnRequest_Control_UpgradeTLSSchema, {}),
+          value: create(NetConnRequest_Control_UpgradeTlsSchema, {}),
         },
       }),
     },

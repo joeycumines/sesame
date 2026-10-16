@@ -14,7 +14,7 @@ import {
   NetConnRequestSchema,
   NetConnRequest_DialSchema,
   NetConnRequest_ControlSchema,
-  NetConnRequest_Control_UpgradeTLSSchema,
+  NetConnRequest_Control_UpgradeTlsSchema,
   NetConnRequest_Control_ResetSchema,
   NetConnRequest_Control_HalfCloseSchema,
   NetConnRequest_Control_PingSchema,
@@ -24,14 +24,14 @@ import {
 import {StatusSchema} from '../src/gen/google/rpc/status_pb';
 import {
   ClientHelloSpecSchema,
-  TLSOptionsSchema,
-  TLSVersion,
-} from '../src/gen/sesame/tls/v1alpha1/tls_pb';
+  TlsOptionsSchema,
+  TlsVersion,
+} from '../src/gen/sesame/v1alpha1/tls_pb';
 import {
   ProxyHop_Type,
   ProxyHopSchema,
   ProxyOptionsSchema,
-} from '../src/gen/sesame/proxy/v1alpha1/proxy_pb';
+} from '../src/gen/sesame/v1alpha1/proxy_pb';
 import {NetAddrSchema} from '../src/gen/sesame/type/netaddr_pb';
 import {createEndpointServer, EndpointServer} from '../src/server';
 import {parseConfig} from '../src/config';
@@ -404,8 +404,8 @@ describe('sesame-endpoint E2E Suite', () => {
               network: 'tcp',
               address: `127.0.0.1:${tlsEchoPort}`,
             }),
-            tls: create(TLSOptionsSchema, {
-              serverName: 'localhost',
+            tls: create(TlsOptionsSchema, {
+              sni: 'localhost',
               insecureSkipVerify: true,
               clientHello: create(ClientHelloSpecSchema, {
                 cipherSuites: [0x1301],
@@ -443,8 +443,8 @@ describe('sesame-endpoint E2E Suite', () => {
               network: 'tcp',
               address: `127.0.0.1:${tlsEchoPort}`,
             }),
-            tls: create(TLSOptionsSchema, {
-              serverName: 'localhost',
+            tls: create(TlsOptionsSchema, {
+              sni: 'localhost',
               alpnProtocols: ['test-proto'],
               insecureSkipVerify: true,
             }),
@@ -473,7 +473,7 @@ describe('sesame-endpoint E2E Suite', () => {
     const conn = first.value.data.value;
     expect(conn.tls).toBeDefined();
     expect(conn.tls?.negotiatedProtocol).toBe('test-proto');
-    expect(conn.tls?.serverName).toBe('localhost');
+    expect(conn.tls?.sni).toBe('localhost');
     expect(conn.tls?.appliedClientHello).toBeUndefined();
 
     // 2. Encrypted echo response
@@ -500,8 +500,8 @@ describe('sesame-endpoint E2E Suite', () => {
               network: 'tcp',
               address: `127.0.0.1:${tlsEchoPort}`,
             }),
-            tls: create(TLSOptionsSchema, {
-              serverName: 'localhost',
+            tls: create(TlsOptionsSchema, {
+              sni: 'localhost',
               alpnProtocols: [],
               insecureSkipVerify: true,
             }),
@@ -539,8 +539,8 @@ describe('sesame-endpoint E2E Suite', () => {
               network: 'tcp',
               address: `127.0.0.1:${tlsEchoPort}`,
             }),
-            tls: create(TLSOptionsSchema, {
-              serverName: 'localhost',
+            tls: create(TlsOptionsSchema, {
+              sni: 'localhost',
               insecureSkipVerify: true,
               clientHello: create(ClientHelloSpecSchema, {}),
             }),
@@ -587,8 +587,8 @@ describe('sesame-endpoint E2E Suite', () => {
               network: 'tcp',
               address: `127.0.0.1:${tlsEchoPort}`,
             }),
-            tls: create(TLSOptionsSchema, {
-              serverName: 'localhost',
+            tls: create(TlsOptionsSchema, {
+              sni: 'localhost',
               insecureSkipVerify: true,
               clientHello: create(ClientHelloSpecSchema, {
                 signatureAlgorithms: [0x0403],
@@ -1434,7 +1434,7 @@ describe('sesame-endpoint E2E Suite', () => {
         '220',
       );
 
-      // 4. Send in-stream UpgradeTLS command, tagged with a
+      // 4. Send in-stream upgrade_tls command, tagged with a
       // correlation id the server must echo verbatim.
       const upgradeRequestId = 4242n;
       reqStream.push(
@@ -1444,9 +1444,9 @@ describe('sesame-endpoint E2E Suite', () => {
             value: create(NetConnRequest_ControlSchema, {
               action: {
                 case: 'upgradeTls',
-                value: create(NetConnRequest_Control_UpgradeTLSSchema, {
-                  options: create(TLSOptionsSchema, {
-                    serverName: 'localhost',
+                value: create(NetConnRequest_Control_UpgradeTlsSchema, {
+                  options: create(TlsOptionsSchema, {
+                    sni: 'localhost',
                     insecureSkipVerify: true,
                   }),
                   requestId: upgradeRequestId,
@@ -1785,7 +1785,7 @@ describe('sesame-endpoint E2E Suite', () => {
             value: create(NetConnRequest_ControlSchema, {
               action: {
                 case: 'upgradeTls',
-                value: create(NetConnRequest_Control_UpgradeTLSSchema, {}),
+                value: create(NetConnRequest_Control_UpgradeTlsSchema, {}),
               },
             }),
           },
@@ -1878,9 +1878,9 @@ describe('sesame-endpoint E2E Suite', () => {
             value: create(NetConnRequest_ControlSchema, {
               action: {
                 case: 'upgradeTls',
-                value: create(NetConnRequest_Control_UpgradeTLSSchema, {
-                  options: create(TLSOptionsSchema, {
-                    serverName: 'localhost',
+                value: create(NetConnRequest_Control_UpgradeTlsSchema, {
+                  options: create(TlsOptionsSchema, {
+                    sni: 'localhost',
                     insecureSkipVerify: true,
                   }),
                 }),
@@ -1974,9 +1974,9 @@ describe('sesame-endpoint E2E Suite', () => {
             value: create(NetConnRequest_ControlSchema, {
               action: {
                 case: 'upgradeTls',
-                value: create(NetConnRequest_Control_UpgradeTLSSchema, {
-                  options: create(TLSOptionsSchema, {
-                    serverName: 'localhost',
+                value: create(NetConnRequest_Control_UpgradeTlsSchema, {
+                  options: create(TlsOptionsSchema, {
+                    sni: 'localhost',
                     insecureSkipVerify: true,
                   }),
                   requestId: failRequestId,
@@ -2053,7 +2053,7 @@ describe('sesame-endpoint E2E Suite', () => {
 
     // 2. Send Ping
     const pingId = 4242n;
-    const pingTs = 123456789n;
+    const pingSendTime = {seconds: 1234567n, nanos: 89};
     reqStream.push(
       create(NetConnRequestSchema, {
         data: {
@@ -2063,7 +2063,7 @@ describe('sesame-endpoint E2E Suite', () => {
               case: 'ping',
               value: create(NetConnRequest_Control_PingSchema, {
                 id: pingId,
-                timestampNanos: pingTs,
+                sendTime: pingSendTime,
               }),
             },
           }),
@@ -2077,7 +2077,8 @@ describe('sesame-endpoint E2E Suite', () => {
     const ctl = pongResp.value.data.value;
     expect(ctl.event.case).toBe('pong');
     expect(ctl.event.value.id).toBe(pingId);
-    expect(ctl.event.value.timestampNanos).toBe(pingTs);
+    expect(ctl.event.value.sendTime?.seconds).toBe(pingSendTime.seconds);
+    expect(ctl.event.value.sendTime?.nanos).toBe(pingSendTime.nanos);
 
     reqStream.close();
   });
@@ -2454,10 +2455,10 @@ describe('sesame-endpoint E2E Suite', () => {
               network: 'tcp',
               address: '127.0.0.1:1',
             }),
-            tls: create(TLSOptionsSchema, {
-              serverName: 'example.com',
-              minVersion: TLSVersion.TLS_1_3,
-              maxVersion: TLSVersion.TLS_1_2,
+            tls: create(TlsOptionsSchema, {
+              sni: 'example.com',
+              minVersion: TlsVersion.TLS_1_3,
+              maxVersion: TlsVersion.TLS_1_2,
             }),
           }),
         },
@@ -2763,7 +2764,7 @@ describe('sesame-endpoint E2E Suite', () => {
                 case: 'ping',
                 value: create(NetConnRequest_Control_PingSchema, {
                   id: 1n,
-                  timestampNanos: 1n,
+                  sendTime: {seconds: 1n, nanos: 0},
                 }),
               },
             }),

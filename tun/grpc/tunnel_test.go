@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/fullstorydev/grpchan/grpchantesting"
 	"github.com/joeycumines/sesame/internal/testutil"
-	"github.com/joeycumines/sesame/type/grpctunnel"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	refl "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
@@ -30,7 +30,7 @@ func ExampleServeTunnel_reflection() {
 			reflection.Register(h)
 			grpchantesting.RegisterTestServiceServer(h, &tunneledService)
 		}
-		tunnelService = &mockServer{openTunnel: func(stream grpctunnel.TunnelService_OpenTunnelServer) error {
+		tunnelService = &mockServer{openTunnel: func(stream typepb.TunnelService_OpenTunnelServer) error {
 			return ServeTunnel(
 				OptTunnel.ServerStream(stream),
 				OptTunnel.Service(handlerMapConfig),
@@ -39,11 +39,11 @@ func ExampleServeTunnel_reflection() {
 	)
 
 	conn := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) {
-		grpctunnel.RegisterTunnelServiceServer(srv, tunnelService)
+		typepb.RegisterTunnelServiceServer(srv, tunnelService)
 	})
 	defer conn.Close()
 
-	tunnel, err := grpctunnel.NewTunnelServiceClient(conn).OpenTunnel(context.Background())
+	tunnel, err := typepb.NewTunnelServiceClient(conn).OpenTunnel(context.Background())
 	if err != nil {
 		panic(err)
 	}
@@ -102,7 +102,7 @@ func Test_maxChunkSize(t *testing.T) {
 			math.MinInt32: 0,
 		}
 		for k := range encodedSizes {
-			b, err := proto.Marshal(&grpctunnel.EncodedMessage{Size: k})
+			b, err := proto.Marshal(&typepb.EncodedMessage{Size: k})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -130,7 +130,7 @@ func Test_maxChunkSize(t *testing.T) {
 			math.MaxUint64: 0,
 		}
 		for k := range encodedSizes {
-			b, err := proto.Marshal(&grpctunnel.ClientToServer{StreamId: k})
+			b, err := proto.Marshal(&typepb.OpenTunnelRequest{StreamId: int64(k)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -157,9 +157,9 @@ func Test_maxChunkSize(t *testing.T) {
 		{
 			Name: `client message`,
 			Init: func() proto.Message {
-				return &grpctunnel.ClientToServer{
-					StreamId: fattestUint64,
-					Frame: &grpctunnel.ClientToServer_Message{Message: &grpctunnel.EncodedMessage{
+				return &typepb.OpenTunnelRequest{
+					StreamId: int64(fattestUint64),
+					Frame: &typepb.OpenTunnelRequest_Message{Message: &typepb.EncodedMessage{
 						Size: fattestInt32,
 						Data: make([]byte, maxChunkSizeBase),
 					}},
@@ -169,18 +169,18 @@ func Test_maxChunkSize(t *testing.T) {
 		{
 			Name: `client message data`,
 			Init: func() proto.Message {
-				return &grpctunnel.ClientToServer{
-					StreamId: fattestUint64,
-					Frame:    &grpctunnel.ClientToServer_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
+				return &typepb.OpenTunnelRequest{
+					StreamId: int64(fattestUint64),
+					Frame:    &typepb.OpenTunnelRequest_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
 				}
 			},
 		},
 		{
 			Name: `server message`,
 			Init: func() proto.Message {
-				return &grpctunnel.ServerToClient{
-					StreamId: fattestUint64,
-					Frame: &grpctunnel.ServerToClient_Message{Message: &grpctunnel.EncodedMessage{
+				return &typepb.OpenTunnelResponse{
+					StreamId: int64(fattestUint64),
+					Frame: &typepb.OpenTunnelResponse_Message{Message: &typepb.EncodedMessage{
 						Size: fattestInt32,
 						Data: make([]byte, maxChunkSizeBase),
 					}},
@@ -190,9 +190,9 @@ func Test_maxChunkSize(t *testing.T) {
 		{
 			Name: `server message data`,
 			Init: func() proto.Message {
-				return &grpctunnel.ServerToClient{
-					StreamId: fattestUint64,
-					Frame:    &grpctunnel.ServerToClient_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
+				return &typepb.OpenTunnelResponse{
+					StreamId: int64(fattestUint64),
+					Frame:    &typepb.OpenTunnelResponse_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
 				}
 			},
 		},

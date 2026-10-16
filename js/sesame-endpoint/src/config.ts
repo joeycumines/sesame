@@ -269,7 +269,7 @@ Options:
   --initial-window-size <bytes>   Initial stream flow control credit (default: 65535, max: 4194304)
   --read-timeout-ms <ms>          Socket read timeout in ms (default: 30000, 0=disable)
   --dial-timeout-ms <ms>          Default upstream dial timeout in ms (default: 10000)
-  --enable-opportunistic-tls <b>  Enable in-stream UpgradeTLS (default: true)
+  --enable-opportunistic-tls <b>  Enable in-stream upgrade_tls (default: true)
   --enable-flow-control <b>       Enable stream flow control (default: true)
   --allowed-networks <list>       Comma-separated allowed target networks (default: tcp,tcp4,tcp6)
   -h, --help                      Show this help message

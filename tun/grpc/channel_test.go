@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/joeycumines/sesame/internal/testutil"
-	"github.com/joeycumines/sesame/type/grpctunnel"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -30,7 +30,7 @@ func Test_readMsgLocked_contextCancellation(t *testing.T) {
 		ctx:            ctx,
 		cncl:           cancel,
 		ch:             ch,
-		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:         make(chan *typepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal:   make(chan struct{}),
 		doneSignal:     make(chan struct{}),
 		isServerStream: true,
@@ -73,7 +73,7 @@ func Test_readMsgLocked_channelContextCancellation(t *testing.T) {
 		ctx:            ctx,
 		cncl:           cancel,
 		ch:             ch,
-		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:         make(chan *typepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal:   make(chan struct{}),
 		doneSignal:     make(chan struct{}),
 		isServerStream: true,
@@ -115,7 +115,7 @@ func Test_readMsgLocked_bufferCloseTakesPriority(t *testing.T) {
 		ctx:            ctx,
 		cncl:           cancel,
 		ch:             ch,
-		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:         make(chan *typepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal:   make(chan struct{}),
 		doneSignal:     make(chan struct{}),
 		isServerStream: true,
@@ -151,7 +151,7 @@ func Test_acceptServerFrame_closedBufferRecover(t *testing.T) {
 		cncl:         cancel,
 		ch:           ch,
 		streamID:     1,
-		buffer:       make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:       make(chan *typepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal: make(chan struct{}),
 		doneSignal:   make(chan struct{}),
 	}
@@ -169,9 +169,9 @@ func Test_acceptServerFrame_closedBufferRecover(t *testing.T) {
 				t.Fatalf("acceptServerFrame panicked: %v", r)
 			}
 		}()
-		st.acceptServerFrame(&grpctunnel.ServerToClient{
+		st.acceptServerFrame(&typepb.OpenTunnelResponse{
 			StreamId: 1,
-			Frame: &grpctunnel.ServerToClient_MessageData{
+			Frame: &typepb.OpenTunnelResponse_MessageData{
 				MessageData: []byte("test"),
 			},
 		})
@@ -188,30 +188,30 @@ func Test_acceptServerFrame_fullBuffer_contextCancel(t *testing.T) {
 	ch := &Channel{
 		ctx:          chCtx,
 		streams:      make(map[uint64]*tunnelClientStream),
-		updateWindow: func(msg *grpctunnel.ServerToClient) {},
+		updateWindow: func(msg *typepb.OpenTunnelResponse) {},
 	}
 	st := &tunnelClientStream{
 		ctx:          ctx,
 		cncl:         cancel,
 		ch:           ch,
 		streamID:     1,
-		buffer:       make(chan *grpctunnel.ServerToClient, 1), // tiny buffer
+		buffer:       make(chan *typepb.OpenTunnelResponse, 1), // tiny buffer
 		headerSignal: make(chan struct{}),
 		doneSignal:   make(chan struct{}),
 	}
 
 	// Fill the buffer.
-	st.buffer <- &grpctunnel.ServerToClient{
+	st.buffer <- &typepb.OpenTunnelResponse{
 		StreamId: 1,
-		Frame:    &grpctunnel.ServerToClient_MessageData{MessageData: []byte("fill")},
+		Frame:    &typepb.OpenTunnelResponse_MessageData{MessageData: []byte("fill")},
 	}
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		st.acceptServerFrame(&grpctunnel.ServerToClient{
+		st.acceptServerFrame(&typepb.OpenTunnelResponse{
 			StreamId: 1,
-			Frame:    &grpctunnel.ServerToClient_MessageData{MessageData: []byte("overflow")},
+			Frame:    &typepb.OpenTunnelResponse_MessageData{MessageData: []byte("overflow")},
 		})
 	}()
 
@@ -238,30 +238,30 @@ func Test_acceptServerFrame_finishStreamBreaksDeadlock(t *testing.T) {
 	ch := &Channel{
 		ctx:          chCtx,
 		streams:      make(map[uint64]*tunnelClientStream),
-		updateWindow: func(msg *grpctunnel.ServerToClient) {},
+		updateWindow: func(msg *typepb.OpenTunnelResponse) {},
 	}
 	st := &tunnelClientStream{
 		ctx:          ctx,
 		cncl:         cancel,
 		ch:           ch,
 		streamID:     1,
-		buffer:       make(chan *grpctunnel.ServerToClient, 1),
+		buffer:       make(chan *typepb.OpenTunnelResponse, 1),
 		headerSignal: make(chan struct{}),
 		doneSignal:   make(chan struct{}),
 	}
 
 	// Fill the buffer to force blocking in acceptServerFrame.
-	st.buffer <- &grpctunnel.ServerToClient{
+	st.buffer <- &typepb.OpenTunnelResponse{
 		StreamId: 1,
-		Frame:    &grpctunnel.ServerToClient_MessageData{MessageData: []byte("fill")},
+		Frame:    &typepb.OpenTunnelResponse_MessageData{MessageData: []byte("fill")},
 	}
 
 	acceptDone := make(chan struct{})
 	go func() {
 		defer close(acceptDone)
-		st.acceptServerFrame(&grpctunnel.ServerToClient{
+		st.acceptServerFrame(&typepb.OpenTunnelResponse{
 			StreamId: 1,
-			Frame:    &grpctunnel.ServerToClient_MessageData{MessageData: []byte("overflow")},
+			Frame:    &typepb.OpenTunnelResponse_MessageData{MessageData: []byte("overflow")},
 		})
 	}()
 
@@ -316,11 +316,11 @@ func Test_channelClose_pendingRecv(t *testing.T) {
 	}, &holdOpenImpl)
 
 	cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) {
-		grpctunnel.RegisterTunnelServiceServer(srv, &ts)
+		typepb.RegisterTunnelServiceServer(srv, &ts)
 	})
 	defer cc.Close()
 
-	tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+	tunnel, err := typepb.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,11 +393,11 @@ func Test_channelClose_pendingRecv_withHeader(t *testing.T) {
 	}, &holdOpenImpl2)
 
 	cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) {
-		grpctunnel.RegisterTunnelServiceServer(srv, &ts)
+		typepb.RegisterTunnelServiceServer(srv, &ts)
 	})
 	defer cc.Close()
 
-	tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+	tunnel, err := typepb.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,10 +473,10 @@ func Test_concurrentCancelAndFinish(t *testing.T) {
 		}, &concCloseImpl)
 
 		cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) {
-			grpctunnel.RegisterTunnelServiceServer(srv, &ts)
+			typepb.RegisterTunnelServiceServer(srv, &ts)
 		})
 
-		tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+		tunnel, err := typepb.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -548,7 +548,7 @@ func Test_readMsgLocked_trailerVisibleAtEOF(t *testing.T) {
 		cncl:           cancel,
 		ch:             ch,
 		streamID:       1,
-		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:         make(chan *typepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal:   make(chan struct{}),
 		doneSignal:     make(chan struct{}),
 		isServerStream: true,

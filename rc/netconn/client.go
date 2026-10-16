@@ -5,11 +5,9 @@ import (
 	"fmt"
 	grpcstream "github.com/joeycumines/sesame/grpc"
 	"github.com/joeycumines/sesame/ionet"
-	"github.com/joeycumines/sesame/rc"
-	sesameproxy "github.com/joeycumines/sesame/rc/proxy"
-	sesametls "github.com/joeycumines/sesame/rc/tls"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	streamutil "github.com/joeycumines/sesame/stream"
-	"github.com/joeycumines/sesame/type/netaddr"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"io"
@@ -20,7 +18,7 @@ import (
 )
 
 type (
-	// Client implements Dialer using rc.RemoteControlClient's NetConn method.
+	// Client implements Dialer using sesamepb.RemoteControlClient's NetConn method.
 	//
 	// ClosePolicy configures the legacy (capability-less) conn's close
 	// behavior. Unset, it defaults to a graceful close bounded by
@@ -31,26 +29,26 @@ type (
 		API          ClientAPI
 		Timeout      time.Duration
 		ClosePolicy  streamutil.ClosePolicy
-		TLS          *sesametls.TLSOptions
-		Proxy        *sesameproxy.ProxyOptions
-		Capabilities *rc.NetConnRequest_Capabilities
+		TLS          *sesamepb.TlsOptions
+		Proxy        *sesamepb.ProxyOptions
+		Capabilities *sesamepb.NetConnRequest_Capabilities
 	}
-	// ClientAPI models a subset of rc.RemoteControlClient, as used by Client.
+	// ClientAPI models a subset of sesamepb.RemoteControlClient, as used by Client.
 	ClientAPI interface {
-		NetConn(ctx context.Context, opts ...grpc.CallOption) (rc.RemoteControl_NetConnClient, error)
+		NetConn(ctx context.Context, opts ...grpc.CallOption) (sesamepb.RemoteControl_NetConnClient, error)
 	}
 
 	netConn struct {
 		netConnI
-		req *rc.NetConnRequest_Dial
-		res *rc.NetConnResponse_Conn
+		req *sesamepb.NetConnRequest_Dial
+		res *sesamepb.NetConnResponse_Conn
 	}
 
 	clientReader struct{ ioReader }
 
 	clientWriter struct {
 		ioWriter
-		stream rc.RemoteControl_NetConnClient
+		stream sesamepb.RemoteControl_NetConnClient
 	}
 
 	netConnI net.Conn
@@ -66,7 +64,7 @@ var (
 	_ net.Conn            = (*netConn)(nil)
 	_ Dialer              = (*Client)(nil)
 	_ ConnTransformResult = (*netConn)(nil)
-	_                     = Client{API: rc.RemoteControlClient(nil)}
+	_                     = Client{API: sesamepb.RemoteControlClient(nil)}
 )
 
 // DefaultCloseDrainTimeout bounds the legacy (capability-less) conn's
@@ -91,8 +89,8 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 		return nil, err
 	}
 
-	conn := netConn{req: &rc.NetConnRequest_Dial{
-		Address: &netaddr.NetAddr{
+	conn := netConn{req: &sesamepb.NetConnRequest_Dial{
+		Address: &typepb.NetAddr{
 			Network: network,
 			Address: address,
 		},
@@ -105,7 +103,7 @@ func (x *Client) DialContext(ctx context.Context, network, address string) (net.
 	}
 
 	// 1. NetConnRequest.dial
-	if err := stream.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Dial_{Dial: conn.req}}); err != nil {
+	if err := stream.Send(&sesamepb.NetConnRequest{Data: &sesamepb.NetConnRequest_Dial_{Dial: conn.req}}); err != nil {
 		return nil, err
 	}
 
@@ -189,17 +187,17 @@ func (x *netConn) LocalAddr() net.Addr { return x.res.GetLocal().AsGoNetAddr() }
 
 func (x *netConn) RemoteAddr() net.Addr { return x.res.GetRemote().AsGoNetAddr() }
 
-func (x *netConn) TLSHandshakeResult() *sesametls.TLSHandshakeResult { return x.res.GetTls() }
+func (x *netConn) TlsHandshakeResult() *sesamepb.TlsHandshakeResult { return x.res.GetTls() }
 
-func (x *netConn) ProxyResult() *sesameproxy.ProxyResult { return x.res.GetProxy() }
+func (x *netConn) ProxyResult() *sesamepb.ProxyResult { return x.res.GetProxy() }
 
-func (x *netConn) ServerCapabilities() *rc.NetConnResponse_Capabilities {
+func (x *netConn) ServerCapabilities() *sesamepb.NetConnResponse_Capabilities {
 	return x.res.GetCapabilities()
 }
 
 func (x *netConn) String() string {
 	var s strings.Builder
-	s.WriteString(rc.RemoteControl_ServiceDesc.ServiceName)
+	s.WriteString(sesamepb.RemoteControl_ServiceDesc.ServiceName)
 	s.WriteString(`.NetConn(`)
 	w := func() func(k string, v bool) {
 		var ok bool
@@ -260,14 +258,14 @@ func (x *clientReader) Close() error { return x.CloseWithError(nil) }
 
 func (x *clientReader) CloseWithError(error) error { return nil }
 
-func newStreamClientReader(stream rc.RemoteControl_NetConnClient) *grpcstream.Reader {
+func newStreamClientReader(stream sesamepb.RemoteControl_NetConnClient) *grpcstream.Reader {
 	return &grpcstream.Reader{
 		Stream: stream,
 		Factory: grpcstream.NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
-			var msg rc.NetConnResponse
+			var msg sesamepb.NetConnResponse
 			value = &msg
 			chunk = func() ([]byte, bool) {
-				if v, ok := msg.GetData().(*rc.NetConnResponse_Bytes); ok {
+				if v, ok := msg.GetData().(*sesamepb.NetConnResponse_Bytes); ok {
 					return v.Bytes, true
 				}
 				return nil, false
@@ -277,9 +275,9 @@ func newStreamClientReader(stream rc.RemoteControl_NetConnClient) *grpcstream.Re
 	}
 }
 
-func newStreamClientWriter(stream rc.RemoteControl_NetConnClient) io.Writer {
+func newStreamClientWriter(stream sesamepb.RemoteControl_NetConnClient) io.Writer {
 	return streamutil.ChunkWriter(func(b []byte) (int, error) {
-		if err := stream.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Bytes{Bytes: b}}); err != nil {
+		if err := stream.Send(&sesamepb.NetConnRequest{Data: &sesamepb.NetConnRequest_Bytes{Bytes: b}}); err != nil {
 			return 0, err
 		}
 		return len(b), nil

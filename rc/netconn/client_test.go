@@ -2,8 +2,8 @@ package netconn
 
 import (
 	"fmt"
-	"github.com/joeycumines/sesame/rc"
-	"github.com/joeycumines/sesame/type/netaddr"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"testing"
 	"time"
@@ -31,19 +31,19 @@ func TestNetConn_String(t *testing.T) {
 		{
 			Name: `set`,
 			Conn: &netConn{
-				req: &rc.NetConnRequest_Dial{
-					Address: &netaddr.NetAddr{
+				req: &sesamepb.NetConnRequest_Dial{
+					Address: &typepb.NetAddr{
 						Network: clientNetworkValue,
 						Address: clientAddressValue,
 					},
 					Timeout: durationpb.New(clientTimeout),
 				},
-				res: &rc.NetConnResponse_Conn{
-					Local: &netaddr.NetAddr{
+				res: &sesamepb.NetConnResponse_Conn{
+					Local: &typepb.NetAddr{
 						Network: networkValue,
 						Address: dialerValue,
 					},
-					Remote: &netaddr.NetAddr{
+					Remote: &typepb.NetAddr{
 						Network: networkValue,
 						Address: listenerValue,
 					},
