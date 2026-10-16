@@ -267,7 +267,7 @@ export function assertBuiltinClientHelloHonorable(
   // targetSize: must be 0 (no padding).
   if (spec.targetSize !== 0) {
     throw new ConnectError(
-      'sesame/rc/netconn: builtin engine cannot honor client_hello.pad_to_size; custom TLSProvider required',
+      'sesame/rc/netconn: builtin engine cannot honor client_hello.target_size; custom TLSProvider required',
       Code.FailedPrecondition,
     );
   }

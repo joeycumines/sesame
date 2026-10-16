@@ -173,7 +173,7 @@ func ValidateClientHelloSpec(spec *sesamepb.ClientHelloSpec) error {
 		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: session_id_length out of range [-1, 32]: %d", sid)
 	}
 	if spec.GetTargetSize() < 0 {
-		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: pad_to_size must not be negative: %d", spec.GetTargetSize())
+		return status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: target_size must not be negative: %d", spec.GetTargetSize())
 	}
 	return nil
 }
@@ -269,10 +269,10 @@ func ApplyGoClientHelloSpec(spec *sesamepb.ClientHelloSpec, cfg *cryptotls.Confi
 			"sesame/rc/netconn: Go crypto/tls always uses TLS 1.2 as the ClientHello legacy_version; cannot honor custom legacy_version")
 	}
 
-	// --- pad_to_size ---
+	// --- target_size ---
 	if spec.GetTargetSize() != 0 {
 		return status.Error(codes.FailedPrecondition,
-			"sesame/rc/netconn: Go crypto/tls provides no ClientHello padding control; cannot honor pad_to_size")
+			"sesame/rc/netconn: Go crypto/tls provides no ClientHello padding control; cannot honor client_hello.target_size")
 	}
 
 	return nil

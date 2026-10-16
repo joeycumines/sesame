@@ -560,7 +560,7 @@ func specSummary(spec *sesamepb.ClientHelloSpec) map[string]interface{} {
 		out["legacy_version"] = spec.LegacyVersion.String()
 	}
 	if spec.TargetSize != 0 {
-		out["pad_to_size"] = spec.TargetSize
+		out["target_size"] = spec.TargetSize
 	}
 	return out
 }
@@ -589,7 +589,7 @@ func runGoEngine(ctx context.Context, grpcAddr string, cert cryptotls.Certificat
 		{"fc-sigalgs", "fail-closed: non-empty signature_algorithms", &sesamepb.ClientHelloSpec{SignatureAlgorithms: []int32{0x0403}}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
 		{"fc-extensions", "fail-closed: non-empty extensions", &sesamepb.ClientHelloSpec{Extensions: []*sesamepb.ClientHelloExtension{{Type: 43}}}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
 		{"fc-session-id", "fail-closed: session_id_length=-1", &sesamepb.ClientHelloSpec{SessionIdLength: -1}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
-		{"fc-pad", "fail-closed: pad_to_size=512", &sesamepb.ClientHelloSpec{TargetSize: 512}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
+		{"fc-pad", "fail-closed: target_size=512", &sesamepb.ClientHelloSpec{TargetSize: 512}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
 		{"fc-legacy-version", "fail-closed: legacy_version=TLS_1_2", &sesamepb.ClientHelloSpec{LegacyVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_2}, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED},
 	}
 	for _, fc := range failClosed {
@@ -605,7 +605,7 @@ func runGoEngine(ctx context.Context, grpcAddr string, cert cryptotls.Certificat
 		{"inv-cipher-range", "invalid: cipher suite 1<<20", &sesamepb.ClientHelloSpec{CipherSuites: []int32{1 << 20}}},
 		{"inv-group-negative", "invalid: group -1", &sesamepb.ClientHelloSpec{SupportedGroups: []int32{-1}}},
 		{"inv-session-id-33", "invalid: session_id_length=33", &sesamepb.ClientHelloSpec{SessionIdLength: 33}},
-		{"inv-pad-negative", "invalid: pad_to_size=-1", &sesamepb.ClientHelloSpec{TargetSize: -1}},
+		{"inv-pad-negative", "invalid: target_size=-1", &sesamepb.ClientHelloSpec{TargetSize: -1}},
 	}
 	for _, iv := range invalid {
 		scenarios = append(scenarios, runFailClosed(ctx, grpcAddr, iv.id, iv.name, iv.spec, sesamepb.TlsVersion_TLS_VERSION_UNSPECIFIED, codes.InvalidArgument))

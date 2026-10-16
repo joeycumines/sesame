@@ -57,7 +57,7 @@ all: lint build test
 clean: sesame-endpoint.clean
 
 .PHONY: lint
-lint: vet staticcheck sesame-endpoint.lint
+lint: vet staticcheck proto-lint sesame-endpoint.lint
 
 .PHONY: build
 build: sesame-endpoint.build
