@@ -443,8 +443,7 @@ components:
             resolution service at these type URLs was considered but Protobuf never
             implemented one and considers contacting these URLs to be problematic and
             a potential security issue. Do not attempt to contact type URLs.
-      additionalProperties:
-        type: object
+      additionalProperties: true
       description: |-
         `Any` contains an arbitrary serialized protocol buffer message along with a
         URL that describes the type of the serialized message.
