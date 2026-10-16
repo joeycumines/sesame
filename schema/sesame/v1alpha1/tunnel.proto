@@ -2,76 +2,132 @@ syntax = "proto3";
 
 package sesame.v1alpha1;
 
+import "google/api/field_behavior.proto";
 import "google/rpc/status.proto";
 import "sesame/type/grpctunnel.proto";
 
-option go_package = "github.com/joeycumines/sesame/tun";
+option go_package = "github.com/joeycumines/sesame/sesamepb";
+option java_multiple_files = true;
+option java_outer_classname = "TunnelProto";
+option java_package = "io.github.joeycumines.sesame.v1alpha1";
 
+// TunnelService orchestrates access to a remote's endpoints, via the
+// tunneling protocols in sesame.type.
 service TunnelService {
-  // Orchestrates Stream connections.
+  // OpenTunnel orchestrates Stream connections.
   // Operates in a bi-directional request-response manner, with paired fields for each request and response, and a
-  // <field>_buffer in value in the connect request, indicating the number of concurrent request/responses per pair.
-  rpc Tunnel (stream TunnelRequest) returns (stream TunnelResponse) {}
-  // Provides dedicated bi-directional streaming (reverse dialed).
-  rpc Stream (stream StreamRequest) returns (stream StreamResponse) {}
+  // stream_buffer value in the connect request, indicating the number of concurrent streams per pair.
+  rpc OpenTunnel(stream OpenTunnelRequest) returns (stream OpenTunnelResponse) {}
+
+  // OpenStream provides dedicated bi-directional streaming (reverse dialed).
+  rpc OpenStream(stream OpenStreamRequest) returns (stream OpenStreamResponse) {}
 }
 
-message TunnelRequest {
-  uint64 id = 1;
+// OpenTunnelRequest models a message sent from a TunnelService.OpenTunnel client to the server.
+message OpenTunnelRequest {
+  // Stream identifier, pairing requests with responses. Must be non-zero and
+  // unique within the stream.
+  int64 id = 1 [(google.api.field_behavior) = OPTIONAL];
+
   oneof data {
-    Connect connect = 2; // request
-    Stream stream = 3; // response (only after stream successfully connected or error)
-  };
-  message Connect {
-    string remote = 1;
-    // Maximum number of concurrent stream requests.
-    int32 stream_buffer = 2;
+    // Connect opens the paired stream for a remote.
+    Connect connect = 2;
+
+    // Stream reports a stream's outcome (only after the stream
+    // successfully connected or errored).
+    Stream stream = 3;
   }
+
+  // Connect models the initial request, opening the remote's streams.
+  message Connect {
+    // The remote to connect to, by resource name.
+    // Format: namespaces/{namespace}/remotes/{remote}
+    string remote = 1 [(google.api.field_behavior) = REQUIRED];
+
+    // Maximum number of concurrent streams.
+    int32 stream_buffer = 2 [(google.api.field_behavior) = OPTIONAL];
+  }
+
+  // Stream reports a stream's terminal state.
   message Stream {
-    google.rpc.Status error = 1;
+    // Terminal error, if any; any error results in stream termination.
+    google.rpc.Status error = 1 [(google.api.field_behavior) = OPTIONAL];
   }
 }
 
-message TunnelResponse {
-  uint64 id = 1;
+// OpenTunnelResponse models a message sent from a TunnelService.OpenTunnel server to the client.
+message OpenTunnelResponse {
+  // Stream identifier, pairing responses with requests, echoing
+  // OpenTunnelRequest.id.
+  int64 id = 1;
+
   oneof data {
-    Connect connect = 2; // response
-    Stream stream = 3; // request
-  };
-  message Connect {
-    // any error results in stream termination
+    // Connect acknowledges the initial request.
+    Connect connect = 2;
+
+    // Stream initiates a new (reverse dialed) stream.
+    Stream stream = 3;
   }
-  // Models a request to initialise a new stream.
+
+  // Connect acknowledges the initial request; any error results in stream
+  // termination.
+  message Connect {}
+
+  // Stream models a request to initialise a new stream.
   message Stream {
-    // The target endpoint.
+    // The target endpoint, by resource name.
+    // Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
     string endpoint = 1;
   }
 }
 
-message StreamRequest {
+// OpenStreamRequest models a message sent from a TunnelService.OpenStream client to the server.
+message OpenStreamRequest {
   oneof data {
-    Connect connect = 1; // request
-    Dial dial = 2; // response
-    type.ServerToClient tunnel = 3;
-  };
+    // Connect opens the dedicated stream for a remote.
+    Connect connect = 1;
+
+    // Dial acknowledges the connection, or reports its failure (any error
+    // results in stream termination).
+    Dial dial = 2;
+
+    // Tunnel carries the tunneled frames, flowing server to client.
+    type.OpenReverseTunnelRequest tunnel = 3;
+  }
+
+  // Connect models the initial request.
   message Connect {
-    string remote = 1;
+    // The remote to connect to, by resource name.
+    // Format: namespaces/{namespace}/remotes/{remote}
+    string remote = 1 [(google.api.field_behavior) = REQUIRED];
   }
-  message Dial {
-    // any error results in stream termination
-  }
+
+  // Dial acknowledges the connection; any error results in stream
+  // termination.
+  message Dial {}
 }
 
-message StreamResponse {
+// OpenStreamResponse models a message sent from a TunnelService.OpenStream server to the client.
+message OpenStreamResponse {
   oneof data {
-    Connect connect = 1; // response
-    Dial dial = 2; // request
-    type.ClientToServer tunnel = 3;
-  };
-  message Connect {
-    // any error results in stream termination
+    // Connect acknowledges the initial request; any error results in
+    // stream termination.
+    Connect connect = 1;
+
+    // Dial initiates the reverse-dialed stream.
+    Dial dial = 2;
+
+    // Tunnel carries the tunneled frames, flowing client to server.
+    type.OpenReverseTunnelResponse tunnel = 3;
   }
+
+  // Connect acknowledges the initial request.
+  message Connect {}
+
+  // Dial models a request to initialise the reverse-dialed stream.
   message Dial {
+    // The target endpoint, by resource name.
+    // Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
     string endpoint = 1;
   }
 }

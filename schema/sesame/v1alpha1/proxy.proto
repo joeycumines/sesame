@@ -1,10 +1,14 @@
 syntax = "proto3";
 
-package sesame.proxy.v1alpha1;
+package sesame.v1alpha1;
 
+import "google/api/field_behavior.proto";
 import "sesame/type/netaddr.proto";
 
-option go_package = "github.com/joeycumines/sesame/rc/proxy";
+option go_package = "github.com/joeycumines/sesame/sesamepb";
+option java_multiple_files = true;
+option java_outer_classname = "ProxyProto";
+option java_package = "io.github.joeycumines.sesame.v1alpha1";
 
 // ProxyOptions specifies an ordered sequence of intermediate egress proxies.
 message ProxyOptions {
@@ -14,7 +18,7 @@ message ProxyOptions {
   // is a server resource commitment: implementations SHOULD enforce a
   // maximum (the reference bound is 8) and MUST reject requests exceeding
   // their bound with INVALID_ARGUMENT.
-  repeated ProxyHop hops = 1;
+  repeated ProxyHop hops = 1 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // ProxyHop describes one intermediate proxy traversal.
@@ -27,8 +31,12 @@ message ProxyHop {
   enum Type {
     // Default value. Invalid in a well-formed hop.
     TYPE_UNSPECIFIED = 0;
-    HTTP_CONNECT = 1;
-    SOCKS5 = 2;
+
+    // HTTP CONNECT tunneling, as in RFC 7231.
+    TYPE_HTTP_CONNECT = 1;
+
+    // SOCKS5 tunneling, as in RFC 1928.
+    TYPE_SOCKS5 = 2;
   }
 
   // Traversal mechanism (REQUIRED).
@@ -39,22 +47,22 @@ message ProxyHop {
   // 255 bytes cannot be encoded on the wire - implementations MUST
   // reject such a target with INVALID_ARGUMENT rather than truncating
   // the length.
-  Type type = 1;
+  Type type = 1 [(google.api.field_behavior) = REQUIRED];
 
   // Address of the intermediate proxy server (REQUIRED).
-  type.NetAddr address = 2;
+  type.NetAddr address = 2 [(google.api.field_behavior) = REQUIRED];
 
   // Optional authentication username (e.g. SOCKS5 username, or the user
   // portion of HTTP CONNECT basic authentication).
   // Sensitive: implementations MUST NOT include this value in logs, errors,
   // or diagnostics.
-  string username = 3;
+  string username = 3 [(google.api.field_behavior) = OPTIONAL];
 
   // Optional authentication password (e.g. SOCKS5 password, or the password
   // portion of HTTP CONNECT basic authentication).
   // Sensitive: implementations MUST NOT include this value in logs, errors,
   // or diagnostics.
-  string password = 4;
+  string password = 4 [(google.api.field_behavior) = OPTIONAL];
 
   // Optional custom authorization header value sent verbatim as the
   // Proxy-Authorization header (e.g. "Basic ...", "Bearer ..."). Takes
@@ -66,7 +74,7 @@ message ProxyHop {
   // other control byte; implementations MUST reject such values with
   // INVALID_ARGUMENT. Hop addresses and the tunnel target follow the
   // same rule wherever they are interpolated into a handshake.
-  string auth_header = 5;
+  string auth_header = 5 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // ProxyResult confirms successful proxy negotiation.

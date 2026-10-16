@@ -2,7 +2,10 @@ syntax = "proto3";
 
 package sesame.type;
 
-option go_package = "github.com/joeycumines/sesame/type/netaddr";
+option go_package = "github.com/joeycumines/sesame/typepb";
+option java_multiple_files = true;
+option java_outer_classname = "NetaddrProto";
+option java_package = "io.github.joeycumines.sesame.type";
 
 // NetAddr represents a network end point address.
 //
@@ -11,6 +14,9 @@ option go_package = "github.com/joeycumines/sesame/type/netaddr";
 //
 // See also Go's net.Addr interface.
 message NetAddr {
+  // The network the address belongs to, e.g. "tcp" or "udp".
   string network = 1;
+
+  // The address itself, in a network-specific form, e.g. "host:port".
   string address = 2;
 }
