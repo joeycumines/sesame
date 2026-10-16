@@ -45,6 +45,7 @@ endif
 
 SESAME_ENDPOINT_DIR ?= js/sesame-endpoint
 BUN ?= bun
+BUF ?= buf
 
 .PHONY: check
 check: all test-ts test-integration
@@ -165,6 +166,31 @@ update: sesame-endpoint.update
 .PHONY: tools
 tools: sesame-endpoint.install
 	@$(LOOP_START) $(GO) install $(LOOP_VAR)$(LOOP_END)
+
+# Proto linting: the Google api-linter (design rules from https://google.aip.dev,
+# pinned in hack/google-api-linter) plus buf lint (STANDARD, configured in
+# schema/buf.yaml). No rule-disables apply to sesame protos; see
+# google-api-linter.yaml and schema/buf.yaml for the vendored-tree carve-outs.
+.PHONY: proto-lint
+proto-lint: google-api-linter buf.lint
+
+.PHONY: google-api-linter
+google-api-linter:
+	hack/google-api-linter.sh
+
+.PHONY: buf.lint
+buf.lint:
+	cd schema && $(BUF) lint
+
+# Rewrites sesame protos into buf's canonical form (schema/buf.yaml workspace;
+# --path keeps the vendored googleapis submodule untouched).
+.PHONY: buf.format
+buf.format:
+	cd schema && $(BUF) format -w --path sesame
+
+.PHONY: buf.format-check
+buf.format-check:
+	cd schema && $(BUF) format --check --path sesame
 
 # this won't work on all systems
 .PHONY: generate
