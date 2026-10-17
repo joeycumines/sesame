@@ -3,12 +3,10 @@
 
 package sesamepb
 
-import (
-	"github.com/joeycumines/sesame/typepb"
-	"google.golang.org/genproto/googleapis/rpc/status"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
-)
+import "github.com/joeycumines/sesame/typepb"
+import "google.golang.org/genproto/googleapis/rpc/status"
+import "google.golang.org/protobuf/types/known/durationpb"
+import "google.golang.org/protobuf/types/known/timestamppb"
 
 // Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
 // Note that v is of an arbitrary type, which may implement any number of the
