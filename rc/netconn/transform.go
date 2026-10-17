@@ -82,13 +82,15 @@ func BuildTLSConfig(opts *sesamepb.TlsOptions, defaultServerName string) (*crypt
 	if serverName == "" {
 		serverName = defaultServerName
 	}
-	// A colon-bearing server_name that is not a bare IPv6 literal must
-	// be a parseable host:port (SNI is a DNS hostname; the port is
-	// stripped). Anything else is malformed client input, rejected with
+	// A colon-bearing sni that is not a bare IPv6 literal must be a
+	// parseable host:port (SNI is a DNS hostname; the port is stripped).
+	// Anything else is malformed client input, rejected with
 	// INVALID_ARGUMENT rather than sent on the wire, mirroring the
-	// TypeScript reference.
+	// TypeScript reference. net.ParseIP rejects zone IDs, so a zoned
+	// literal such as "::1%eth0" is rejected here - a zone is
+	// interface-local and meaningless as SNI.
 	if strings.Contains(serverName, ":") && net.ParseIP(serverName) == nil {
-		if err := validateHostPort(serverName, "server_name"); err != nil {
+		if err := validateHostPort(serverName, "sni"); err != nil {
 			return nil, err
 		}
 		host, _, _ := net.SplitHostPort(serverName)

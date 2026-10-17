@@ -375,8 +375,12 @@ export async function executeTLSHandshake(
 
   let sni = opts.sni || defaultServerName;
   // A bare IPv6 literal is already a valid SNI value; only strip a port when
-  // the value is a bracketed literal or a name:port pair.
-  if (sni.includes(':') && !net.isIPv6(sni)) {
+  // the value is a bracketed literal or a name:port pair. Zoned literals
+  // (e.g. '::1%eth0') are not bare IPv6 - like Go's net.ParseIP, which
+  // rejects zone IDs - so they fall through to parseHostPort and are
+  // rejected with InvalidArgument (a zone is interface-local and
+  // meaningless as SNI), matching the Go reference.
+  if (sni.includes(':') && !(net.isIPv6(sni) && !sni.includes('%'))) {
     sni = parseHostPort(sni).host;
   }
 

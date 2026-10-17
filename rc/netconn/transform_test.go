@@ -743,12 +743,13 @@ func TestExecuteProxyHops_RejectsOversizedSocks5Domain(t *testing.T) {
 	}
 }
 
-func TestBuildTLSConfig_ServerNameHandling(t *testing.T) {
-	// A colon-bearing server_name that is not a bare IPv6 literal must
-	// parse as host:port; anything else is malformed client input,
-	// rejected with INVALID_ARGUMENT, mirroring the TypeScript
-	// reference. Valid forms strip their port; bare IPv6 literals pass
-	// through unchanged.
+func TestBuildTLSConfig_SniHandling(t *testing.T) {
+	// A colon-bearing sni that is not a bare IPv6 literal must parse as
+	// host:port; anything else is malformed client input, rejected with
+	// INVALID_ARGUMENT, mirroring the TypeScript reference. Valid forms
+	// strip their port; bare IPv6 literals pass through unchanged;
+	// zoned literals are rejected (a zone is interface-local, and
+	// net.ParseIP rejects zone IDs, so they are not bare literals).
 	for _, tc := range []struct {
 		name string
 		in   string
@@ -762,7 +763,7 @@ func TestBuildTLSConfig_ServerNameHandling(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg, err := BuildTLSConfig(&sesamepb.TlsOptions{Sni: tc.in}, "")
 			if err != nil {
-				t.Fatalf("expected server_name %q to validate, got %v", tc.in, err)
+				t.Fatalf("expected sni %q to validate, got %v", tc.in, err)
 			}
 			if cfg.ServerName != tc.want {
 				t.Fatalf("got ServerName %q, want %q", cfg.ServerName, tc.want)
@@ -775,11 +776,12 @@ func TestBuildTLSConfig_ServerNameHandling(t *testing.T) {
 		{"whitespace port", "host: 80"},
 		{"non-numeric port", "host:notaport"},
 		{"bracketed literal without port", "[::1]"},
+		{"zoned ipv6 literal", "::1%eth0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := BuildTLSConfig(&sesamepb.TlsOptions{Sni: tc.in}, "")
 			if err == nil || status.Code(err) != codes.InvalidArgument {
-				t.Fatalf("expected InvalidArgument for server_name %q, got %v", tc.in, err)
+				t.Fatalf("expected InvalidArgument for sni %q, got %v", tc.in, err)
 			}
 		})
 	}

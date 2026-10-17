@@ -458,6 +458,28 @@ describe('executeTLSHandshake abort and timeout wiring', () => {
     }
     await new Promise<void>(r => silent.close(() => r()));
   });
+
+  it('rejects a zoned IPv6 literal in sni with InvalidArgument', async () => {
+    // A zone ID ('::1%eth0') is interface-local and meaningless as SNI.
+    // Go's net.ParseIP rejects zoned literals, so its sni validation
+    // rejects them; Bun's net.isIPv6 accepts them, so the bare-IPv6
+    // guard must exclude zones to keep the stacks aligned. The guard
+    // fires before any socket I/O.
+    let err: unknown;
+    try {
+      await executeTLSHandshake(
+        new net.Socket(),
+        create(TlsOptionsSchema, {sni: '::1%eth0'}),
+        'example.com',
+      );
+    } catch (e: unknown) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ConnectError);
+    const ce = err as ConnectError;
+    expect(ce.code).toBe(Code.InvalidArgument);
+    expect(ce.message).toContain('must specify a port');
+  });
 });
 
 describe('executeProxyHops control-byte rejection', () => {
