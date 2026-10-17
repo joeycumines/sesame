@@ -1820,6 +1820,143 @@ describe('sesame-endpoint E2E Suite', () => {
     }
   });
 
+  it('bounds a stalled in-stream TLS upgrade by the shared fallback, not the stale dial timeout', async () => {
+    // The upgrade call-site passes HANDSHAKE_FALLBACK_TIMEOUT_MS (the Go
+    // reference's 30s handshakeFallbackTimeout), NOT the per-request
+    // dial timeout: a dial timeout is establishment semantics an
+    // in-stream upgrade must not inherit (the 71d41ea bug). Pin the
+    // wiring without waiting 30s: dial an accept-only target with a
+    // 200ms dial timeout (the cleartext TCP dial still completes),
+    // then start an upgrade - it stalls because the target never
+    // answers the ClientHello. A regressed call-site would emit
+    // tls_upgrade_failed (DeadlineExceeded) inside the dial window;
+    // the fallback-bounded upgrade stays pending past it. The
+    // observation window asserts pending-ness, then the call is
+    // aborted to settle the handshake and clear its timer.
+    const serverSockets: net.Socket[] = [];
+    const silent = net.createServer(sock => {
+      serverSockets.push(sock);
+    });
+    await new Promise<void>(r => silent.listen(0, '127.0.0.1', () => r()));
+    const silentPort = (silent.address() as net.AddressInfo).port;
+
+    const abort = new AbortController();
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${silentPort}`,
+            }),
+            timeout: durationFromMs(200),
+            capabilities: create(NetConnRequest_CapabilitiesSchema, {
+              supportsOpportunisticTls: true,
+              supportsFlowControl: true,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream, {signal: abort.signal});
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    try {
+      const first = await iterator.next();
+      expect(first.done).toBe(false);
+      expect(first.value.data.case).toBe('conn');
+
+      reqStream.push(
+        create(NetConnRequestSchema, {
+          data: {
+            case: 'control',
+            value: create(NetConnRequest_ControlSchema, {
+              action: {
+                case: 'upgradeTls',
+                value: create(NetConnRequest_Control_UpgradeTlsSchema, {
+                  options: create(TlsOptionsSchema, {
+                    sni: 'localhost',
+                    insecureSkipVerify: true,
+                  }),
+                }),
+              },
+            }),
+          },
+        }),
+      );
+
+      // Observation window: 6x the dial timeout. Benign flow-control
+      // traffic (windowUpdate for the consumed dial bytes) may arrive;
+      // anything else - a tls_upgrade_failed or stream termination -
+      // is the regression. The fallback-bounded upgrade stays pending
+      // through the whole window.
+      const WINDOW_MS = 1200;
+      const deadline = Date.now() + WINDOW_MS;
+      let regression: {value?: unknown; err?: unknown} | null = null;
+      while (Date.now() < deadline) {
+        const raced = await Promise.race([
+          iterator.next().then(
+            res => ({kind: 'next' as const, res}),
+            err => ({kind: 'err' as const, err}),
+          ),
+          new Promise<{kind: 'timeout'}>(resolve =>
+            setTimeout(
+              () => resolve({kind: 'timeout' as const}),
+              deadline - Date.now(),
+            ),
+          ),
+        ]);
+        if (raced.kind === 'timeout') {
+          break; // window elapsed with the upgrade still pending
+        }
+        if (raced.kind === 'err') {
+          regression = {err: raced.err};
+          break;
+        }
+        const res = raced.res;
+        if (res.done) {
+          regression = {value: res};
+          break;
+        }
+        const evt = res.value.data;
+        if (
+          evt.case === 'control' &&
+          evt.value.event.case === 'windowUpdate'
+        ) {
+          continue; // benign flow-control credit; keep watching
+        }
+        regression = {value: res};
+        break;
+      }
+      expect(regression).toBeNull();
+
+      // Teardown: abort the call. The endpoint's context abort settles
+      // the stalled handshake (Canceled; the handshake timer is
+      // cleared on rejection) and the stream terminates.
+      abort.abort();
+      const settled = await Promise.race([
+        iterator.next().then(
+          () => ({kind: 'next' as const}),
+          () => ({kind: 'err' as const}),
+        ),
+        new Promise<{kind: 'drain-timeout'}>(resolve =>
+          setTimeout(() => resolve({kind: 'drain-timeout' as const}), 5000),
+        ),
+      ]);
+      expect(settled.kind).not.toBe('drain-timeout');
+    } finally {
+      abort.abort();
+      reqStream.close();
+      for (const sock of serverSockets) {
+        sock.destroy();
+      }
+      await new Promise<void>(r => silent.close(() => r()));
+    }
+  });
+
   it('rejects in-stream TLS upgrade when opportunistic TLS is disabled', async () => {
     // A server started with enableOpportunisticTls=false still advertises
     // the flag honestly, but a buggy or malicious client may send
