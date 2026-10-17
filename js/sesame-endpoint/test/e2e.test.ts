@@ -2570,6 +2570,89 @@ describe('sesame-endpoint E2E Suite', () => {
     reqStream.close();
   });
 
+  it('reports the negative timeout before the malformed address (parity with Go)', async () => {
+    // A request malformed in several ways must report the same message
+    // on both stacks: the boundary validation order mirrors the Go
+    // reference's validateDialRequest (capabilities, TLS range,
+    // negative timeout, then address), and the shared messages are
+    // byte-identical by construction.
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: 'noport',
+            }),
+            timeout: durationFromMs(-1000),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    let err: unknown;
+    try {
+      while (true) {
+        const resp = await iterator.next();
+        if (resp.done) break;
+      }
+    } catch (e: unknown) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ConnectError);
+    const ce = err as ConnectError;
+    expect(ce.code).toBe(Code.InvalidArgument);
+    expect(ce.message).toContain('negative dial timeout');
+    reqStream.close();
+  });
+
+  it('reports the impossible TLS range before the malformed address (parity with Go)', async () => {
+    // Same precedence contract as the negative-timeout case: the TLS
+    // version-range check fires before the address validation on both
+    // stacks.
+    const reqStream = new RequestStream();
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: 'noport',
+            }),
+            tls: create(TlsOptionsSchema, {
+              minVersion: TlsVersion.TLS_1_3,
+              maxVersion: TlsVersion.TLS_1_2,
+            }),
+          }),
+        },
+      }),
+    );
+
+    const respStream = client.netConn(reqStream);
+    const iterator = respStream[Symbol.asyncIterator]();
+
+    let err: unknown;
+    try {
+      while (true) {
+        const resp = await iterator.next();
+        if (resp.done) break;
+      }
+    } catch (e: unknown) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ConnectError);
+    const ce = err as ConnectError;
+    expect(ce.code).toBe(Code.InvalidArgument);
+    expect(ce.message).toContain('min_version exceeds max_version');
+    reqStream.close();
+  });
+
   it('rejects a malformed target address with InvalidArgument', async () => {
     // A target that is not host:port is malformed client input:
     // INVALID_ARGUMENT at the boundary, not a late dial failure.

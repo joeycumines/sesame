@@ -52,6 +52,20 @@ func TestValidateDialRequest(t *testing.T) {
 			req.Timeout = durationpb.New(-time.Second)
 			return req
 		}(), "negative dial timeout"},
+		// Precedence parity with the TypeScript reference: a request
+		// malformed in several ways reports the same message on both
+		// stacks, so the timeout check must fire before the address
+		// validation and the TLS range check before both.
+		{"negative timeout with malformed address", func() *sesamepb.NetConnRequest_Dial {
+			req := dial("noport")
+			req.Timeout = durationpb.New(-time.Second)
+			return req
+		}(), "negative dial timeout"},
+		{"impossible tls range with malformed address", func() *sesamepb.NetConnRequest_Dial {
+			req := dial("noport")
+			req.Tls = &sesamepb.TlsOptions{MinVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_3, MaxVersion: sesamepb.TlsVersion_TLS_VERSION_TLS_1_2}
+			return req
+		}(), "min_version exceeds max_version"},
 		{"zero timeout is unset", func() *sesamepb.NetConnRequest_Dial {
 			req := dial("target.internal:443")
 			req.Timeout = durationpb.New(0)

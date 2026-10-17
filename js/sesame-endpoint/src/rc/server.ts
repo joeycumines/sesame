@@ -166,16 +166,15 @@ export function createRemoteControlService(
       }
 
       const dialReq = first.value.data.value;
-      if (!dialReq.address?.address) {
-        throw new ConnectError(
-          'sesame/rc/netconn: missing target address in dial request',
-          Code.InvalidArgument,
-        );
-      }
 
-      // Validate advertised capabilities at the API boundary, matching the
-      // Go reference: negative window/chunk values are malformed input,
-      // rejected before any dialing or stream output.
+      // Boundary validation mirrors the Go reference's validateDialRequest
+      // order exactly - capabilities, TLS version range, negative timeout,
+      // then the target address - so a request malformed in several ways
+      // fails with the same message on both stacks (the shared messages
+      // are byte-identical by construction).
+      //
+      // Negative window/chunk values are malformed input, rejected before
+      // any dialing or stream output.
       if (
         dialReq.capabilities &&
         (dialReq.capabilities.initialWindowSize < 0 ||
@@ -183,6 +182,40 @@ export function createRemoteControlService(
       ) {
         throw new ConnectError(
           'sesame/rc/netconn: negative capability value in dial request',
+          Code.InvalidArgument,
+        );
+      }
+
+      // Version-range validation at the API boundary: a floor above its
+      // ceiling can never negotiate. TlsVersion values are monotonic, so
+      // the enum compares directly.
+      if (
+        dialReq.tls &&
+        dialReq.tls.minVersion !== TlsVersion.UNSPECIFIED &&
+        dialReq.tls.maxVersion !== TlsVersion.UNSPECIFIED &&
+        dialReq.tls.minVersion > dialReq.tls.maxVersion
+      ) {
+        throw new ConnectError(
+          'sesame/rc/netconn: min_version exceeds max_version',
+          Code.InvalidArgument,
+        );
+      }
+
+      // A negative timeout is malformed input, not "unset": reject it at
+      // the boundary like the negative capability values, before the
+      // address validation, matching the Go reference's order.
+      const requestedTimeoutMs =
+        dialReq.timeout !== undefined ? durationMs(dialReq.timeout) : 0;
+      if (requestedTimeoutMs < 0) {
+        throw new ConnectError(
+          'sesame/rc/netconn: negative dial timeout',
+          Code.InvalidArgument,
+        );
+      }
+
+      if (!dialReq.address?.address) {
+        throw new ConnectError(
+          'sesame/rc/netconn: missing target address in dial request',
           Code.InvalidArgument,
         );
       }
@@ -203,25 +236,15 @@ export function createRemoteControlService(
       // dial failure.
       parseHostPort(targetAddr);
 
-      // Validate ClientHelloSpec and version range upfront, before any
-      // dialing, mirroring the Go server's boundary validation.
+      // Validate ClientHelloSpec upfront, before any dialing. The Go
+      // reference re-checks the spec at handshake time rather than at
+      // the dial boundary, so this check deliberately sits after the
+      // shared boundary validation to keep multi-malformed requests
+      // reporting the same message on both stacks.
       if (dialReq.tls) {
         validateClientHelloSpec(dialReq.tls.clientHello);
         if (!tlsProvider) {
           assertBuiltinClientHelloHonorable(dialReq.tls.clientHello);
-        }
-        // Version-range validation at the API boundary, before any dialing:
-        // a floor above its ceiling can never negotiate. TlsVersion values
-        // are monotonic, so the enum compares directly.
-        if (
-          dialReq.tls.minVersion !== TlsVersion.UNSPECIFIED &&
-          dialReq.tls.maxVersion !== TlsVersion.UNSPECIFIED &&
-          dialReq.tls.minVersion > dialReq.tls.maxVersion
-        ) {
-          throw new ConnectError(
-            'sesame/rc/netconn: min_version exceeds max_version',
-            Code.InvalidArgument,
-          );
         }
       }
 
@@ -232,17 +255,6 @@ export function createRemoteControlService(
       let activeSocket: net.Socket;
       let proxyResult: ProxyResult | undefined;
       let tlsResult: TlsHandshakeResult | undefined;
-      const requestedTimeoutMs =
-        dialReq.timeout !== undefined ? durationMs(dialReq.timeout) : 0;
-      // A negative timeout is malformed input, not "unset": reject it
-      // at the boundary like the negative capability values, matching
-      // the Go reference.
-      if (requestedTimeoutMs < 0) {
-        throw new ConnectError(
-          'sesame/rc/netconn: negative dial timeout',
-          Code.InvalidArgument,
-        );
-      }
       const effectiveDialTimeoutMs =
         requestedTimeoutMs > 0 ? requestedTimeoutMs : config.dialTimeoutMs;
 
