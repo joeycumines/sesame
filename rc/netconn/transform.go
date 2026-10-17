@@ -96,6 +96,13 @@ func BuildTLSConfig(opts *sesamepb.TlsOptions, defaultServerName string) (*crypt
 		host, _, _ := net.SplitHostPort(serverName)
 		serverName = host
 	}
+	// A zone ID (RFC 4007 "address%zone") is interface-local and can
+	// never be SNI (RFC 6066 hostnames carry no '%'), so a bracketed
+	// zoned literal must not survive the port-strip either - matching
+	// the bare-form rejection above and the TypeScript reference.
+	if strings.Contains(serverName, "%") {
+		return nil, status.Errorf(codes.InvalidArgument, "sesame/rc/netconn: invalid sni %q: zone ID not permitted", serverName)
+	}
 
 	cfg := &cryptotls.Config{
 		ServerName:         serverName,

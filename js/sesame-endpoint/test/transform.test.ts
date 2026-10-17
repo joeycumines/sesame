@@ -480,6 +480,29 @@ describe('executeTLSHandshake abort and timeout wiring', () => {
     expect(ce.code).toBe(Code.InvalidArgument);
     expect(ce.message).toContain('must specify a port');
   });
+
+  it('rejects a bracketed zoned IPv6 literal in sni with InvalidArgument', async () => {
+    // The port-strip must not resurrect a zone ID into the SNI value:
+    // a zone is interface-local and can never be SNI (RFC 6066
+    // hostnames carry no '%'). Both stacks reject with the same
+    // message.
+    let err: unknown;
+    try {
+      await executeTLSHandshake(
+        new net.Socket(),
+        create(TlsOptionsSchema, {sni: '[::1%eth0]:443'}),
+        'example.com',
+      );
+    } catch (e: unknown) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ConnectError);
+    const ce = err as ConnectError;
+    expect(ce.code).toBe(Code.InvalidArgument);
+    expect(ce.message).toContain(
+      'invalid sni "::1%eth0": zone ID not permitted',
+    );
+  });
 });
 
 describe('executeProxyHops control-byte rejection', () => {

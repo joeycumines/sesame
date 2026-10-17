@@ -383,6 +383,17 @@ export async function executeTLSHandshake(
   if (sni.includes(':') && !(net.isIPv6(sni) && !sni.includes('%'))) {
     sni = parseHostPort(sni).host;
   }
+  // A zone ID (RFC 4007 "address%zone") is interface-local and can
+  // never be SNI (RFC 6066 hostnames carry no '%'): a bracketed zoned
+  // literal must not survive the port-strip either - matching the
+  // bare-form rejection above and the Go reference, which rejects with
+  // the same message.
+  if (sni.includes('%')) {
+    throw new ConnectError(
+      `sesame/rc/netconn: invalid sni "${sni}": zone ID not permitted`,
+      Code.InvalidArgument,
+    );
+  }
 
   const tlsConnectOptions: tls.ConnectionOptions = {
     socket,

@@ -777,6 +777,9 @@ func TestBuildTLSConfig_SniHandling(t *testing.T) {
 		{"non-numeric port", "host:notaport"},
 		{"bracketed literal without port", "[::1]"},
 		{"zoned ipv6 literal", "::1%eth0"},
+		// A zone is interface-local and can never be SNI; the
+		// bracketed form must not survive the port-strip.
+		{"bracketed zoned literal with port", "[::1%eth0]:443"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := BuildTLSConfig(&sesamepb.TlsOptions{Sni: tc.in}, "")
