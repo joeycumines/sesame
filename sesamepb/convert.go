@@ -2,7 +2,7 @@ package sesamepb
 
 // Hand-written conversions between the forward and reverse tunnel frame
 // vocabularies. The two vocabularies are wire-identical in shape (see
-// schema/sesame/type/grpctunnel.proto): OpenTunnelRequest matches
+// schema/sesame/v1alpha1/grpctunnel.proto): OpenTunnelRequest matches
 // OpenReverseTunnelResponse (client-shaped frames) and OpenTunnelResponse
 // matches OpenReverseTunnelRequest (server-shaped frames). The generated
 // Proto_ShallowCopy cannot be used for these cross-type oneof copies: its
