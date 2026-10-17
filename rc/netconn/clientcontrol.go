@@ -102,6 +102,22 @@ type (
 	}
 )
 
+// UpgradeTlsFailedError surfaces the canonical google.rpc.Status the
+// server carried in its tls_upgrade_failed result, preserving the code
+// so callers can distinguish failure classes programmatically (a
+// stalled handshake surfaces DEADLINE_EXCEEDED, an aborted one CANCELED,
+// a server-side dial failure UNAVAILABLE) instead of parsing the
+// message text. Code holds the canonical google.rpc.Code numbering,
+// which matches google.golang.org/grpc's codes.Code.
+type UpgradeTlsFailedError struct {
+	Code    int32
+	Message string
+}
+
+func (e *UpgradeTlsFailedError) Error() string {
+	return fmt.Sprintf("sesame/rc/netconn: TLS upgrade failed (code %d): %s", e.Code, e.Message)
+}
+
 var _ InStreamConn = (*clientControlConn)(nil)
 
 // NewClientControlConn constructs a client-side connection wrapper with full in-stream control demultiplexing.
@@ -172,7 +188,6 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 			c.abortPending(err)
 			return
 		}
-
 		switch data := res.GetData().(type) {
 		case *sesamepb.NetConnResponse_Bytes:
 			if len(data.Bytes) > 0 {
@@ -298,14 +313,19 @@ func (c *clientControlConn) readLoop(ctx context.Context) {
 					if mismatch {
 						ch <- upgradeResult{err: fmt.Errorf("sesame/rc/netconn: TlsUpgradeFailed request_id %d does not match pending upgrade request_id %d", requestID, id)}
 					} else {
-						errMsg := "sesame/rc/netconn: TLS upgrade failed"
+						// Surface the server's canonical status as a
+						// typed error so callers can distinguish
+						// failure classes programmatically
+						// (UpgradeTlsFailedError); a result with no
+						// status detail stays a plain error.
+						err := error(errors.New("sesame/rc/netconn: TLS upgrade failed"))
 						if st := event.TlsUpgradeFailed.GetError(); st != nil {
-							errMsg = fmt.Sprintf("sesame/rc/netconn: TLS upgrade failed (code %d): %s", st.GetCode(), st.GetMessage())
+							err = &UpgradeTlsFailedError{Code: st.GetCode(), Message: st.GetMessage()}
 						}
 						// Under the mutex, for the same linearization as above
 						// (cosmetic here - the server stays cleartext on
 						// failure - but the pattern must not diverge).
-						ch <- upgradeResult{err: errors.New(errMsg)}
+						ch <- upgradeResult{err: err}
 					}
 				}
 				c.upgradeMu.Unlock()

@@ -952,9 +952,15 @@ func TestClientServer_InStream_UpgradeTLS_Failure(t *testing.T) {
 	defer clientPipe.Close()
 	defer serverPipe.Close()
 
-	// Upstream mock server that immediately closes on TLS handshake attempt
+	// Upstream mock server that speaks STARTTLS, then answers the TLS
+	// ClientHello with an invalid record. The upstream STAYS OPEN, so
+	// the upgrade failure is the only terminal cause: the server
+	// deterministically emits tls_upgrade_failed (an upstream EOF would
+	// instead race the pause stage and terminate the stream before the
+	// handshake - the client would surface plain io.EOF and no failure
+	// event at all).
 	go func() {
-		buf := make([]byte, 128)
+		buf := make([]byte, 4096)
 		n, err := serverPipe.Read(buf)
 		if err != nil {
 			return
@@ -962,8 +968,14 @@ func TestClientServer_InStream_UpgradeTLS_Failure(t *testing.T) {
 		if string(buf[:n]) == "STARTTLS\n" {
 			_, _ = serverPipe.Write([]byte("220 Ready\n"))
 		}
-		// Close abruptly when TLS client hello arrives
-		_ = serverPipe.Close()
+		// Consume the ClientHello, then reply with an invalid TLS
+		// record (bad content type and version); block until the test
+		// closes the pipe.
+		if _, err := serverPipe.Read(buf); err != nil {
+			return
+		}
+		_, _ = serverPipe.Write([]byte{0x00, 0x00, 0x00, 0x00, 0x00})
+		_, _ = serverPipe.Read(buf)
 	}()
 
 	server := netconn.Server{
@@ -1013,7 +1025,18 @@ func TestClientServer_InStream_UpgradeTLS_Failure(t *testing.T) {
 		InsecureSkipVerify: true,
 	})
 	if err == nil {
-		t.Fatal("expected UpgradeTls error when upstream abruptly drops, got nil")
+		t.Fatal("expected UpgradeTls error when upstream answers the ClientHello with garbage, got nil")
+	}
+
+	// The failure must surface the server's canonical status as a typed
+	// error: the abrupt drop maps to Unavailable, and the type lets
+	// callers distinguish failure classes programmatically.
+	var typedErr *netconn.UpgradeTlsFailedError
+	if !errors.As(err, &typedErr) {
+		t.Fatalf("expected *UpgradeTlsFailedError, got %T: %v", err, err)
+	}
+	if typedErr.Code != int32(codes.Unavailable) {
+		t.Fatalf("got UpgradeTlsFailedError code %d, want %d (Unavailable)", typedErr.Code, codes.Unavailable)
 	}
 
 	// Verify fail-closed: connection must not be usable in cleartext
