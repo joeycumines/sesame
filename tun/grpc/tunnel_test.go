@@ -3,19 +3,20 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/fullstorydev/grpchan/grpchantesting"
-	"github.com/joeycumines/sesame/internal/testutil"
-	typepb "github.com/joeycumines/sesame/typepb"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
-	refl "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
-	"google.golang.org/grpc/test/bufconn"
-	"google.golang.org/protobuf/proto"
 	"math"
 	"runtime"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/fullstorydev/grpchan/grpchantesting"
+	"github.com/joeycumines/sesame/internal/testutil"
+	"github.com/joeycumines/sesame/sesamepb"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+	refl "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
+	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
 )
 
 // ExampleServeTunnel_reflection demonstrates how to enable the reflection API on the tunnel.
@@ -30,7 +31,7 @@ func ExampleServeTunnel_reflection() {
 			reflection.Register(h)
 			grpchantesting.RegisterTestServiceServer(h, &tunneledService)
 		}
-		tunnelService = &mockServer{openTunnel: func(stream typepb.TunnelService_OpenTunnelServer) error {
+		tunnelService = &mockServer{openTunnel: func(stream sesamepb.GrpcTunnelService_OpenTunnelServer) error {
 			return ServeTunnel(
 				OptTunnel.ServerStream(stream),
 				OptTunnel.Service(handlerMapConfig),
@@ -39,11 +40,11 @@ func ExampleServeTunnel_reflection() {
 	)
 
 	conn := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) {
-		typepb.RegisterTunnelServiceServer(srv, tunnelService)
+		sesamepb.RegisterGrpcTunnelServiceServer(srv, tunnelService)
 	})
 	defer conn.Close()
 
-	tunnel, err := typepb.NewTunnelServiceClient(conn).OpenTunnel(context.Background())
+	tunnel, err := sesamepb.NewGrpcTunnelServiceClient(conn).OpenTunnel(context.Background())
 	if err != nil {
 		panic(err)
 	}
@@ -102,7 +103,7 @@ func Test_maxChunkSize(t *testing.T) {
 			math.MinInt32: 0,
 		}
 		for k := range encodedSizes {
-			b, err := proto.Marshal(&typepb.EncodedMessage{Size: k})
+			b, err := proto.Marshal(&sesamepb.EncodedMessage{Size: k})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -130,7 +131,7 @@ func Test_maxChunkSize(t *testing.T) {
 			math.MaxUint64: 0,
 		}
 		for k := range encodedSizes {
-			b, err := proto.Marshal(&typepb.OpenTunnelRequest{StreamId: int64(k)})
+			b, err := proto.Marshal(&sesamepb.OpenTunnelRequest{StreamId: int64(k)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -157,9 +158,9 @@ func Test_maxChunkSize(t *testing.T) {
 		{
 			Name: `client message`,
 			Init: func() proto.Message {
-				return &typepb.OpenTunnelRequest{
+				return &sesamepb.OpenTunnelRequest{
 					StreamId: int64(fattestUint64),
-					Frame: &typepb.OpenTunnelRequest_Message{Message: &typepb.EncodedMessage{
+					Frame: &sesamepb.OpenTunnelRequest_Message{Message: &sesamepb.EncodedMessage{
 						Size: fattestInt32,
 						Data: make([]byte, maxChunkSizeBase),
 					}},
@@ -169,18 +170,18 @@ func Test_maxChunkSize(t *testing.T) {
 		{
 			Name: `client message data`,
 			Init: func() proto.Message {
-				return &typepb.OpenTunnelRequest{
+				return &sesamepb.OpenTunnelRequest{
 					StreamId: int64(fattestUint64),
-					Frame:    &typepb.OpenTunnelRequest_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
+					Frame:    &sesamepb.OpenTunnelRequest_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
 				}
 			},
 		},
 		{
 			Name: `server message`,
 			Init: func() proto.Message {
-				return &typepb.OpenTunnelResponse{
+				return &sesamepb.OpenTunnelResponse{
 					StreamId: int64(fattestUint64),
-					Frame: &typepb.OpenTunnelResponse_Message{Message: &typepb.EncodedMessage{
+					Frame: &sesamepb.OpenTunnelResponse_Message{Message: &sesamepb.EncodedMessage{
 						Size: fattestInt32,
 						Data: make([]byte, maxChunkSizeBase),
 					}},
@@ -190,9 +191,9 @@ func Test_maxChunkSize(t *testing.T) {
 		{
 			Name: `server message data`,
 			Init: func() proto.Message {
-				return &typepb.OpenTunnelResponse{
+				return &sesamepb.OpenTunnelResponse{
 					StreamId: int64(fattestUint64),
-					Frame:    &typepb.OpenTunnelResponse_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
+					Frame:    &sesamepb.OpenTunnelResponse_MessageData{MessageData: make([]byte, maxChunkSizeBase)},
 				}
 			},
 		},

@@ -8,6 +8,7 @@ package sesamepb
 
 import (
 	context "context"
+
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -19,8 +20,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TunnelService_OpenTunnel_FullMethodName = "/sesame.v1alpha1.TunnelService/OpenTunnel"
-	TunnelService_OpenStream_FullMethodName = "/sesame.v1alpha1.TunnelService/OpenStream"
+	TunnelService_OpenRemoteTunnel_FullMethodName = "/sesame.v1alpha1.TunnelService/OpenRemoteTunnel"
+	TunnelService_OpenRemoteStream_FullMethodName = "/sesame.v1alpha1.TunnelService/OpenRemoteStream"
 )
 
 // TunnelServiceClient is the client API for TunnelService service.
@@ -28,14 +29,14 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // TunnelService orchestrates access to a remote's endpoints, via the
-// tunneling protocols in sesame.type.
+// GrpcTunnelService tunneling protocol.
 type TunnelServiceClient interface {
-	// OpenTunnel orchestrates Stream connections.
+	// OpenRemoteTunnel orchestrates Stream connections.
 	// Operates in a bi-directional request-response manner, with paired fields for each request and response, and a
 	// stream_buffer value in the connect request, indicating the number of concurrent streams per pair.
-	OpenTunnel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenTunnelRequest, OpenTunnelResponse], error)
-	// OpenStream provides dedicated bi-directional streaming (reverse dialed).
-	OpenStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenStreamRequest, OpenStreamResponse], error)
+	OpenRemoteTunnel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenRemoteTunnelRequest, OpenRemoteTunnelResponse], error)
+	// OpenRemoteStream provides dedicated bi-directional streaming (reverse dialed).
+	OpenRemoteStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenRemoteStreamRequest, OpenRemoteStreamResponse], error)
 }
 
 type tunnelServiceClient struct {
@@ -46,45 +47,45 @@ func NewTunnelServiceClient(cc grpc.ClientConnInterface) TunnelServiceClient {
 	return &tunnelServiceClient{cc}
 }
 
-func (c *tunnelServiceClient) OpenTunnel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenTunnelRequest, OpenTunnelResponse], error) {
+func (c *tunnelServiceClient) OpenRemoteTunnel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenRemoteTunnelRequest, OpenRemoteTunnelResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TunnelService_ServiceDesc.Streams[0], TunnelService_OpenTunnel_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &TunnelService_ServiceDesc.Streams[0], TunnelService_OpenRemoteTunnel_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[OpenTunnelRequest, OpenTunnelResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[OpenRemoteTunnelRequest, OpenRemoteTunnelResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TunnelService_OpenTunnelClient = grpc.BidiStreamingClient[OpenTunnelRequest, OpenTunnelResponse]
+type TunnelService_OpenRemoteTunnelClient = grpc.BidiStreamingClient[OpenRemoteTunnelRequest, OpenRemoteTunnelResponse]
 
-func (c *tunnelServiceClient) OpenStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenStreamRequest, OpenStreamResponse], error) {
+func (c *tunnelServiceClient) OpenRemoteStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenRemoteStreamRequest, OpenRemoteStreamResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TunnelService_ServiceDesc.Streams[1], TunnelService_OpenStream_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &TunnelService_ServiceDesc.Streams[1], TunnelService_OpenRemoteStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[OpenStreamRequest, OpenStreamResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[OpenRemoteStreamRequest, OpenRemoteStreamResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TunnelService_OpenStreamClient = grpc.BidiStreamingClient[OpenStreamRequest, OpenStreamResponse]
+type TunnelService_OpenRemoteStreamClient = grpc.BidiStreamingClient[OpenRemoteStreamRequest, OpenRemoteStreamResponse]
 
 // TunnelServiceServer is the server API for TunnelService service.
 // All implementations must embed UnimplementedTunnelServiceServer
 // for forward compatibility.
 //
 // TunnelService orchestrates access to a remote's endpoints, via the
-// tunneling protocols in sesame.type.
+// GrpcTunnelService tunneling protocol.
 type TunnelServiceServer interface {
-	// OpenTunnel orchestrates Stream connections.
+	// OpenRemoteTunnel orchestrates Stream connections.
 	// Operates in a bi-directional request-response manner, with paired fields for each request and response, and a
 	// stream_buffer value in the connect request, indicating the number of concurrent streams per pair.
-	OpenTunnel(grpc.BidiStreamingServer[OpenTunnelRequest, OpenTunnelResponse]) error
-	// OpenStream provides dedicated bi-directional streaming (reverse dialed).
-	OpenStream(grpc.BidiStreamingServer[OpenStreamRequest, OpenStreamResponse]) error
+	OpenRemoteTunnel(grpc.BidiStreamingServer[OpenRemoteTunnelRequest, OpenRemoteTunnelResponse]) error
+	// OpenRemoteStream provides dedicated bi-directional streaming (reverse dialed).
+	OpenRemoteStream(grpc.BidiStreamingServer[OpenRemoteStreamRequest, OpenRemoteStreamResponse]) error
 	mustEmbedUnimplementedTunnelServiceServer()
 }
 
@@ -95,11 +96,11 @@ type TunnelServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedTunnelServiceServer struct{}
 
-func (UnimplementedTunnelServiceServer) OpenTunnel(grpc.BidiStreamingServer[OpenTunnelRequest, OpenTunnelResponse]) error {
-	return status.Error(codes.Unimplemented, "method OpenTunnel not implemented")
+func (UnimplementedTunnelServiceServer) OpenRemoteTunnel(grpc.BidiStreamingServer[OpenRemoteTunnelRequest, OpenRemoteTunnelResponse]) error {
+	return status.Error(codes.Unimplemented, "method OpenRemoteTunnel not implemented")
 }
-func (UnimplementedTunnelServiceServer) OpenStream(grpc.BidiStreamingServer[OpenStreamRequest, OpenStreamResponse]) error {
-	return status.Error(codes.Unimplemented, "method OpenStream not implemented")
+func (UnimplementedTunnelServiceServer) OpenRemoteStream(grpc.BidiStreamingServer[OpenRemoteStreamRequest, OpenRemoteStreamResponse]) error {
+	return status.Error(codes.Unimplemented, "method OpenRemoteStream not implemented")
 }
 func (UnimplementedTunnelServiceServer) mustEmbedUnimplementedTunnelServiceServer() {}
 func (UnimplementedTunnelServiceServer) testEmbeddedByValue()                       {}
@@ -122,19 +123,19 @@ func RegisterTunnelServiceServer(s grpc.ServiceRegistrar, srv TunnelServiceServe
 	s.RegisterService(&TunnelService_ServiceDesc, srv)
 }
 
-func _TunnelService_OpenTunnel_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TunnelServiceServer).OpenTunnel(&grpc.GenericServerStream[OpenTunnelRequest, OpenTunnelResponse]{ServerStream: stream})
+func _TunnelService_OpenRemoteTunnel_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TunnelServiceServer).OpenRemoteTunnel(&grpc.GenericServerStream[OpenRemoteTunnelRequest, OpenRemoteTunnelResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TunnelService_OpenTunnelServer = grpc.BidiStreamingServer[OpenTunnelRequest, OpenTunnelResponse]
+type TunnelService_OpenRemoteTunnelServer = grpc.BidiStreamingServer[OpenRemoteTunnelRequest, OpenRemoteTunnelResponse]
 
-func _TunnelService_OpenStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TunnelServiceServer).OpenStream(&grpc.GenericServerStream[OpenStreamRequest, OpenStreamResponse]{ServerStream: stream})
+func _TunnelService_OpenRemoteStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TunnelServiceServer).OpenRemoteStream(&grpc.GenericServerStream[OpenRemoteStreamRequest, OpenRemoteStreamResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TunnelService_OpenStreamServer = grpc.BidiStreamingServer[OpenStreamRequest, OpenStreamResponse]
+type TunnelService_OpenRemoteStreamServer = grpc.BidiStreamingServer[OpenRemoteStreamRequest, OpenRemoteStreamResponse]
 
 // TunnelService_ServiceDesc is the grpc.ServiceDesc for TunnelService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -145,14 +146,14 @@ var TunnelService_ServiceDesc = grpc.ServiceDesc{
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "OpenTunnel",
-			Handler:       _TunnelService_OpenTunnel_Handler,
+			StreamName:    "OpenRemoteTunnel",
+			Handler:       _TunnelService_OpenRemoteTunnel_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "OpenStream",
-			Handler:       _TunnelService_OpenStream_Handler,
+			StreamName:    "OpenRemoteStream",
+			Handler:       _TunnelService_OpenRemoteStream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

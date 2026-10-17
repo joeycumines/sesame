@@ -209,12 +209,13 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v7.36.2
-// source: sesame/type/grpctunnel.proto
+// source: sesame/v1alpha1/grpctunnel.proto
 
-package typepb
+package sesamepb
 
 import (
 	context "context"
+
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -226,17 +227,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	TunnelService_OpenTunnel_FullMethodName        = "/sesame.type.TunnelService/OpenTunnel"
-	TunnelService_OpenReverseTunnel_FullMethodName = "/sesame.type.TunnelService/OpenReverseTunnel"
+	GrpcTunnelService_OpenTunnel_FullMethodName        = "/sesame.v1alpha1.GrpcTunnelService/OpenTunnel"
+	GrpcTunnelService_OpenReverseTunnel_FullMethodName = "/sesame.v1alpha1.GrpcTunnelService/OpenReverseTunnel"
 )
 
-// TunnelServiceClient is the client API for TunnelService service.
+// GrpcTunnelServiceClient is the client API for GrpcTunnelService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// TunnelService provides the two gRPC tunneling methods, one where the client
-// initiates tunneled RPCs and one (the reverse tunnel) where the server does.
-type TunnelServiceClient interface {
+// GrpcTunnelService provides the two gRPC tunneling methods, one where the
+// client initiates tunneled RPCs and one (the reverse tunnel) where the
+// server does.
+type GrpcTunnelServiceClient interface {
 	// OpenTunnel creates a channel to the server which can be used to send
 	// additional RPCs, all of which will be sent to the same server via a
 	// single underlying gRPC stream. This can provide affinity for a "chatty"
@@ -253,17 +255,17 @@ type TunnelServiceClient interface {
 	OpenReverseTunnel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenReverseTunnelRequest, OpenReverseTunnelResponse], error)
 }
 
-type tunnelServiceClient struct {
+type grpcTunnelServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewTunnelServiceClient(cc grpc.ClientConnInterface) TunnelServiceClient {
-	return &tunnelServiceClient{cc}
+func NewGrpcTunnelServiceClient(cc grpc.ClientConnInterface) GrpcTunnelServiceClient {
+	return &grpcTunnelServiceClient{cc}
 }
 
-func (c *tunnelServiceClient) OpenTunnel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenTunnelRequest, OpenTunnelResponse], error) {
+func (c *grpcTunnelServiceClient) OpenTunnel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenTunnelRequest, OpenTunnelResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TunnelService_ServiceDesc.Streams[0], TunnelService_OpenTunnel_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &GrpcTunnelService_ServiceDesc.Streams[0], GrpcTunnelService_OpenTunnel_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -272,11 +274,11 @@ func (c *tunnelServiceClient) OpenTunnel(ctx context.Context, opts ...grpc.CallO
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TunnelService_OpenTunnelClient = grpc.BidiStreamingClient[OpenTunnelRequest, OpenTunnelResponse]
+type GrpcTunnelService_OpenTunnelClient = grpc.BidiStreamingClient[OpenTunnelRequest, OpenTunnelResponse]
 
-func (c *tunnelServiceClient) OpenReverseTunnel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenReverseTunnelRequest, OpenReverseTunnelResponse], error) {
+func (c *grpcTunnelServiceClient) OpenReverseTunnel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[OpenReverseTunnelRequest, OpenReverseTunnelResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &TunnelService_ServiceDesc.Streams[1], TunnelService_OpenReverseTunnel_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &GrpcTunnelService_ServiceDesc.Streams[1], GrpcTunnelService_OpenReverseTunnel_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -285,15 +287,16 @@ func (c *tunnelServiceClient) OpenReverseTunnel(ctx context.Context, opts ...grp
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TunnelService_OpenReverseTunnelClient = grpc.BidiStreamingClient[OpenReverseTunnelRequest, OpenReverseTunnelResponse]
+type GrpcTunnelService_OpenReverseTunnelClient = grpc.BidiStreamingClient[OpenReverseTunnelRequest, OpenReverseTunnelResponse]
 
-// TunnelServiceServer is the server API for TunnelService service.
-// All implementations must embed UnimplementedTunnelServiceServer
+// GrpcTunnelServiceServer is the server API for GrpcTunnelService service.
+// All implementations must embed UnimplementedGrpcTunnelServiceServer
 // for forward compatibility.
 //
-// TunnelService provides the two gRPC tunneling methods, one where the client
-// initiates tunneled RPCs and one (the reverse tunnel) where the server does.
-type TunnelServiceServer interface {
+// GrpcTunnelService provides the two gRPC tunneling methods, one where the
+// client initiates tunneled RPCs and one (the reverse tunnel) where the
+// server does.
+type GrpcTunnelServiceServer interface {
 	// OpenTunnel creates a channel to the server which can be used to send
 	// additional RPCs, all of which will be sent to the same server via a
 	// single underlying gRPC stream. This can provide affinity for a "chatty"
@@ -308,77 +311,77 @@ type TunnelServiceServer interface {
 	// reversed: the server initiates RPCs and sends requests and the client
 	// replies to them and sends responses.
 	OpenReverseTunnel(grpc.BidiStreamingServer[OpenReverseTunnelRequest, OpenReverseTunnelResponse]) error
-	mustEmbedUnimplementedTunnelServiceServer()
+	mustEmbedUnimplementedGrpcTunnelServiceServer()
 }
 
-// UnimplementedTunnelServiceServer must be embedded to have
+// UnimplementedGrpcTunnelServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedTunnelServiceServer struct{}
+type UnimplementedGrpcTunnelServiceServer struct{}
 
-func (UnimplementedTunnelServiceServer) OpenTunnel(grpc.BidiStreamingServer[OpenTunnelRequest, OpenTunnelResponse]) error {
+func (UnimplementedGrpcTunnelServiceServer) OpenTunnel(grpc.BidiStreamingServer[OpenTunnelRequest, OpenTunnelResponse]) error {
 	return status.Error(codes.Unimplemented, "method OpenTunnel not implemented")
 }
-func (UnimplementedTunnelServiceServer) OpenReverseTunnel(grpc.BidiStreamingServer[OpenReverseTunnelRequest, OpenReverseTunnelResponse]) error {
+func (UnimplementedGrpcTunnelServiceServer) OpenReverseTunnel(grpc.BidiStreamingServer[OpenReverseTunnelRequest, OpenReverseTunnelResponse]) error {
 	return status.Error(codes.Unimplemented, "method OpenReverseTunnel not implemented")
 }
-func (UnimplementedTunnelServiceServer) mustEmbedUnimplementedTunnelServiceServer() {}
-func (UnimplementedTunnelServiceServer) testEmbeddedByValue()                       {}
+func (UnimplementedGrpcTunnelServiceServer) mustEmbedUnimplementedGrpcTunnelServiceServer() {}
+func (UnimplementedGrpcTunnelServiceServer) testEmbeddedByValue()                           {}
 
-// UnsafeTunnelServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to TunnelServiceServer will
+// UnsafeGrpcTunnelServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to GrpcTunnelServiceServer will
 // result in compilation errors.
-type UnsafeTunnelServiceServer interface {
-	mustEmbedUnimplementedTunnelServiceServer()
+type UnsafeGrpcTunnelServiceServer interface {
+	mustEmbedUnimplementedGrpcTunnelServiceServer()
 }
 
-func RegisterTunnelServiceServer(s grpc.ServiceRegistrar, srv TunnelServiceServer) {
-	// If the following call panics, it indicates UnimplementedTunnelServiceServer was
+func RegisterGrpcTunnelServiceServer(s grpc.ServiceRegistrar, srv GrpcTunnelServiceServer) {
+	// If the following call panics, it indicates UnimplementedGrpcTunnelServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&TunnelService_ServiceDesc, srv)
+	s.RegisterService(&GrpcTunnelService_ServiceDesc, srv)
 }
 
-func _TunnelService_OpenTunnel_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TunnelServiceServer).OpenTunnel(&grpc.GenericServerStream[OpenTunnelRequest, OpenTunnelResponse]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TunnelService_OpenTunnelServer = grpc.BidiStreamingServer[OpenTunnelRequest, OpenTunnelResponse]
-
-func _TunnelService_OpenReverseTunnel_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(TunnelServiceServer).OpenReverseTunnel(&grpc.GenericServerStream[OpenReverseTunnelRequest, OpenReverseTunnelResponse]{ServerStream: stream})
+func _GrpcTunnelService_OpenTunnel_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(GrpcTunnelServiceServer).OpenTunnel(&grpc.GenericServerStream[OpenTunnelRequest, OpenTunnelResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type TunnelService_OpenReverseTunnelServer = grpc.BidiStreamingServer[OpenReverseTunnelRequest, OpenReverseTunnelResponse]
+type GrpcTunnelService_OpenTunnelServer = grpc.BidiStreamingServer[OpenTunnelRequest, OpenTunnelResponse]
 
-// TunnelService_ServiceDesc is the grpc.ServiceDesc for TunnelService service.
+func _GrpcTunnelService_OpenReverseTunnel_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(GrpcTunnelServiceServer).OpenReverseTunnel(&grpc.GenericServerStream[OpenReverseTunnelRequest, OpenReverseTunnelResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type GrpcTunnelService_OpenReverseTunnelServer = grpc.BidiStreamingServer[OpenReverseTunnelRequest, OpenReverseTunnelResponse]
+
+// GrpcTunnelService_ServiceDesc is the grpc.ServiceDesc for GrpcTunnelService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var TunnelService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "sesame.type.TunnelService",
-	HandlerType: (*TunnelServiceServer)(nil),
+var GrpcTunnelService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "sesame.v1alpha1.GrpcTunnelService",
+	HandlerType: (*GrpcTunnelServiceServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "OpenTunnel",
-			Handler:       _TunnelService_OpenTunnel_Handler,
+			Handler:       _GrpcTunnelService_OpenTunnel_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 		{
 			StreamName:    "OpenReverseTunnel",
-			Handler:       _TunnelService_OpenReverseTunnel_Handler,
+			Handler:       _GrpcTunnelService_OpenReverseTunnel_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},
-	Metadata: "sesame/type/grpctunnel.proto",
+	Metadata: "sesame/v1alpha1/grpctunnel.proto",
 }

@@ -209,19 +209,21 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        v7.36.2
-// source: sesame/type/grpctunnel.proto
+// source: sesame/v1alpha1/grpctunnel.proto
 
-package typepb
+package sesamepb
 
 import (
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
+
+	typepb "github.com/joeycumines/sesame/typepb"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	status "google.golang.org/genproto/googleapis/rpc/status"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
 )
 
 const (
@@ -232,7 +234,7 @@ const (
 )
 
 // OpenTunnelRequest is the frame message a client sends on the
-// TunnelService.OpenTunnel stream.
+// GrpcTunnelService.OpenTunnel stream.
 //
 // For a single stream ID, the first such message must include the new_stream
 // field. After that, there can be any number of requests sent, via the
@@ -265,7 +267,7 @@ type OpenTunnelRequest struct {
 
 func (x *OpenTunnelRequest) Reset() {
 	*x = OpenTunnelRequest{}
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[0]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -277,7 +279,7 @@ func (x *OpenTunnelRequest) String() string {
 func (*OpenTunnelRequest) ProtoMessage() {}
 
 func (x *OpenTunnelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[0]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -290,7 +292,7 @@ func (x *OpenTunnelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenTunnelRequest.ProtoReflect.Descriptor instead.
 func (*OpenTunnelRequest) Descriptor() ([]byte, []int) {
-	return file_sesame_type_grpctunnel_proto_rawDescGZIP(), []int{0}
+	return file_sesame_v1alpha1_grpctunnel_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *OpenTunnelRequest) GetStreamId() int64 {
@@ -416,7 +418,7 @@ func (*OpenTunnelRequest_HalfClose) isOpenTunnelRequest_Frame() {}
 func (*OpenTunnelRequest_Cancel) isOpenTunnelRequest_Frame() {}
 
 // OpenTunnelResponse is the frame message a server sends on the
-// TunnelService.OpenTunnel stream.
+// GrpcTunnelService.OpenTunnel stream.
 //
 // For a single stream ID, the first such message should include the
 // header field unless no headers are to be sent. After the headers,
@@ -443,7 +445,7 @@ type OpenTunnelResponse struct {
 
 func (x *OpenTunnelResponse) Reset() {
 	*x = OpenTunnelResponse{}
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[1]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -455,7 +457,7 @@ func (x *OpenTunnelResponse) String() string {
 func (*OpenTunnelResponse) ProtoMessage() {}
 
 func (x *OpenTunnelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[1]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -468,7 +470,7 @@ func (x *OpenTunnelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenTunnelResponse.ProtoReflect.Descriptor instead.
 func (*OpenTunnelResponse) Descriptor() ([]byte, []int) {
-	return file_sesame_type_grpctunnel_proto_rawDescGZIP(), []int{1}
+	return file_sesame_v1alpha1_grpctunnel_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *OpenTunnelResponse) GetStreamId() int64 {
@@ -494,7 +496,7 @@ func (x *OpenTunnelResponse) GetWindowUpdate() int32 {
 	return 0
 }
 
-func (x *OpenTunnelResponse) GetHeader() *GrpcMetadata {
+func (x *OpenTunnelResponse) GetHeader() *typepb.GrpcMetadata {
 	if x != nil {
 		if x, ok := x.Frame.(*OpenTunnelResponse_Header); ok {
 			return x.Header
@@ -544,7 +546,7 @@ type OpenTunnelResponse_WindowUpdate struct {
 type OpenTunnelResponse_Header struct {
 	// Sends response headers for this stream. If headers are sent at all,
 	// they must be sent before any response message data.
-	Header *GrpcMetadata `protobuf:"bytes,3,opt,name=header,proto3,oneof"`
+	Header *typepb.GrpcMetadata `protobuf:"bytes,3,opt,name=header,proto3,oneof"`
 }
 
 type OpenTunnelResponse_Message struct {
@@ -578,7 +580,7 @@ func (*OpenTunnelResponse_MessageData) isOpenTunnelResponse_Frame() {}
 func (*OpenTunnelResponse_CloseStream) isOpenTunnelResponse_Frame() {}
 
 // OpenReverseTunnelRequest is the frame message a client sends on the
-// TunnelService.OpenReverseTunnel stream, carrying the responses to the
+// GrpcTunnelService.OpenReverseTunnel stream, carrying the responses to the
 // RPCs the server initiates.
 //
 // The frames are identical in shape to OpenTunnelResponse: for a single
@@ -606,7 +608,7 @@ type OpenReverseTunnelRequest struct {
 
 func (x *OpenReverseTunnelRequest) Reset() {
 	*x = OpenReverseTunnelRequest{}
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[2]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -618,7 +620,7 @@ func (x *OpenReverseTunnelRequest) String() string {
 func (*OpenReverseTunnelRequest) ProtoMessage() {}
 
 func (x *OpenReverseTunnelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[2]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -631,7 +633,7 @@ func (x *OpenReverseTunnelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenReverseTunnelRequest.ProtoReflect.Descriptor instead.
 func (*OpenReverseTunnelRequest) Descriptor() ([]byte, []int) {
-	return file_sesame_type_grpctunnel_proto_rawDescGZIP(), []int{2}
+	return file_sesame_v1alpha1_grpctunnel_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *OpenReverseTunnelRequest) GetStreamId() int64 {
@@ -657,7 +659,7 @@ func (x *OpenReverseTunnelRequest) GetWindowUpdate() int32 {
 	return 0
 }
 
-func (x *OpenReverseTunnelRequest) GetHeader() *GrpcMetadata {
+func (x *OpenReverseTunnelRequest) GetHeader() *typepb.GrpcMetadata {
 	if x != nil {
 		if x, ok := x.Frame.(*OpenReverseTunnelRequest_Header); ok {
 			return x.Header
@@ -707,7 +709,7 @@ type OpenReverseTunnelRequest_WindowUpdate struct {
 type OpenReverseTunnelRequest_Header struct {
 	// Sends response headers for this stream. If headers are sent at all,
 	// they must be sent before any response message data.
-	Header *GrpcMetadata `protobuf:"bytes,3,opt,name=header,proto3,oneof"`
+	Header *typepb.GrpcMetadata `protobuf:"bytes,3,opt,name=header,proto3,oneof"`
 }
 
 type OpenReverseTunnelRequest_Message struct {
@@ -741,7 +743,7 @@ func (*OpenReverseTunnelRequest_MessageData) isOpenReverseTunnelRequest_Frame() 
 func (*OpenReverseTunnelRequest_CloseStream) isOpenReverseTunnelRequest_Frame() {}
 
 // OpenReverseTunnelResponse is the frame message a server sends on the
-// TunnelService.OpenReverseTunnel stream, carrying the requests for the
+// GrpcTunnelService.OpenReverseTunnel stream, carrying the requests for the
 // RPCs the server initiates.
 //
 // The frames are identical in shape to OpenTunnelRequest: for a single
@@ -774,7 +776,7 @@ type OpenReverseTunnelResponse struct {
 
 func (x *OpenReverseTunnelResponse) Reset() {
 	*x = OpenReverseTunnelResponse{}
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[3]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -786,7 +788,7 @@ func (x *OpenReverseTunnelResponse) String() string {
 func (*OpenReverseTunnelResponse) ProtoMessage() {}
 
 func (x *OpenReverseTunnelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[3]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -799,7 +801,7 @@ func (x *OpenReverseTunnelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenReverseTunnelResponse.ProtoReflect.Descriptor instead.
 func (*OpenReverseTunnelResponse) Descriptor() ([]byte, []int) {
-	return file_sesame_type_grpctunnel_proto_rawDescGZIP(), []int{3}
+	return file_sesame_v1alpha1_grpctunnel_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *OpenReverseTunnelResponse) GetStreamId() int64 {
@@ -932,14 +934,14 @@ type NewStream struct {
 	// "sesame.v1alpha1.RemoteControl/NetConn".
 	Method string `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
 	// Request header metadata for the RPC being initiated.
-	Header        *GrpcMetadata `protobuf:"bytes,2,opt,name=header,proto3" json:"header,omitempty"`
+	Header        *typepb.GrpcMetadata `protobuf:"bytes,2,opt,name=header,proto3" json:"header,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NewStream) Reset() {
 	*x = NewStream{}
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[4]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -951,7 +953,7 @@ func (x *NewStream) String() string {
 func (*NewStream) ProtoMessage() {}
 
 func (x *NewStream) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[4]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -964,7 +966,7 @@ func (x *NewStream) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NewStream.ProtoReflect.Descriptor instead.
 func (*NewStream) Descriptor() ([]byte, []int) {
-	return file_sesame_type_grpctunnel_proto_rawDescGZIP(), []int{4}
+	return file_sesame_v1alpha1_grpctunnel_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *NewStream) GetMethod() string {
@@ -974,7 +976,7 @@ func (x *NewStream) GetMethod() string {
 	return ""
 }
 
-func (x *NewStream) GetHeader() *GrpcMetadata {
+func (x *NewStream) GetHeader() *typepb.GrpcMetadata {
 	if x != nil {
 		return x.Header
 	}
@@ -986,7 +988,7 @@ func (x *NewStream) GetHeader() *GrpcMetadata {
 type CloseStream struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Response trailer metadata for the RPC being concluded.
-	Trailer *GrpcMetadata `protobuf:"bytes,1,opt,name=trailer,proto3" json:"trailer,omitempty"`
+	Trailer *typepb.GrpcMetadata `protobuf:"bytes,1,opt,name=trailer,proto3" json:"trailer,omitempty"`
 	// Terminal status of the RPC being concluded.
 	Status        *status.Status `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -995,7 +997,7 @@ type CloseStream struct {
 
 func (x *CloseStream) Reset() {
 	*x = CloseStream{}
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[5]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1007,7 +1009,7 @@ func (x *CloseStream) String() string {
 func (*CloseStream) ProtoMessage() {}
 
 func (x *CloseStream) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[5]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1020,10 +1022,10 @@ func (x *CloseStream) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloseStream.ProtoReflect.Descriptor instead.
 func (*CloseStream) Descriptor() ([]byte, []int) {
-	return file_sesame_type_grpctunnel_proto_rawDescGZIP(), []int{5}
+	return file_sesame_v1alpha1_grpctunnel_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *CloseStream) GetTrailer() *GrpcMetadata {
+func (x *CloseStream) GetTrailer() *typepb.GrpcMetadata {
 	if x != nil {
 		return x.Trailer
 	}
@@ -1056,7 +1058,7 @@ type EncodedMessage struct {
 
 func (x *EncodedMessage) Reset() {
 	*x = EncodedMessage{}
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[6]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1068,7 +1070,7 @@ func (x *EncodedMessage) String() string {
 func (*EncodedMessage) ProtoMessage() {}
 
 func (x *EncodedMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_sesame_type_grpctunnel_proto_msgTypes[6]
+	mi := &file_sesame_v1alpha1_grpctunnel_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1081,7 +1083,7 @@ func (x *EncodedMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EncodedMessage.ProtoReflect.Descriptor instead.
 func (*EncodedMessage) Descriptor() ([]byte, []int) {
-	return file_sesame_type_grpctunnel_proto_rawDescGZIP(), []int{6}
+	return file_sesame_v1alpha1_grpctunnel_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *EncodedMessage) GetSize() int32 {
@@ -1098,44 +1100,44 @@ func (x *EncodedMessage) GetData() []byte {
 	return nil
 }
 
-var File_sesame_type_grpctunnel_proto protoreflect.FileDescriptor
+var File_sesame_v1alpha1_grpctunnel_proto protoreflect.FileDescriptor
 
-const file_sesame_type_grpctunnel_proto_rawDesc = "" +
+const file_sesame_v1alpha1_grpctunnel_proto_rawDesc = "" +
 	"\n" +
-	"\x1csesame/type/grpctunnel.proto\x12\vsesame.type\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x17google/rpc/status.proto\x1a\x1esesame/type/grpcmetadata.proto\"\xe7\x02\n" +
+	" sesame/v1alpha1/grpctunnel.proto\x12\x0fsesame.v1alpha1\x1a\x1fgoogle/api/field_behavior.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x17google/rpc/status.proto\x1a\x1esesame/type/grpcmetadata.proto\"\xef\x02\n" +
 	"\x11OpenTunnelRequest\x12 \n" +
 	"\tstream_id\x18\x01 \x01(\x03B\x03\xe0A\x01R\bstreamId\x12%\n" +
-	"\rwindow_update\x18\x02 \x01(\x05H\x00R\fwindowUpdate\x127\n" +
+	"\rwindow_update\x18\x02 \x01(\x05H\x00R\fwindowUpdate\x12;\n" +
 	"\n" +
-	"new_stream\x18\x03 \x01(\v2\x16.sesame.type.NewStreamH\x00R\tnewStream\x127\n" +
-	"\amessage\x18\x04 \x01(\v2\x1b.sesame.type.EncodedMessageH\x00R\amessage\x12#\n" +
+	"new_stream\x18\x03 \x01(\v2\x1a.sesame.v1alpha1.NewStreamH\x00R\tnewStream\x12;\n" +
+	"\amessage\x18\x04 \x01(\v2\x1f.sesame.v1alpha1.EncodedMessageH\x00R\amessage\x12#\n" +
 	"\fmessage_data\x18\x05 \x01(\fH\x00R\vmessageData\x127\n" +
 	"\n" +
 	"half_close\x18\x06 \x01(\v2\x16.google.protobuf.EmptyH\x00R\thalfClose\x120\n" +
 	"\x06cancel\x18\a \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06cancelB\a\n" +
-	"\x05frame\"\xb3\x02\n" +
+	"\x05frame\"\xbb\x02\n" +
 	"\x12OpenTunnelResponse\x12\x1b\n" +
 	"\tstream_id\x18\x01 \x01(\x03R\bstreamId\x12%\n" +
 	"\rwindow_update\x18\x02 \x01(\x05H\x00R\fwindowUpdate\x123\n" +
-	"\x06header\x18\x03 \x01(\v2\x19.sesame.type.GrpcMetadataH\x00R\x06header\x127\n" +
-	"\amessage\x18\x04 \x01(\v2\x1b.sesame.type.EncodedMessageH\x00R\amessage\x12#\n" +
-	"\fmessage_data\x18\x05 \x01(\fH\x00R\vmessageData\x12=\n" +
-	"\fclose_stream\x18\x06 \x01(\v2\x18.sesame.type.CloseStreamH\x00R\vcloseStreamB\a\n" +
-	"\x05frame\"\xbe\x02\n" +
+	"\x06header\x18\x03 \x01(\v2\x19.sesame.type.GrpcMetadataH\x00R\x06header\x12;\n" +
+	"\amessage\x18\x04 \x01(\v2\x1f.sesame.v1alpha1.EncodedMessageH\x00R\amessage\x12#\n" +
+	"\fmessage_data\x18\x05 \x01(\fH\x00R\vmessageData\x12A\n" +
+	"\fclose_stream\x18\x06 \x01(\v2\x1c.sesame.v1alpha1.CloseStreamH\x00R\vcloseStreamB\a\n" +
+	"\x05frame\"\xc6\x02\n" +
 	"\x18OpenReverseTunnelRequest\x12 \n" +
 	"\tstream_id\x18\x01 \x01(\x03B\x03\xe0A\x01R\bstreamId\x12%\n" +
 	"\rwindow_update\x18\x02 \x01(\x05H\x00R\fwindowUpdate\x123\n" +
-	"\x06header\x18\x03 \x01(\v2\x19.sesame.type.GrpcMetadataH\x00R\x06header\x127\n" +
-	"\amessage\x18\x04 \x01(\v2\x1b.sesame.type.EncodedMessageH\x00R\amessage\x12#\n" +
-	"\fmessage_data\x18\x05 \x01(\fH\x00R\vmessageData\x12=\n" +
-	"\fclose_stream\x18\x06 \x01(\v2\x18.sesame.type.CloseStreamH\x00R\vcloseStreamB\a\n" +
-	"\x05frame\"\xea\x02\n" +
+	"\x06header\x18\x03 \x01(\v2\x19.sesame.type.GrpcMetadataH\x00R\x06header\x12;\n" +
+	"\amessage\x18\x04 \x01(\v2\x1f.sesame.v1alpha1.EncodedMessageH\x00R\amessage\x12#\n" +
+	"\fmessage_data\x18\x05 \x01(\fH\x00R\vmessageData\x12A\n" +
+	"\fclose_stream\x18\x06 \x01(\v2\x1c.sesame.v1alpha1.CloseStreamH\x00R\vcloseStreamB\a\n" +
+	"\x05frame\"\xf2\x02\n" +
 	"\x19OpenReverseTunnelResponse\x12\x1b\n" +
 	"\tstream_id\x18\x01 \x01(\x03R\bstreamId\x12%\n" +
-	"\rwindow_update\x18\x02 \x01(\x05H\x00R\fwindowUpdate\x127\n" +
+	"\rwindow_update\x18\x02 \x01(\x05H\x00R\fwindowUpdate\x12;\n" +
 	"\n" +
-	"new_stream\x18\x03 \x01(\v2\x16.sesame.type.NewStreamH\x00R\tnewStream\x127\n" +
-	"\amessage\x18\x04 \x01(\v2\x1b.sesame.type.EncodedMessageH\x00R\amessage\x12#\n" +
+	"new_stream\x18\x03 \x01(\v2\x1a.sesame.v1alpha1.NewStreamH\x00R\tnewStream\x12;\n" +
+	"\amessage\x18\x04 \x01(\v2\x1f.sesame.v1alpha1.EncodedMessageH\x00R\amessage\x12#\n" +
 	"\fmessage_data\x18\x05 \x01(\fH\x00R\vmessageData\x127\n" +
 	"\n" +
 	"half_close\x18\x06 \x01(\v2\x16.google.protobuf.EmptyH\x00R\thalfClose\x120\n" +
@@ -1149,60 +1151,60 @@ const file_sesame_type_grpctunnel_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\v2\x12.google.rpc.StatusB\x03\xe0A\x01R\x06status\"B\n" +
 	"\x0eEncodedMessage\x12\x17\n" +
 	"\x04size\x18\x01 \x01(\x05B\x03\xe0A\x01R\x04size\x12\x17\n" +
-	"\x04data\x18\x02 \x01(\fB\x03\xe0A\x01R\x04data2\xca\x01\n" +
-	"\rTunnelService\x12Q\n" +
+	"\x04data\x18\x02 \x01(\fB\x03\xe0A\x01R\x04data2\xde\x01\n" +
+	"\x11GrpcTunnelService\x12Y\n" +
 	"\n" +
-	"OpenTunnel\x12\x1e.sesame.type.OpenTunnelRequest\x1a\x1f.sesame.type.OpenTunnelResponse(\x010\x01\x12f\n" +
-	"\x11OpenReverseTunnel\x12%.sesame.type.OpenReverseTunnelRequest\x1a&.sesame.type.OpenReverseTunnelResponse(\x010\x01B\\\n" +
-	"!io.github.joeycumines.sesame.typeB\x0fGrpctunnelProtoP\x01Z$github.com/joeycumines/sesame/typepbb\x06proto3"
+	"OpenTunnel\x12\".sesame.v1alpha1.OpenTunnelRequest\x1a#.sesame.v1alpha1.OpenTunnelResponse(\x010\x01\x12n\n" +
+	"\x11OpenReverseTunnel\x12).sesame.v1alpha1.OpenReverseTunnelRequest\x1a*.sesame.v1alpha1.OpenReverseTunnelResponse(\x010\x01Bb\n" +
+	"%io.github.joeycumines.sesame.v1alpha1B\x0fGrpctunnelProtoP\x01Z&github.com/joeycumines/sesame/sesamepbb\x06proto3"
 
 var (
-	file_sesame_type_grpctunnel_proto_rawDescOnce sync.Once
-	file_sesame_type_grpctunnel_proto_rawDescData []byte
+	file_sesame_v1alpha1_grpctunnel_proto_rawDescOnce sync.Once
+	file_sesame_v1alpha1_grpctunnel_proto_rawDescData []byte
 )
 
-func file_sesame_type_grpctunnel_proto_rawDescGZIP() []byte {
-	file_sesame_type_grpctunnel_proto_rawDescOnce.Do(func() {
-		file_sesame_type_grpctunnel_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sesame_type_grpctunnel_proto_rawDesc), len(file_sesame_type_grpctunnel_proto_rawDesc)))
+func file_sesame_v1alpha1_grpctunnel_proto_rawDescGZIP() []byte {
+	file_sesame_v1alpha1_grpctunnel_proto_rawDescOnce.Do(func() {
+		file_sesame_v1alpha1_grpctunnel_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_sesame_v1alpha1_grpctunnel_proto_rawDesc), len(file_sesame_v1alpha1_grpctunnel_proto_rawDesc)))
 	})
-	return file_sesame_type_grpctunnel_proto_rawDescData
+	return file_sesame_v1alpha1_grpctunnel_proto_rawDescData
 }
 
-var file_sesame_type_grpctunnel_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
-var file_sesame_type_grpctunnel_proto_goTypes = []any{
-	(*OpenTunnelRequest)(nil),         // 0: sesame.type.OpenTunnelRequest
-	(*OpenTunnelResponse)(nil),        // 1: sesame.type.OpenTunnelResponse
-	(*OpenReverseTunnelRequest)(nil),  // 2: sesame.type.OpenReverseTunnelRequest
-	(*OpenReverseTunnelResponse)(nil), // 3: sesame.type.OpenReverseTunnelResponse
-	(*NewStream)(nil),                 // 4: sesame.type.NewStream
-	(*CloseStream)(nil),               // 5: sesame.type.CloseStream
-	(*EncodedMessage)(nil),            // 6: sesame.type.EncodedMessage
+var file_sesame_v1alpha1_grpctunnel_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_sesame_v1alpha1_grpctunnel_proto_goTypes = []any{
+	(*OpenTunnelRequest)(nil),         // 0: sesame.v1alpha1.OpenTunnelRequest
+	(*OpenTunnelResponse)(nil),        // 1: sesame.v1alpha1.OpenTunnelResponse
+	(*OpenReverseTunnelRequest)(nil),  // 2: sesame.v1alpha1.OpenReverseTunnelRequest
+	(*OpenReverseTunnelResponse)(nil), // 3: sesame.v1alpha1.OpenReverseTunnelResponse
+	(*NewStream)(nil),                 // 4: sesame.v1alpha1.NewStream
+	(*CloseStream)(nil),               // 5: sesame.v1alpha1.CloseStream
+	(*EncodedMessage)(nil),            // 6: sesame.v1alpha1.EncodedMessage
 	(*emptypb.Empty)(nil),             // 7: google.protobuf.Empty
-	(*GrpcMetadata)(nil),              // 8: sesame.type.GrpcMetadata
+	(*typepb.GrpcMetadata)(nil),       // 8: sesame.type.GrpcMetadata
 	(*status.Status)(nil),             // 9: google.rpc.Status
 }
-var file_sesame_type_grpctunnel_proto_depIdxs = []int32{
-	4,  // 0: sesame.type.OpenTunnelRequest.new_stream:type_name -> sesame.type.NewStream
-	6,  // 1: sesame.type.OpenTunnelRequest.message:type_name -> sesame.type.EncodedMessage
-	7,  // 2: sesame.type.OpenTunnelRequest.half_close:type_name -> google.protobuf.Empty
-	7,  // 3: sesame.type.OpenTunnelRequest.cancel:type_name -> google.protobuf.Empty
-	8,  // 4: sesame.type.OpenTunnelResponse.header:type_name -> sesame.type.GrpcMetadata
-	6,  // 5: sesame.type.OpenTunnelResponse.message:type_name -> sesame.type.EncodedMessage
-	5,  // 6: sesame.type.OpenTunnelResponse.close_stream:type_name -> sesame.type.CloseStream
-	8,  // 7: sesame.type.OpenReverseTunnelRequest.header:type_name -> sesame.type.GrpcMetadata
-	6,  // 8: sesame.type.OpenReverseTunnelRequest.message:type_name -> sesame.type.EncodedMessage
-	5,  // 9: sesame.type.OpenReverseTunnelRequest.close_stream:type_name -> sesame.type.CloseStream
-	4,  // 10: sesame.type.OpenReverseTunnelResponse.new_stream:type_name -> sesame.type.NewStream
-	6,  // 11: sesame.type.OpenReverseTunnelResponse.message:type_name -> sesame.type.EncodedMessage
-	7,  // 12: sesame.type.OpenReverseTunnelResponse.half_close:type_name -> google.protobuf.Empty
-	7,  // 13: sesame.type.OpenReverseTunnelResponse.cancel:type_name -> google.protobuf.Empty
-	8,  // 14: sesame.type.NewStream.header:type_name -> sesame.type.GrpcMetadata
-	8,  // 15: sesame.type.CloseStream.trailer:type_name -> sesame.type.GrpcMetadata
-	9,  // 16: sesame.type.CloseStream.status:type_name -> google.rpc.Status
-	0,  // 17: sesame.type.TunnelService.OpenTunnel:input_type -> sesame.type.OpenTunnelRequest
-	2,  // 18: sesame.type.TunnelService.OpenReverseTunnel:input_type -> sesame.type.OpenReverseTunnelRequest
-	1,  // 19: sesame.type.TunnelService.OpenTunnel:output_type -> sesame.type.OpenTunnelResponse
-	3,  // 20: sesame.type.TunnelService.OpenReverseTunnel:output_type -> sesame.type.OpenReverseTunnelResponse
+var file_sesame_v1alpha1_grpctunnel_proto_depIdxs = []int32{
+	4,  // 0: sesame.v1alpha1.OpenTunnelRequest.new_stream:type_name -> sesame.v1alpha1.NewStream
+	6,  // 1: sesame.v1alpha1.OpenTunnelRequest.message:type_name -> sesame.v1alpha1.EncodedMessage
+	7,  // 2: sesame.v1alpha1.OpenTunnelRequest.half_close:type_name -> google.protobuf.Empty
+	7,  // 3: sesame.v1alpha1.OpenTunnelRequest.cancel:type_name -> google.protobuf.Empty
+	8,  // 4: sesame.v1alpha1.OpenTunnelResponse.header:type_name -> sesame.type.GrpcMetadata
+	6,  // 5: sesame.v1alpha1.OpenTunnelResponse.message:type_name -> sesame.v1alpha1.EncodedMessage
+	5,  // 6: sesame.v1alpha1.OpenTunnelResponse.close_stream:type_name -> sesame.v1alpha1.CloseStream
+	8,  // 7: sesame.v1alpha1.OpenReverseTunnelRequest.header:type_name -> sesame.type.GrpcMetadata
+	6,  // 8: sesame.v1alpha1.OpenReverseTunnelRequest.message:type_name -> sesame.v1alpha1.EncodedMessage
+	5,  // 9: sesame.v1alpha1.OpenReverseTunnelRequest.close_stream:type_name -> sesame.v1alpha1.CloseStream
+	4,  // 10: sesame.v1alpha1.OpenReverseTunnelResponse.new_stream:type_name -> sesame.v1alpha1.NewStream
+	6,  // 11: sesame.v1alpha1.OpenReverseTunnelResponse.message:type_name -> sesame.v1alpha1.EncodedMessage
+	7,  // 12: sesame.v1alpha1.OpenReverseTunnelResponse.half_close:type_name -> google.protobuf.Empty
+	7,  // 13: sesame.v1alpha1.OpenReverseTunnelResponse.cancel:type_name -> google.protobuf.Empty
+	8,  // 14: sesame.v1alpha1.NewStream.header:type_name -> sesame.type.GrpcMetadata
+	8,  // 15: sesame.v1alpha1.CloseStream.trailer:type_name -> sesame.type.GrpcMetadata
+	9,  // 16: sesame.v1alpha1.CloseStream.status:type_name -> google.rpc.Status
+	0,  // 17: sesame.v1alpha1.GrpcTunnelService.OpenTunnel:input_type -> sesame.v1alpha1.OpenTunnelRequest
+	2,  // 18: sesame.v1alpha1.GrpcTunnelService.OpenReverseTunnel:input_type -> sesame.v1alpha1.OpenReverseTunnelRequest
+	1,  // 19: sesame.v1alpha1.GrpcTunnelService.OpenTunnel:output_type -> sesame.v1alpha1.OpenTunnelResponse
+	3,  // 20: sesame.v1alpha1.GrpcTunnelService.OpenReverseTunnel:output_type -> sesame.v1alpha1.OpenReverseTunnelResponse
 	19, // [19:21] is the sub-list for method output_type
 	17, // [17:19] is the sub-list for method input_type
 	17, // [17:17] is the sub-list for extension type_name
@@ -1210,13 +1212,12 @@ var file_sesame_type_grpctunnel_proto_depIdxs = []int32{
 	0,  // [0:17] is the sub-list for field type_name
 }
 
-func init() { file_sesame_type_grpctunnel_proto_init() }
-func file_sesame_type_grpctunnel_proto_init() {
-	if File_sesame_type_grpctunnel_proto != nil {
+func init() { file_sesame_v1alpha1_grpctunnel_proto_init() }
+func file_sesame_v1alpha1_grpctunnel_proto_init() {
+	if File_sesame_v1alpha1_grpctunnel_proto != nil {
 		return
 	}
-	file_sesame_type_grpcmetadata_proto_init()
-	file_sesame_type_grpctunnel_proto_msgTypes[0].OneofWrappers = []any{
+	file_sesame_v1alpha1_grpctunnel_proto_msgTypes[0].OneofWrappers = []any{
 		(*OpenTunnelRequest_WindowUpdate)(nil),
 		(*OpenTunnelRequest_NewStream)(nil),
 		(*OpenTunnelRequest_Message)(nil),
@@ -1224,21 +1225,21 @@ func file_sesame_type_grpctunnel_proto_init() {
 		(*OpenTunnelRequest_HalfClose)(nil),
 		(*OpenTunnelRequest_Cancel)(nil),
 	}
-	file_sesame_type_grpctunnel_proto_msgTypes[1].OneofWrappers = []any{
+	file_sesame_v1alpha1_grpctunnel_proto_msgTypes[1].OneofWrappers = []any{
 		(*OpenTunnelResponse_WindowUpdate)(nil),
 		(*OpenTunnelResponse_Header)(nil),
 		(*OpenTunnelResponse_Message)(nil),
 		(*OpenTunnelResponse_MessageData)(nil),
 		(*OpenTunnelResponse_CloseStream)(nil),
 	}
-	file_sesame_type_grpctunnel_proto_msgTypes[2].OneofWrappers = []any{
+	file_sesame_v1alpha1_grpctunnel_proto_msgTypes[2].OneofWrappers = []any{
 		(*OpenReverseTunnelRequest_WindowUpdate)(nil),
 		(*OpenReverseTunnelRequest_Header)(nil),
 		(*OpenReverseTunnelRequest_Message)(nil),
 		(*OpenReverseTunnelRequest_MessageData)(nil),
 		(*OpenReverseTunnelRequest_CloseStream)(nil),
 	}
-	file_sesame_type_grpctunnel_proto_msgTypes[3].OneofWrappers = []any{
+	file_sesame_v1alpha1_grpctunnel_proto_msgTypes[3].OneofWrappers = []any{
 		(*OpenReverseTunnelResponse_WindowUpdate)(nil),
 		(*OpenReverseTunnelResponse_NewStream)(nil),
 		(*OpenReverseTunnelResponse_Message)(nil),
@@ -1250,17 +1251,17 @@ func file_sesame_type_grpctunnel_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sesame_type_grpctunnel_proto_rawDesc), len(file_sesame_type_grpctunnel_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_sesame_v1alpha1_grpctunnel_proto_rawDesc), len(file_sesame_v1alpha1_grpctunnel_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_sesame_type_grpctunnel_proto_goTypes,
-		DependencyIndexes: file_sesame_type_grpctunnel_proto_depIdxs,
-		MessageInfos:      file_sesame_type_grpctunnel_proto_msgTypes,
+		GoTypes:           file_sesame_v1alpha1_grpctunnel_proto_goTypes,
+		DependencyIndexes: file_sesame_v1alpha1_grpctunnel_proto_depIdxs,
+		MessageInfos:      file_sesame_v1alpha1_grpctunnel_proto_msgTypes,
 	}.Build()
-	File_sesame_type_grpctunnel_proto = out.File
-	file_sesame_type_grpctunnel_proto_goTypes = nil
-	file_sesame_type_grpctunnel_proto_depIdxs = nil
+	File_sesame_v1alpha1_grpctunnel_proto = out.File
+	file_sesame_v1alpha1_grpctunnel_proto_goTypes = nil
+	file_sesame_v1alpha1_grpctunnel_proto_depIdxs = nil
 }

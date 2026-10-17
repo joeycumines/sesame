@@ -3,7 +3,6 @@
 
 package sesamepb
 
-import "github.com/joeycumines/sesame/typepb"
 import "google.golang.org/genproto/googleapis/rpc/status"
 
 // Proto_ShallowCopy copies fields, from v to the receiver, using field getters.
@@ -11,9 +10,9 @@ import "google.golang.org/genproto/googleapis/rpc/status"
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenTunnelRequest) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteTunnelRequest) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *OpenTunnelRequest:
+	case *OpenRemoteTunnelRequest:
 		x.Id = v.GetId()
 		x.Data = v.GetData()
 	default:
@@ -21,26 +20,26 @@ func (x *OpenTunnelRequest) Proto_ShallowCopy(v interface{}) {
 			x.Id = v.GetId()
 		}
 		if v, ok := v.(interface {
-			GetData() isOpenTunnelRequest_Data
+			GetData() isOpenRemoteTunnelRequest_Data
 		}); ok {
 			x.Data = v.GetData()
 		} else {
 			func() {
 				if v, ok := v.(interface {
-					GetConnect() *OpenTunnelRequest_Connect
+					GetConnect() *OpenRemoteTunnelRequest_Connect
 				}); ok {
-					var defaultValue *OpenTunnelRequest_Connect
+					var defaultValue *OpenRemoteTunnelRequest_Connect
 					if v := v.GetConnect(); v != defaultValue {
-						x.Data = &OpenTunnelRequest_Connect_{Connect: v}
+						x.Data = &OpenRemoteTunnelRequest_Connect_{Connect: v}
 						return
 					}
 				}
 				if v, ok := v.(interface {
-					GetStream() *OpenTunnelRequest_Stream
+					GetStream() *OpenRemoteTunnelRequest_Stream
 				}); ok {
-					var defaultValue *OpenTunnelRequest_Stream
+					var defaultValue *OpenRemoteTunnelRequest_Stream
 					if v := v.GetStream(); v != defaultValue {
-						x.Data = &OpenTunnelRequest_Stream_{Stream: v}
+						x.Data = &OpenRemoteTunnelRequest_Stream_{Stream: v}
 						return
 					}
 				}
@@ -50,9 +49,9 @@ func (x *OpenTunnelRequest) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenTunnelRequest) Proto_ShallowClone() (c *OpenTunnelRequest) {
+func (x *OpenRemoteTunnelRequest) Proto_ShallowClone() (c *OpenRemoteTunnelRequest) {
 	if x != nil {
-		c = new(OpenTunnelRequest)
+		c = new(OpenRemoteTunnelRequest)
 		c.Id = x.Id
 		c.Data = x.Data
 	}
@@ -64,9 +63,9 @@ func (x *OpenTunnelRequest) Proto_ShallowClone() (c *OpenTunnelRequest) {
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenTunnelRequest_Connect) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteTunnelRequest_Connect) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *OpenTunnelRequest_Connect:
+	case *OpenRemoteTunnelRequest_Connect:
 		x.Remote = v.GetRemote()
 		x.StreamBuffer = v.GetStreamBuffer()
 	default:
@@ -80,9 +79,9 @@ func (x *OpenTunnelRequest_Connect) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenTunnelRequest_Connect) Proto_ShallowClone() (c *OpenTunnelRequest_Connect) {
+func (x *OpenRemoteTunnelRequest_Connect) Proto_ShallowClone() (c *OpenRemoteTunnelRequest_Connect) {
 	if x != nil {
-		c = new(OpenTunnelRequest_Connect)
+		c = new(OpenRemoteTunnelRequest_Connect)
 		c.Remote = x.Remote
 		c.StreamBuffer = x.StreamBuffer
 	}
@@ -94,9 +93,9 @@ func (x *OpenTunnelRequest_Connect) Proto_ShallowClone() (c *OpenTunnelRequest_C
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenTunnelRequest_Stream) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteTunnelRequest_Stream) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *OpenTunnelRequest_Stream:
+	case *OpenRemoteTunnelRequest_Stream:
 		x.Error = v.GetError()
 	default:
 		if v, ok := v.(interface{ GetError() *status.Status }); ok {
@@ -106,9 +105,9 @@ func (x *OpenTunnelRequest_Stream) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenTunnelRequest_Stream) Proto_ShallowClone() (c *OpenTunnelRequest_Stream) {
+func (x *OpenRemoteTunnelRequest_Stream) Proto_ShallowClone() (c *OpenRemoteTunnelRequest_Stream) {
 	if x != nil {
-		c = new(OpenTunnelRequest_Stream)
+		c = new(OpenRemoteTunnelRequest_Stream)
 		c.Error = x.Error
 	}
 	return
@@ -119,9 +118,9 @@ func (x *OpenTunnelRequest_Stream) Proto_ShallowClone() (c *OpenTunnelRequest_St
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenTunnelResponse) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteTunnelResponse) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *OpenTunnelResponse:
+	case *OpenRemoteTunnelResponse:
 		x.Id = v.GetId()
 		x.Data = v.GetData()
 	default:
@@ -129,26 +128,26 @@ func (x *OpenTunnelResponse) Proto_ShallowCopy(v interface{}) {
 			x.Id = v.GetId()
 		}
 		if v, ok := v.(interface {
-			GetData() isOpenTunnelResponse_Data
+			GetData() isOpenRemoteTunnelResponse_Data
 		}); ok {
 			x.Data = v.GetData()
 		} else {
 			func() {
 				if v, ok := v.(interface {
-					GetConnect() *OpenTunnelResponse_Connect
+					GetConnect() *OpenRemoteTunnelResponse_Connect
 				}); ok {
-					var defaultValue *OpenTunnelResponse_Connect
+					var defaultValue *OpenRemoteTunnelResponse_Connect
 					if v := v.GetConnect(); v != defaultValue {
-						x.Data = &OpenTunnelResponse_Connect_{Connect: v}
+						x.Data = &OpenRemoteTunnelResponse_Connect_{Connect: v}
 						return
 					}
 				}
 				if v, ok := v.(interface {
-					GetStream() *OpenTunnelResponse_Stream
+					GetStream() *OpenRemoteTunnelResponse_Stream
 				}); ok {
-					var defaultValue *OpenTunnelResponse_Stream
+					var defaultValue *OpenRemoteTunnelResponse_Stream
 					if v := v.GetStream(); v != defaultValue {
-						x.Data = &OpenTunnelResponse_Stream_{Stream: v}
+						x.Data = &OpenRemoteTunnelResponse_Stream_{Stream: v}
 						return
 					}
 				}
@@ -158,9 +157,9 @@ func (x *OpenTunnelResponse) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenTunnelResponse) Proto_ShallowClone() (c *OpenTunnelResponse) {
+func (x *OpenRemoteTunnelResponse) Proto_ShallowClone() (c *OpenRemoteTunnelResponse) {
 	if x != nil {
-		c = new(OpenTunnelResponse)
+		c = new(OpenRemoteTunnelResponse)
 		c.Id = x.Id
 		c.Data = x.Data
 	}
@@ -172,13 +171,13 @@ func (x *OpenTunnelResponse) Proto_ShallowClone() (c *OpenTunnelResponse) {
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenTunnelResponse_Connect) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteTunnelResponse_Connect) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenTunnelResponse_Connect) Proto_ShallowClone() (c *OpenTunnelResponse_Connect) {
+func (x *OpenRemoteTunnelResponse_Connect) Proto_ShallowClone() (c *OpenRemoteTunnelResponse_Connect) {
 	if x != nil {
-		c = new(OpenTunnelResponse_Connect)
+		c = new(OpenRemoteTunnelResponse_Connect)
 	}
 	return
 }
@@ -188,9 +187,9 @@ func (x *OpenTunnelResponse_Connect) Proto_ShallowClone() (c *OpenTunnelResponse
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenTunnelResponse_Stream) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteTunnelResponse_Stream) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *OpenTunnelResponse_Stream:
+	case *OpenRemoteTunnelResponse_Stream:
 		x.Endpoint = v.GetEndpoint()
 	default:
 		if v, ok := v.(interface{ GetEndpoint() string }); ok {
@@ -200,9 +199,9 @@ func (x *OpenTunnelResponse_Stream) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenTunnelResponse_Stream) Proto_ShallowClone() (c *OpenTunnelResponse_Stream) {
+func (x *OpenRemoteTunnelResponse_Stream) Proto_ShallowClone() (c *OpenRemoteTunnelResponse_Stream) {
 	if x != nil {
-		c = new(OpenTunnelResponse_Stream)
+		c = new(OpenRemoteTunnelResponse_Stream)
 		c.Endpoint = x.Endpoint
 	}
 	return
@@ -213,41 +212,41 @@ func (x *OpenTunnelResponse_Stream) Proto_ShallowClone() (c *OpenTunnelResponse_
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenStreamRequest) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteStreamRequest) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *OpenStreamRequest:
+	case *OpenRemoteStreamRequest:
 		x.Data = v.GetData()
 	default:
 		if v, ok := v.(interface {
-			GetData() isOpenStreamRequest_Data
+			GetData() isOpenRemoteStreamRequest_Data
 		}); ok {
 			x.Data = v.GetData()
 		} else {
 			func() {
 				if v, ok := v.(interface {
-					GetConnect() *OpenStreamRequest_Connect
+					GetConnect() *OpenRemoteStreamRequest_Connect
 				}); ok {
-					var defaultValue *OpenStreamRequest_Connect
+					var defaultValue *OpenRemoteStreamRequest_Connect
 					if v := v.GetConnect(); v != defaultValue {
-						x.Data = &OpenStreamRequest_Connect_{Connect: v}
+						x.Data = &OpenRemoteStreamRequest_Connect_{Connect: v}
 						return
 					}
 				}
 				if v, ok := v.(interface {
-					GetDial() *OpenStreamRequest_Dial
+					GetDial() *OpenRemoteStreamRequest_Dial
 				}); ok {
-					var defaultValue *OpenStreamRequest_Dial
+					var defaultValue *OpenRemoteStreamRequest_Dial
 					if v := v.GetDial(); v != defaultValue {
-						x.Data = &OpenStreamRequest_Dial_{Dial: v}
+						x.Data = &OpenRemoteStreamRequest_Dial_{Dial: v}
 						return
 					}
 				}
 				if v, ok := v.(interface {
-					GetTunnel() *typepb.OpenReverseTunnelRequest
+					GetTunnel() *OpenReverseTunnelRequest
 				}); ok {
-					var defaultValue *typepb.OpenReverseTunnelRequest
+					var defaultValue *OpenReverseTunnelRequest
 					if v := v.GetTunnel(); v != defaultValue {
-						x.Data = &OpenStreamRequest_Tunnel{Tunnel: v}
+						x.Data = &OpenRemoteStreamRequest_Tunnel{Tunnel: v}
 						return
 					}
 				}
@@ -257,9 +256,9 @@ func (x *OpenStreamRequest) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenStreamRequest) Proto_ShallowClone() (c *OpenStreamRequest) {
+func (x *OpenRemoteStreamRequest) Proto_ShallowClone() (c *OpenRemoteStreamRequest) {
 	if x != nil {
-		c = new(OpenStreamRequest)
+		c = new(OpenRemoteStreamRequest)
 		c.Data = x.Data
 	}
 	return
@@ -270,9 +269,9 @@ func (x *OpenStreamRequest) Proto_ShallowClone() (c *OpenStreamRequest) {
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenStreamRequest_Connect) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteStreamRequest_Connect) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *OpenStreamRequest_Connect:
+	case *OpenRemoteStreamRequest_Connect:
 		x.Remote = v.GetRemote()
 	default:
 		if v, ok := v.(interface{ GetRemote() string }); ok {
@@ -282,9 +281,9 @@ func (x *OpenStreamRequest_Connect) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenStreamRequest_Connect) Proto_ShallowClone() (c *OpenStreamRequest_Connect) {
+func (x *OpenRemoteStreamRequest_Connect) Proto_ShallowClone() (c *OpenRemoteStreamRequest_Connect) {
 	if x != nil {
-		c = new(OpenStreamRequest_Connect)
+		c = new(OpenRemoteStreamRequest_Connect)
 		c.Remote = x.Remote
 	}
 	return
@@ -295,13 +294,13 @@ func (x *OpenStreamRequest_Connect) Proto_ShallowClone() (c *OpenStreamRequest_C
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenStreamRequest_Dial) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteStreamRequest_Dial) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenStreamRequest_Dial) Proto_ShallowClone() (c *OpenStreamRequest_Dial) {
+func (x *OpenRemoteStreamRequest_Dial) Proto_ShallowClone() (c *OpenRemoteStreamRequest_Dial) {
 	if x != nil {
-		c = new(OpenStreamRequest_Dial)
+		c = new(OpenRemoteStreamRequest_Dial)
 	}
 	return
 }
@@ -311,41 +310,41 @@ func (x *OpenStreamRequest_Dial) Proto_ShallowClone() (c *OpenStreamRequest_Dial
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenStreamResponse) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteStreamResponse) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *OpenStreamResponse:
+	case *OpenRemoteStreamResponse:
 		x.Data = v.GetData()
 	default:
 		if v, ok := v.(interface {
-			GetData() isOpenStreamResponse_Data
+			GetData() isOpenRemoteStreamResponse_Data
 		}); ok {
 			x.Data = v.GetData()
 		} else {
 			func() {
 				if v, ok := v.(interface {
-					GetConnect() *OpenStreamResponse_Connect
+					GetConnect() *OpenRemoteStreamResponse_Connect
 				}); ok {
-					var defaultValue *OpenStreamResponse_Connect
+					var defaultValue *OpenRemoteStreamResponse_Connect
 					if v := v.GetConnect(); v != defaultValue {
-						x.Data = &OpenStreamResponse_Connect_{Connect: v}
+						x.Data = &OpenRemoteStreamResponse_Connect_{Connect: v}
 						return
 					}
 				}
 				if v, ok := v.(interface {
-					GetDial() *OpenStreamResponse_Dial
+					GetDial() *OpenRemoteStreamResponse_Dial
 				}); ok {
-					var defaultValue *OpenStreamResponse_Dial
+					var defaultValue *OpenRemoteStreamResponse_Dial
 					if v := v.GetDial(); v != defaultValue {
-						x.Data = &OpenStreamResponse_Dial_{Dial: v}
+						x.Data = &OpenRemoteStreamResponse_Dial_{Dial: v}
 						return
 					}
 				}
 				if v, ok := v.(interface {
-					GetTunnel() *typepb.OpenReverseTunnelResponse
+					GetTunnel() *OpenReverseTunnelResponse
 				}); ok {
-					var defaultValue *typepb.OpenReverseTunnelResponse
+					var defaultValue *OpenReverseTunnelResponse
 					if v := v.GetTunnel(); v != defaultValue {
-						x.Data = &OpenStreamResponse_Tunnel{Tunnel: v}
+						x.Data = &OpenRemoteStreamResponse_Tunnel{Tunnel: v}
 						return
 					}
 				}
@@ -355,9 +354,9 @@ func (x *OpenStreamResponse) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenStreamResponse) Proto_ShallowClone() (c *OpenStreamResponse) {
+func (x *OpenRemoteStreamResponse) Proto_ShallowClone() (c *OpenRemoteStreamResponse) {
 	if x != nil {
-		c = new(OpenStreamResponse)
+		c = new(OpenRemoteStreamResponse)
 		c.Data = x.Data
 	}
 	return
@@ -368,13 +367,13 @@ func (x *OpenStreamResponse) Proto_ShallowClone() (c *OpenStreamResponse) {
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenStreamResponse_Connect) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteStreamResponse_Connect) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenStreamResponse_Connect) Proto_ShallowClone() (c *OpenStreamResponse_Connect) {
+func (x *OpenRemoteStreamResponse_Connect) Proto_ShallowClone() (c *OpenRemoteStreamResponse_Connect) {
 	if x != nil {
-		c = new(OpenStreamResponse_Connect)
+		c = new(OpenRemoteStreamResponse_Connect)
 	}
 	return
 }
@@ -384,9 +383,9 @@ func (x *OpenStreamResponse_Connect) Proto_ShallowClone() (c *OpenStreamResponse
 // field getters, which are defined as any methods of the same signature as those
 // generated for the receiver type, with a name starting with Get.
 // WARNING: Optional fields may be ignored, if v is not the receiver type.
-func (x *OpenStreamResponse_Dial) Proto_ShallowCopy(v interface{}) {
+func (x *OpenRemoteStreamResponse_Dial) Proto_ShallowCopy(v interface{}) {
 	switch v := v.(type) {
-	case *OpenStreamResponse_Dial:
+	case *OpenRemoteStreamResponse_Dial:
 		x.Endpoint = v.GetEndpoint()
 	default:
 		if v, ok := v.(interface{ GetEndpoint() string }); ok {
@@ -396,9 +395,9 @@ func (x *OpenStreamResponse_Dial) Proto_ShallowCopy(v interface{}) {
 }
 
 // Proto_ShallowClone returns a shallow copy of the receiver or nil if it's nil.
-func (x *OpenStreamResponse_Dial) Proto_ShallowClone() (c *OpenStreamResponse_Dial) {
+func (x *OpenRemoteStreamResponse_Dial) Proto_ShallowClone() (c *OpenRemoteStreamResponse_Dial) {
 	if x != nil {
-		c = new(OpenStreamResponse_Dial)
+		c = new(OpenRemoteStreamResponse_Dial)
 		c.Endpoint = x.Endpoint
 	}
 	return

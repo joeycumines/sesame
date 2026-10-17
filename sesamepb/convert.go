@@ -1,4 +1,4 @@
-package typepb
+package sesamepb
 
 // Hand-written conversions between the forward and reverse tunnel frame
 // vocabularies. The two vocabularies are wire-identical in shape (see

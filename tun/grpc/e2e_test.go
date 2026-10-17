@@ -4,6 +4,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"math"
+	"math/rand"
+	"net"
+	"runtime"
+	"sort"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
 	"github.com/joeycumines/sesame/internal/grpctest"
 	"github.com/joeycumines/sesame/internal/pipelistener"
 	"github.com/joeycumines/sesame/internal/testutil"
@@ -18,16 +29,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"io"
-	"math"
-	"math/rand"
-	"net"
-	"runtime"
-	"sort"
-	"sync"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 type (
@@ -75,8 +76,8 @@ func reverseTunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.Clien
 			default:
 			}
 		}}
-		cc := ccFactory(func(h testutil.GRPCServer) { typepb.RegisterTunnelServiceServer(h, &svc) })
-		st, err := typepb.NewTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
+		cc := ccFactory(func(h testutil.GRPCServer) { sesamepb.RegisterGrpcTunnelServiceServer(h, &svc) })
+		st, err := sesamepb.NewGrpcTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
 		if err != nil {
 			panic(err)
 		}
@@ -136,8 +137,8 @@ func tunnelCCFactory(ccFactory testutil.ClientConnFactory) testutil.ClientConnFa
 	return func(fn func(h testutil.GRPCServer)) testutil.ClientConnCloser {
 		svc := grpctun.TunnelServer{NoReverseTunnels: true}
 		fn(&svc)
-		cc := ccFactory(func(h testutil.GRPCServer) { typepb.RegisterTunnelServiceServer(h, &svc) })
-		st, err := typepb.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+		cc := ccFactory(func(h testutil.GRPCServer) { sesamepb.RegisterGrpcTunnelServiceServer(h, &svc) })
+		st, err := sesamepb.NewGrpcTunnelServiceClient(cc).OpenTunnel(context.Background())
 		if err != nil {
 			panic(err)
 		}
@@ -254,9 +255,9 @@ func Test_largeMessage(t *testing.T) {
 						}
 					}
 					var extra string
-					if msg, ok := msg.(*typepb.OpenTunnelResponse); ok {
+					if msg, ok := msg.(*sesamepb.OpenTunnelResponse); ok {
 						switch frame := msg.GetFrame().(type) {
-						case *typepb.OpenTunnelResponse_Message:
+						case *sesamepb.OpenTunnelResponse_Message:
 							extra = fmt.Sprintf(` s2c_message=%d/%d`, len(frame.Message.GetData()), frame.Message.GetSize())
 							if remainingMsg != 0 {
 								t.Error(`never finished previous message`, remainingMsg)
@@ -276,7 +277,7 @@ func Test_largeMessage(t *testing.T) {
 								t.Error(`unexpectedly large message`, frame.Message.GetSize())
 							}
 
-						case *typepb.OpenTunnelResponse_MessageData:
+						case *sesamepb.OpenTunnelResponse_MessageData:
 							extra = fmt.Sprintf(` s2c_message_data=%d`, len(frame.MessageData))
 							if v := atomic.AddInt32(&remainingMsg, -int32(len(frame.MessageData))); v < 0 {
 								t.Error(`bad remainingMsg`, v)
@@ -521,7 +522,7 @@ func Test_clientCancel(t *testing.T) {
 			conn = &debugClientConnSends{
 				clientConnCloserI: conn,
 				hook: func(msg any) {
-					if _, ok := msg.(*typepb.OpenTunnelRequest).GetFrame().(*typepb.OpenTunnelRequest_Cancel); ok {
+					if _, ok := msg.(*sesamepb.OpenTunnelRequest).GetFrame().(*sesamepb.OpenTunnelRequest_Cancel); ok {
 						cin <- struct{}{}
 						<-cout
 					}

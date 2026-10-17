@@ -18,17 +18,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+	"sync"
+
 	"github.com/fullstorydev/grpchan"
 	"github.com/joeycumines/sesame/internal/flowcontrol"
+	"github.com/joeycumines/sesame/sesamepb"
 	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-	"io"
-	"strings"
-	"sync"
 )
 
 const (
@@ -70,7 +72,7 @@ func serveTunnel(c *tunnelConfig) error {
 	// initialise flow control, wrapping stream
 	// WARNING not ready for use yet (needs to be wired up with the tunnelServer)
 	fcInterface := &flowControlServer{tunnelStreamServer: stream}
-	fcConn := flowcontrol.NewConn[uint64, *typepb.OpenTunnelResponse, *typepb.OpenTunnelRequest](fcInterface)
+	fcConn := flowcontrol.NewConn[uint64, *sesamepb.OpenTunnelResponse, *sesamepb.OpenTunnelRequest](fcInterface)
 	stream = fcConn
 
 	tun := tunnelServer{
@@ -90,13 +92,13 @@ func serveTunnel(c *tunnelConfig) error {
 
 type tunnelStreamServer interface {
 	Context() context.Context
-	Send(*typepb.OpenTunnelResponse) error
-	Recv() (*typepb.OpenTunnelRequest, error)
+	Send(*sesamepb.OpenTunnelResponse) error
+	Recv() (*sesamepb.OpenTunnelRequest, error)
 }
 
 type tunnelServer struct {
 	stream       tunnelStreamServer
-	updateWindow func(msg *typepb.OpenTunnelRequest)
+	updateWindow func(msg *sesamepb.OpenTunnelRequest)
 	services     grpchan.HandlerMap
 	stop         <-chan struct{} // graceful
 
@@ -140,16 +142,16 @@ func (s *tunnelServer) serve() error {
 					return status.Error(codes.InvalidArgument, "invalid frame")
 				}
 
-				if f, ok := msg.Frame.(*typepb.OpenTunnelRequest_NewStream); ok {
+				if f, ok := msg.Frame.(*sesamepb.OpenTunnelRequest_NewStream); ok {
 					if ok, err := s.createStream(ctx, uint64(msg.StreamId), f.NewStream); err != nil {
 						if !ok {
 							return err
 						} else {
 							st, _ := status.FromError(err)
-							_ = s.stream.Send(&typepb.OpenTunnelResponse{
+							_ = s.stream.Send(&sesamepb.OpenTunnelResponse{
 								StreamId: msg.StreamId,
-								Frame: &typepb.OpenTunnelResponse_CloseStream{
-									CloseStream: &typepb.CloseStream{
+								Frame: &sesamepb.OpenTunnelResponse_CloseStream{
+									CloseStream: &sesamepb.CloseStream{
 										Status: st.Proto(),
 									},
 								},
@@ -164,7 +166,7 @@ func (s *tunnelServer) serve() error {
 					return err
 				}
 
-				if _, ok := msg.GetFrame().(*typepb.OpenTunnelRequest_WindowUpdate); ok {
+				if _, ok := msg.GetFrame().(*sesamepb.OpenTunnelRequest_WindowUpdate); ok {
 					// handled in the flow control wrapper impl.
 					continue
 				}
@@ -215,7 +217,7 @@ func (s *tunnelServer) waitAllStreams(ctx context.Context) error {
 	}
 }
 
-func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame *typepb.NewStream) (bool, error) {
+func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame *sesamepb.NewStream) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -269,7 +271,7 @@ func (s *tunnelServer) createStream(ctx context.Context, streamID uint64, frame 
 		stream:         s.stream,
 		isClientStream: isClientStream,
 		isServerStream: isServerStream,
-		buffer:         make(chan *typepb.OpenTunnelRequest, windowMaxBuffer),
+		buffer:         make(chan *sesamepb.OpenTunnelRequest, windowMaxBuffer),
 		closed:         make(chan struct{}),
 	}
 	s.streams[streamID] = str
@@ -329,7 +331,7 @@ type tunnelServerStream struct {
 	isServerStream bool
 
 	ingestMu   sync.Mutex
-	buffer     chan *typepb.OpenTunnelRequest
+	buffer     chan *sesamepb.OpenTunnelRequest
 	halfClosed error
 
 	readMu  sync.Mutex
@@ -345,7 +347,7 @@ type tunnelServerStream struct {
 	hasSent bool
 }
 
-func (st *tunnelServerStream) acceptClientFrame(msg *typepb.OpenTunnelRequest) {
+func (st *tunnelServerStream) acceptClientFrame(msg *sesamepb.OpenTunnelRequest) {
 	if st == nil {
 		// can happen if server decided that the stream ID was recently used
 		// yet inactive -- it returns nil error but also nil stream, which
@@ -355,11 +357,11 @@ func (st *tunnelServerStream) acceptClientFrame(msg *typepb.OpenTunnelRequest) {
 	}
 
 	switch msg.GetFrame().(type) {
-	case *typepb.OpenTunnelRequest_HalfClose:
+	case *sesamepb.OpenTunnelRequest_HalfClose:
 		st.halfClose(io.EOF)
 		return
 
-	case *typepb.OpenTunnelRequest_Cancel:
+	case *sesamepb.OpenTunnelRequest_Cancel:
 		st.finishStream(context.Canceled)
 		return
 	}
@@ -405,9 +407,9 @@ func (st *tunnelServerStream) setHeader(md metadata.MD, send bool) error {
 }
 
 func (st *tunnelServerStream) sendHeadersLocked() error {
-	err := st.stream.Send(&typepb.OpenTunnelResponse{
+	err := st.stream.Send(&sesamepb.OpenTunnelResponse{
 		StreamId: int64(st.streamID),
-		Frame: &typepb.OpenTunnelResponse_Header{
+		Frame: &sesamepb.OpenTunnelResponse_Header{
 			Header: toProto(st.header),
 		},
 	})
@@ -511,19 +513,19 @@ func (st *tunnelServerStream) SendMsg(m interface{}) error {
 		}
 
 		if i == 0 {
-			err = st.stream.Send(&typepb.OpenTunnelResponse{
+			err = st.stream.Send(&sesamepb.OpenTunnelResponse{
 				StreamId: int64(st.streamID),
-				Frame: &typepb.OpenTunnelResponse_Message{
-					Message: &typepb.EncodedMessage{
+				Frame: &sesamepb.OpenTunnelResponse_Message{
+					Message: &sesamepb.EncodedMessage{
 						Size: int32(len(b)),
 						Data: chunk,
 					},
 				},
 			})
 		} else {
-			err = st.stream.Send(&typepb.OpenTunnelResponse{
+			err = st.stream.Send(&sesamepb.OpenTunnelResponse{
 				StreamId: int64(st.streamID),
-				Frame: &typepb.OpenTunnelResponse_MessageData{
+				Frame: &sesamepb.OpenTunnelResponse_MessageData{
 					MessageData: chunk,
 				},
 			})
@@ -612,7 +614,7 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 			st.tun.updateWindow(msg)
 
 			switch frame := msg.GetFrame().(type) {
-			case *typepb.OpenTunnelRequest_Message:
+			case *sesamepb.OpenTunnelRequest_Message:
 				if msgLen != -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "received redundant request message envelope")
 				}
@@ -625,7 +627,7 @@ func (st *tunnelServerStream) readMsgLocked() (data []byte, ok bool, err error) 
 					return b, true, nil
 				}
 
-			case *typepb.OpenTunnelRequest_MessageData:
+			case *sesamepb.OpenTunnelRequest_MessageData:
 				if msgLen == -1 {
 					return nil, false, status.Errorf(codes.InvalidArgument, "never received envelope for request message")
 				}
@@ -691,10 +693,10 @@ func (st *tunnelServerStream) finishStream(err error) {
 	}
 
 	stat, _ := status.FromError(err)
-	_ = st.stream.Send(&typepb.OpenTunnelResponse{
+	_ = st.stream.Send(&sesamepb.OpenTunnelResponse{
 		StreamId: int64(st.streamID),
-		Frame: &typepb.OpenTunnelResponse_CloseStream{
-			CloseStream: &typepb.CloseStream{
+		Frame: &sesamepb.OpenTunnelResponse_CloseStream{
+			CloseStream: &sesamepb.CloseStream{
 				Status:  stat.Proto(),
 				Trailer: toProto(st.trailer),
 			},

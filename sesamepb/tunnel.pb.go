@@ -7,14 +7,14 @@
 package sesamepb
 
 import (
-	typepb "github.com/joeycumines/sesame/typepb"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
+
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	status "google.golang.org/genproto/googleapis/rpc/status"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
 )
 
 const (
@@ -24,35 +24,35 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// OpenTunnelRequest models a message sent from a TunnelService.OpenTunnel client to the server.
-type OpenTunnelRequest struct {
+// OpenRemoteTunnelRequest models a message sent from a TunnelService.OpenRemoteTunnel client to the server.
+type OpenRemoteTunnelRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Stream identifier, pairing requests with responses. Must be non-zero and
 	// unique within the stream.
 	Id int64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Types that are valid to be assigned to Data:
 	//
-	//	*OpenTunnelRequest_Connect_
-	//	*OpenTunnelRequest_Stream_
-	Data          isOpenTunnelRequest_Data `protobuf_oneof:"data"`
+	//	*OpenRemoteTunnelRequest_Connect_
+	//	*OpenRemoteTunnelRequest_Stream_
+	Data          isOpenRemoteTunnelRequest_Data `protobuf_oneof:"data"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenTunnelRequest) Reset() {
-	*x = OpenTunnelRequest{}
+func (x *OpenRemoteTunnelRequest) Reset() {
+	*x = OpenRemoteTunnelRequest{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenTunnelRequest) String() string {
+func (x *OpenRemoteTunnelRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenTunnelRequest) ProtoMessage() {}
+func (*OpenRemoteTunnelRequest) ProtoMessage() {}
 
-func (x *OpenTunnelRequest) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteTunnelRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -64,91 +64,91 @@ func (x *OpenTunnelRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenTunnelRequest.ProtoReflect.Descriptor instead.
-func (*OpenTunnelRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteTunnelRequest.ProtoReflect.Descriptor instead.
+func (*OpenRemoteTunnelRequest) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *OpenTunnelRequest) GetId() int64 {
+func (x *OpenRemoteTunnelRequest) GetId() int64 {
 	if x != nil {
 		return x.Id
 	}
 	return 0
 }
 
-func (x *OpenTunnelRequest) GetData() isOpenTunnelRequest_Data {
+func (x *OpenRemoteTunnelRequest) GetData() isOpenRemoteTunnelRequest_Data {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-func (x *OpenTunnelRequest) GetConnect() *OpenTunnelRequest_Connect {
+func (x *OpenRemoteTunnelRequest) GetConnect() *OpenRemoteTunnelRequest_Connect {
 	if x != nil {
-		if x, ok := x.Data.(*OpenTunnelRequest_Connect_); ok {
+		if x, ok := x.Data.(*OpenRemoteTunnelRequest_Connect_); ok {
 			return x.Connect
 		}
 	}
 	return nil
 }
 
-func (x *OpenTunnelRequest) GetStream() *OpenTunnelRequest_Stream {
+func (x *OpenRemoteTunnelRequest) GetStream() *OpenRemoteTunnelRequest_Stream {
 	if x != nil {
-		if x, ok := x.Data.(*OpenTunnelRequest_Stream_); ok {
+		if x, ok := x.Data.(*OpenRemoteTunnelRequest_Stream_); ok {
 			return x.Stream
 		}
 	}
 	return nil
 }
 
-type isOpenTunnelRequest_Data interface {
-	isOpenTunnelRequest_Data()
+type isOpenRemoteTunnelRequest_Data interface {
+	isOpenRemoteTunnelRequest_Data()
 }
 
-type OpenTunnelRequest_Connect_ struct {
+type OpenRemoteTunnelRequest_Connect_ struct {
 	// Connect opens the paired stream for a remote.
-	Connect *OpenTunnelRequest_Connect `protobuf:"bytes,2,opt,name=connect,proto3,oneof"`
+	Connect *OpenRemoteTunnelRequest_Connect `protobuf:"bytes,2,opt,name=connect,proto3,oneof"`
 }
 
-type OpenTunnelRequest_Stream_ struct {
+type OpenRemoteTunnelRequest_Stream_ struct {
 	// Stream reports a stream's outcome (only after the stream
 	// successfully connected or errored).
-	Stream *OpenTunnelRequest_Stream `protobuf:"bytes,3,opt,name=stream,proto3,oneof"`
+	Stream *OpenRemoteTunnelRequest_Stream `protobuf:"bytes,3,opt,name=stream,proto3,oneof"`
 }
 
-func (*OpenTunnelRequest_Connect_) isOpenTunnelRequest_Data() {}
+func (*OpenRemoteTunnelRequest_Connect_) isOpenRemoteTunnelRequest_Data() {}
 
-func (*OpenTunnelRequest_Stream_) isOpenTunnelRequest_Data() {}
+func (*OpenRemoteTunnelRequest_Stream_) isOpenRemoteTunnelRequest_Data() {}
 
-// OpenTunnelResponse models a message sent from a TunnelService.OpenTunnel server to the client.
-type OpenTunnelResponse struct {
+// OpenRemoteTunnelResponse models a message sent from a TunnelService.OpenRemoteTunnel server to the client.
+type OpenRemoteTunnelResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Stream identifier, pairing responses with requests, echoing
-	// OpenTunnelRequest.id.
+	// OpenRemoteTunnelRequest.id.
 	Id int64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Types that are valid to be assigned to Data:
 	//
-	//	*OpenTunnelResponse_Connect_
-	//	*OpenTunnelResponse_Stream_
-	Data          isOpenTunnelResponse_Data `protobuf_oneof:"data"`
+	//	*OpenRemoteTunnelResponse_Connect_
+	//	*OpenRemoteTunnelResponse_Stream_
+	Data          isOpenRemoteTunnelResponse_Data `protobuf_oneof:"data"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenTunnelResponse) Reset() {
-	*x = OpenTunnelResponse{}
+func (x *OpenRemoteTunnelResponse) Reset() {
+	*x = OpenRemoteTunnelResponse{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenTunnelResponse) String() string {
+func (x *OpenRemoteTunnelResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenTunnelResponse) ProtoMessage() {}
+func (*OpenRemoteTunnelResponse) ProtoMessage() {}
 
-func (x *OpenTunnelResponse) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteTunnelResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -160,88 +160,88 @@ func (x *OpenTunnelResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenTunnelResponse.ProtoReflect.Descriptor instead.
-func (*OpenTunnelResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteTunnelResponse.ProtoReflect.Descriptor instead.
+func (*OpenRemoteTunnelResponse) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *OpenTunnelResponse) GetId() int64 {
+func (x *OpenRemoteTunnelResponse) GetId() int64 {
 	if x != nil {
 		return x.Id
 	}
 	return 0
 }
 
-func (x *OpenTunnelResponse) GetData() isOpenTunnelResponse_Data {
+func (x *OpenRemoteTunnelResponse) GetData() isOpenRemoteTunnelResponse_Data {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-func (x *OpenTunnelResponse) GetConnect() *OpenTunnelResponse_Connect {
+func (x *OpenRemoteTunnelResponse) GetConnect() *OpenRemoteTunnelResponse_Connect {
 	if x != nil {
-		if x, ok := x.Data.(*OpenTunnelResponse_Connect_); ok {
+		if x, ok := x.Data.(*OpenRemoteTunnelResponse_Connect_); ok {
 			return x.Connect
 		}
 	}
 	return nil
 }
 
-func (x *OpenTunnelResponse) GetStream() *OpenTunnelResponse_Stream {
+func (x *OpenRemoteTunnelResponse) GetStream() *OpenRemoteTunnelResponse_Stream {
 	if x != nil {
-		if x, ok := x.Data.(*OpenTunnelResponse_Stream_); ok {
+		if x, ok := x.Data.(*OpenRemoteTunnelResponse_Stream_); ok {
 			return x.Stream
 		}
 	}
 	return nil
 }
 
-type isOpenTunnelResponse_Data interface {
-	isOpenTunnelResponse_Data()
+type isOpenRemoteTunnelResponse_Data interface {
+	isOpenRemoteTunnelResponse_Data()
 }
 
-type OpenTunnelResponse_Connect_ struct {
+type OpenRemoteTunnelResponse_Connect_ struct {
 	// Connect acknowledges the initial request.
-	Connect *OpenTunnelResponse_Connect `protobuf:"bytes,2,opt,name=connect,proto3,oneof"`
+	Connect *OpenRemoteTunnelResponse_Connect `protobuf:"bytes,2,opt,name=connect,proto3,oneof"`
 }
 
-type OpenTunnelResponse_Stream_ struct {
+type OpenRemoteTunnelResponse_Stream_ struct {
 	// Stream initiates a new (reverse dialed) stream.
-	Stream *OpenTunnelResponse_Stream `protobuf:"bytes,3,opt,name=stream,proto3,oneof"`
+	Stream *OpenRemoteTunnelResponse_Stream `protobuf:"bytes,3,opt,name=stream,proto3,oneof"`
 }
 
-func (*OpenTunnelResponse_Connect_) isOpenTunnelResponse_Data() {}
+func (*OpenRemoteTunnelResponse_Connect_) isOpenRemoteTunnelResponse_Data() {}
 
-func (*OpenTunnelResponse_Stream_) isOpenTunnelResponse_Data() {}
+func (*OpenRemoteTunnelResponse_Stream_) isOpenRemoteTunnelResponse_Data() {}
 
-// OpenStreamRequest models a message sent from a TunnelService.OpenStream client to the server.
-type OpenStreamRequest struct {
+// OpenRemoteStreamRequest models a message sent from a TunnelService.OpenRemoteStream client to the server.
+type OpenRemoteStreamRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Data:
 	//
-	//	*OpenStreamRequest_Connect_
-	//	*OpenStreamRequest_Dial_
-	//	*OpenStreamRequest_Tunnel
-	Data          isOpenStreamRequest_Data `protobuf_oneof:"data"`
+	//	*OpenRemoteStreamRequest_Connect_
+	//	*OpenRemoteStreamRequest_Dial_
+	//	*OpenRemoteStreamRequest_Tunnel
+	Data          isOpenRemoteStreamRequest_Data `protobuf_oneof:"data"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenStreamRequest) Reset() {
-	*x = OpenStreamRequest{}
+func (x *OpenRemoteStreamRequest) Reset() {
+	*x = OpenRemoteStreamRequest{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenStreamRequest) String() string {
+func (x *OpenRemoteStreamRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenStreamRequest) ProtoMessage() {}
+func (*OpenRemoteStreamRequest) ProtoMessage() {}
 
-func (x *OpenStreamRequest) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteStreamRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -253,98 +253,98 @@ func (x *OpenStreamRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenStreamRequest.ProtoReflect.Descriptor instead.
-func (*OpenStreamRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteStreamRequest.ProtoReflect.Descriptor instead.
+func (*OpenRemoteStreamRequest) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *OpenStreamRequest) GetData() isOpenStreamRequest_Data {
+func (x *OpenRemoteStreamRequest) GetData() isOpenRemoteStreamRequest_Data {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-func (x *OpenStreamRequest) GetConnect() *OpenStreamRequest_Connect {
+func (x *OpenRemoteStreamRequest) GetConnect() *OpenRemoteStreamRequest_Connect {
 	if x != nil {
-		if x, ok := x.Data.(*OpenStreamRequest_Connect_); ok {
+		if x, ok := x.Data.(*OpenRemoteStreamRequest_Connect_); ok {
 			return x.Connect
 		}
 	}
 	return nil
 }
 
-func (x *OpenStreamRequest) GetDial() *OpenStreamRequest_Dial {
+func (x *OpenRemoteStreamRequest) GetDial() *OpenRemoteStreamRequest_Dial {
 	if x != nil {
-		if x, ok := x.Data.(*OpenStreamRequest_Dial_); ok {
+		if x, ok := x.Data.(*OpenRemoteStreamRequest_Dial_); ok {
 			return x.Dial
 		}
 	}
 	return nil
 }
 
-func (x *OpenStreamRequest) GetTunnel() *typepb.OpenReverseTunnelRequest {
+func (x *OpenRemoteStreamRequest) GetTunnel() *OpenReverseTunnelRequest {
 	if x != nil {
-		if x, ok := x.Data.(*OpenStreamRequest_Tunnel); ok {
+		if x, ok := x.Data.(*OpenRemoteStreamRequest_Tunnel); ok {
 			return x.Tunnel
 		}
 	}
 	return nil
 }
 
-type isOpenStreamRequest_Data interface {
-	isOpenStreamRequest_Data()
+type isOpenRemoteStreamRequest_Data interface {
+	isOpenRemoteStreamRequest_Data()
 }
 
-type OpenStreamRequest_Connect_ struct {
+type OpenRemoteStreamRequest_Connect_ struct {
 	// Connect opens the dedicated stream for a remote.
-	Connect *OpenStreamRequest_Connect `protobuf:"bytes,1,opt,name=connect,proto3,oneof"`
+	Connect *OpenRemoteStreamRequest_Connect `protobuf:"bytes,1,opt,name=connect,proto3,oneof"`
 }
 
-type OpenStreamRequest_Dial_ struct {
+type OpenRemoteStreamRequest_Dial_ struct {
 	// Dial acknowledges the connection, or reports its failure (any error
 	// results in stream termination).
-	Dial *OpenStreamRequest_Dial `protobuf:"bytes,2,opt,name=dial,proto3,oneof"`
+	Dial *OpenRemoteStreamRequest_Dial `protobuf:"bytes,2,opt,name=dial,proto3,oneof"`
 }
 
-type OpenStreamRequest_Tunnel struct {
+type OpenRemoteStreamRequest_Tunnel struct {
 	// Tunnel carries the tunneled frames, flowing server to client.
-	Tunnel *typepb.OpenReverseTunnelRequest `protobuf:"bytes,3,opt,name=tunnel,proto3,oneof"`
+	Tunnel *OpenReverseTunnelRequest `protobuf:"bytes,3,opt,name=tunnel,proto3,oneof"`
 }
 
-func (*OpenStreamRequest_Connect_) isOpenStreamRequest_Data() {}
+func (*OpenRemoteStreamRequest_Connect_) isOpenRemoteStreamRequest_Data() {}
 
-func (*OpenStreamRequest_Dial_) isOpenStreamRequest_Data() {}
+func (*OpenRemoteStreamRequest_Dial_) isOpenRemoteStreamRequest_Data() {}
 
-func (*OpenStreamRequest_Tunnel) isOpenStreamRequest_Data() {}
+func (*OpenRemoteStreamRequest_Tunnel) isOpenRemoteStreamRequest_Data() {}
 
-// OpenStreamResponse models a message sent from a TunnelService.OpenStream server to the client.
-type OpenStreamResponse struct {
+// OpenRemoteStreamResponse models a message sent from a TunnelService.OpenRemoteStream server to the client.
+type OpenRemoteStreamResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Data:
 	//
-	//	*OpenStreamResponse_Connect_
-	//	*OpenStreamResponse_Dial_
-	//	*OpenStreamResponse_Tunnel
-	Data          isOpenStreamResponse_Data `protobuf_oneof:"data"`
+	//	*OpenRemoteStreamResponse_Connect_
+	//	*OpenRemoteStreamResponse_Dial_
+	//	*OpenRemoteStreamResponse_Tunnel
+	Data          isOpenRemoteStreamResponse_Data `protobuf_oneof:"data"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenStreamResponse) Reset() {
-	*x = OpenStreamResponse{}
+func (x *OpenRemoteStreamResponse) Reset() {
+	*x = OpenRemoteStreamResponse{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenStreamResponse) String() string {
+func (x *OpenRemoteStreamResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenStreamResponse) ProtoMessage() {}
+func (*OpenRemoteStreamResponse) ProtoMessage() {}
 
-func (x *OpenStreamResponse) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteStreamResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -356,73 +356,73 @@ func (x *OpenStreamResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenStreamResponse.ProtoReflect.Descriptor instead.
-func (*OpenStreamResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteStreamResponse.ProtoReflect.Descriptor instead.
+func (*OpenRemoteStreamResponse) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *OpenStreamResponse) GetData() isOpenStreamResponse_Data {
+func (x *OpenRemoteStreamResponse) GetData() isOpenRemoteStreamResponse_Data {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-func (x *OpenStreamResponse) GetConnect() *OpenStreamResponse_Connect {
+func (x *OpenRemoteStreamResponse) GetConnect() *OpenRemoteStreamResponse_Connect {
 	if x != nil {
-		if x, ok := x.Data.(*OpenStreamResponse_Connect_); ok {
+		if x, ok := x.Data.(*OpenRemoteStreamResponse_Connect_); ok {
 			return x.Connect
 		}
 	}
 	return nil
 }
 
-func (x *OpenStreamResponse) GetDial() *OpenStreamResponse_Dial {
+func (x *OpenRemoteStreamResponse) GetDial() *OpenRemoteStreamResponse_Dial {
 	if x != nil {
-		if x, ok := x.Data.(*OpenStreamResponse_Dial_); ok {
+		if x, ok := x.Data.(*OpenRemoteStreamResponse_Dial_); ok {
 			return x.Dial
 		}
 	}
 	return nil
 }
 
-func (x *OpenStreamResponse) GetTunnel() *typepb.OpenReverseTunnelResponse {
+func (x *OpenRemoteStreamResponse) GetTunnel() *OpenReverseTunnelResponse {
 	if x != nil {
-		if x, ok := x.Data.(*OpenStreamResponse_Tunnel); ok {
+		if x, ok := x.Data.(*OpenRemoteStreamResponse_Tunnel); ok {
 			return x.Tunnel
 		}
 	}
 	return nil
 }
 
-type isOpenStreamResponse_Data interface {
-	isOpenStreamResponse_Data()
+type isOpenRemoteStreamResponse_Data interface {
+	isOpenRemoteStreamResponse_Data()
 }
 
-type OpenStreamResponse_Connect_ struct {
+type OpenRemoteStreamResponse_Connect_ struct {
 	// Connect acknowledges the initial request; any error results in
 	// stream termination.
-	Connect *OpenStreamResponse_Connect `protobuf:"bytes,1,opt,name=connect,proto3,oneof"`
+	Connect *OpenRemoteStreamResponse_Connect `protobuf:"bytes,1,opt,name=connect,proto3,oneof"`
 }
 
-type OpenStreamResponse_Dial_ struct {
+type OpenRemoteStreamResponse_Dial_ struct {
 	// Dial initiates the reverse-dialed stream.
-	Dial *OpenStreamResponse_Dial `protobuf:"bytes,2,opt,name=dial,proto3,oneof"`
+	Dial *OpenRemoteStreamResponse_Dial `protobuf:"bytes,2,opt,name=dial,proto3,oneof"`
 }
 
-type OpenStreamResponse_Tunnel struct {
+type OpenRemoteStreamResponse_Tunnel struct {
 	// Tunnel carries the tunneled frames, flowing client to server.
-	Tunnel *typepb.OpenReverseTunnelResponse `protobuf:"bytes,3,opt,name=tunnel,proto3,oneof"`
+	Tunnel *OpenReverseTunnelResponse `protobuf:"bytes,3,opt,name=tunnel,proto3,oneof"`
 }
 
-func (*OpenStreamResponse_Connect_) isOpenStreamResponse_Data() {}
+func (*OpenRemoteStreamResponse_Connect_) isOpenRemoteStreamResponse_Data() {}
 
-func (*OpenStreamResponse_Dial_) isOpenStreamResponse_Data() {}
+func (*OpenRemoteStreamResponse_Dial_) isOpenRemoteStreamResponse_Data() {}
 
-func (*OpenStreamResponse_Tunnel) isOpenStreamResponse_Data() {}
+func (*OpenRemoteStreamResponse_Tunnel) isOpenRemoteStreamResponse_Data() {}
 
 // Connect models the initial request, opening the remote's streams.
-type OpenTunnelRequest_Connect struct {
+type OpenRemoteTunnelRequest_Connect struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The remote to connect to, by resource name.
 	// Format: namespaces/{namespace}/remotes/{remote}
@@ -433,20 +433,20 @@ type OpenTunnelRequest_Connect struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenTunnelRequest_Connect) Reset() {
-	*x = OpenTunnelRequest_Connect{}
+func (x *OpenRemoteTunnelRequest_Connect) Reset() {
+	*x = OpenRemoteTunnelRequest_Connect{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenTunnelRequest_Connect) String() string {
+func (x *OpenRemoteTunnelRequest_Connect) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenTunnelRequest_Connect) ProtoMessage() {}
+func (*OpenRemoteTunnelRequest_Connect) ProtoMessage() {}
 
-func (x *OpenTunnelRequest_Connect) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteTunnelRequest_Connect) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -458,19 +458,19 @@ func (x *OpenTunnelRequest_Connect) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenTunnelRequest_Connect.ProtoReflect.Descriptor instead.
-func (*OpenTunnelRequest_Connect) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteTunnelRequest_Connect.ProtoReflect.Descriptor instead.
+func (*OpenRemoteTunnelRequest_Connect) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{0, 0}
 }
 
-func (x *OpenTunnelRequest_Connect) GetRemote() string {
+func (x *OpenRemoteTunnelRequest_Connect) GetRemote() string {
 	if x != nil {
 		return x.Remote
 	}
 	return ""
 }
 
-func (x *OpenTunnelRequest_Connect) GetStreamBuffer() int32 {
+func (x *OpenRemoteTunnelRequest_Connect) GetStreamBuffer() int32 {
 	if x != nil {
 		return x.StreamBuffer
 	}
@@ -478,7 +478,7 @@ func (x *OpenTunnelRequest_Connect) GetStreamBuffer() int32 {
 }
 
 // Stream reports a stream's terminal state.
-type OpenTunnelRequest_Stream struct {
+type OpenRemoteTunnelRequest_Stream struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Terminal error, if any; any error results in stream termination.
 	Error         *status.Status `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
@@ -486,20 +486,20 @@ type OpenTunnelRequest_Stream struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenTunnelRequest_Stream) Reset() {
-	*x = OpenTunnelRequest_Stream{}
+func (x *OpenRemoteTunnelRequest_Stream) Reset() {
+	*x = OpenRemoteTunnelRequest_Stream{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenTunnelRequest_Stream) String() string {
+func (x *OpenRemoteTunnelRequest_Stream) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenTunnelRequest_Stream) ProtoMessage() {}
+func (*OpenRemoteTunnelRequest_Stream) ProtoMessage() {}
 
-func (x *OpenTunnelRequest_Stream) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteTunnelRequest_Stream) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -511,12 +511,12 @@ func (x *OpenTunnelRequest_Stream) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenTunnelRequest_Stream.ProtoReflect.Descriptor instead.
-func (*OpenTunnelRequest_Stream) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteTunnelRequest_Stream.ProtoReflect.Descriptor instead.
+func (*OpenRemoteTunnelRequest_Stream) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{0, 1}
 }
 
-func (x *OpenTunnelRequest_Stream) GetError() *status.Status {
+func (x *OpenRemoteTunnelRequest_Stream) GetError() *status.Status {
 	if x != nil {
 		return x.Error
 	}
@@ -525,26 +525,26 @@ func (x *OpenTunnelRequest_Stream) GetError() *status.Status {
 
 // Connect acknowledges the initial request; any error results in stream
 // termination.
-type OpenTunnelResponse_Connect struct {
+type OpenRemoteTunnelResponse_Connect struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenTunnelResponse_Connect) Reset() {
-	*x = OpenTunnelResponse_Connect{}
+func (x *OpenRemoteTunnelResponse_Connect) Reset() {
+	*x = OpenRemoteTunnelResponse_Connect{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenTunnelResponse_Connect) String() string {
+func (x *OpenRemoteTunnelResponse_Connect) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenTunnelResponse_Connect) ProtoMessage() {}
+func (*OpenRemoteTunnelResponse_Connect) ProtoMessage() {}
 
-func (x *OpenTunnelResponse_Connect) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteTunnelResponse_Connect) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -556,13 +556,13 @@ func (x *OpenTunnelResponse_Connect) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenTunnelResponse_Connect.ProtoReflect.Descriptor instead.
-func (*OpenTunnelResponse_Connect) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteTunnelResponse_Connect.ProtoReflect.Descriptor instead.
+func (*OpenRemoteTunnelResponse_Connect) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{1, 0}
 }
 
 // Stream models a request to initialise a new stream.
-type OpenTunnelResponse_Stream struct {
+type OpenRemoteTunnelResponse_Stream struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The target endpoint, by resource name.
 	// Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
@@ -571,20 +571,20 @@ type OpenTunnelResponse_Stream struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenTunnelResponse_Stream) Reset() {
-	*x = OpenTunnelResponse_Stream{}
+func (x *OpenRemoteTunnelResponse_Stream) Reset() {
+	*x = OpenRemoteTunnelResponse_Stream{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenTunnelResponse_Stream) String() string {
+func (x *OpenRemoteTunnelResponse_Stream) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenTunnelResponse_Stream) ProtoMessage() {}
+func (*OpenRemoteTunnelResponse_Stream) ProtoMessage() {}
 
-func (x *OpenTunnelResponse_Stream) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteTunnelResponse_Stream) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -596,12 +596,12 @@ func (x *OpenTunnelResponse_Stream) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenTunnelResponse_Stream.ProtoReflect.Descriptor instead.
-func (*OpenTunnelResponse_Stream) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteTunnelResponse_Stream.ProtoReflect.Descriptor instead.
+func (*OpenRemoteTunnelResponse_Stream) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{1, 1}
 }
 
-func (x *OpenTunnelResponse_Stream) GetEndpoint() string {
+func (x *OpenRemoteTunnelResponse_Stream) GetEndpoint() string {
 	if x != nil {
 		return x.Endpoint
 	}
@@ -609,7 +609,7 @@ func (x *OpenTunnelResponse_Stream) GetEndpoint() string {
 }
 
 // Connect models the initial request.
-type OpenStreamRequest_Connect struct {
+type OpenRemoteStreamRequest_Connect struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The remote to connect to, by resource name.
 	// Format: namespaces/{namespace}/remotes/{remote}
@@ -618,20 +618,20 @@ type OpenStreamRequest_Connect struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenStreamRequest_Connect) Reset() {
-	*x = OpenStreamRequest_Connect{}
+func (x *OpenRemoteStreamRequest_Connect) Reset() {
+	*x = OpenRemoteStreamRequest_Connect{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenStreamRequest_Connect) String() string {
+func (x *OpenRemoteStreamRequest_Connect) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenStreamRequest_Connect) ProtoMessage() {}
+func (*OpenRemoteStreamRequest_Connect) ProtoMessage() {}
 
-func (x *OpenStreamRequest_Connect) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteStreamRequest_Connect) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -643,12 +643,12 @@ func (x *OpenStreamRequest_Connect) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenStreamRequest_Connect.ProtoReflect.Descriptor instead.
-func (*OpenStreamRequest_Connect) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteStreamRequest_Connect.ProtoReflect.Descriptor instead.
+func (*OpenRemoteStreamRequest_Connect) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{2, 0}
 }
 
-func (x *OpenStreamRequest_Connect) GetRemote() string {
+func (x *OpenRemoteStreamRequest_Connect) GetRemote() string {
 	if x != nil {
 		return x.Remote
 	}
@@ -657,26 +657,26 @@ func (x *OpenStreamRequest_Connect) GetRemote() string {
 
 // Dial acknowledges the connection; any error results in stream
 // termination.
-type OpenStreamRequest_Dial struct {
+type OpenRemoteStreamRequest_Dial struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenStreamRequest_Dial) Reset() {
-	*x = OpenStreamRequest_Dial{}
+func (x *OpenRemoteStreamRequest_Dial) Reset() {
+	*x = OpenRemoteStreamRequest_Dial{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenStreamRequest_Dial) String() string {
+func (x *OpenRemoteStreamRequest_Dial) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenStreamRequest_Dial) ProtoMessage() {}
+func (*OpenRemoteStreamRequest_Dial) ProtoMessage() {}
 
-func (x *OpenStreamRequest_Dial) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteStreamRequest_Dial) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -688,32 +688,32 @@ func (x *OpenStreamRequest_Dial) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenStreamRequest_Dial.ProtoReflect.Descriptor instead.
-func (*OpenStreamRequest_Dial) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteStreamRequest_Dial.ProtoReflect.Descriptor instead.
+func (*OpenRemoteStreamRequest_Dial) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{2, 1}
 }
 
 // Connect acknowledges the initial request.
-type OpenStreamResponse_Connect struct {
+type OpenRemoteStreamResponse_Connect struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenStreamResponse_Connect) Reset() {
-	*x = OpenStreamResponse_Connect{}
+func (x *OpenRemoteStreamResponse_Connect) Reset() {
+	*x = OpenRemoteStreamResponse_Connect{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenStreamResponse_Connect) String() string {
+func (x *OpenRemoteStreamResponse_Connect) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenStreamResponse_Connect) ProtoMessage() {}
+func (*OpenRemoteStreamResponse_Connect) ProtoMessage() {}
 
-func (x *OpenStreamResponse_Connect) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteStreamResponse_Connect) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -725,13 +725,13 @@ func (x *OpenStreamResponse_Connect) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenStreamResponse_Connect.ProtoReflect.Descriptor instead.
-func (*OpenStreamResponse_Connect) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteStreamResponse_Connect.ProtoReflect.Descriptor instead.
+func (*OpenRemoteStreamResponse_Connect) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{3, 0}
 }
 
 // Dial models a request to initialise the reverse-dialed stream.
-type OpenStreamResponse_Dial struct {
+type OpenRemoteStreamResponse_Dial struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The target endpoint, by resource name.
 	// Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
@@ -740,20 +740,20 @@ type OpenStreamResponse_Dial struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *OpenStreamResponse_Dial) Reset() {
-	*x = OpenStreamResponse_Dial{}
+func (x *OpenRemoteStreamResponse_Dial) Reset() {
+	*x = OpenRemoteStreamResponse_Dial{}
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *OpenStreamResponse_Dial) String() string {
+func (x *OpenRemoteStreamResponse_Dial) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*OpenStreamResponse_Dial) ProtoMessage() {}
+func (*OpenRemoteStreamResponse_Dial) ProtoMessage() {}
 
-func (x *OpenStreamResponse_Dial) ProtoReflect() protoreflect.Message {
+func (x *OpenRemoteStreamResponse_Dial) ProtoReflect() protoreflect.Message {
 	mi := &file_sesame_v1alpha1_tunnel_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -765,12 +765,12 @@ func (x *OpenStreamResponse_Dial) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use OpenStreamResponse_Dial.ProtoReflect.Descriptor instead.
-func (*OpenStreamResponse_Dial) Descriptor() ([]byte, []int) {
+// Deprecated: Use OpenRemoteStreamResponse_Dial.ProtoReflect.Descriptor instead.
+func (*OpenRemoteStreamResponse_Dial) Descriptor() ([]byte, []int) {
 	return file_sesame_v1alpha1_tunnel_proto_rawDescGZIP(), []int{3, 1}
 }
 
-func (x *OpenStreamResponse_Dial) GetEndpoint() string {
+func (x *OpenRemoteStreamResponse_Dial) GetEndpoint() string {
 	if x != nil {
 		return x.Endpoint
 	}
@@ -781,46 +781,44 @@ var File_sesame_v1alpha1_tunnel_proto protoreflect.FileDescriptor
 
 const file_sesame_v1alpha1_tunnel_proto_rawDesc = "" +
 	"\n" +
-	"\x1csesame/v1alpha1/tunnel.proto\x12\x0fsesame.v1alpha1\x1a\x1fgoogle/api/field_behavior.proto\x1a\x17google/rpc/status.proto\x1a\x1csesame/type/grpctunnel.proto\"\xc8\x02\n" +
-	"\x11OpenTunnelRequest\x12\x13\n" +
-	"\x02id\x18\x01 \x01(\x03B\x03\xe0A\x01R\x02id\x12F\n" +
-	"\aconnect\x18\x02 \x01(\v2*.sesame.v1alpha1.OpenTunnelRequest.ConnectH\x00R\aconnect\x12C\n" +
-	"\x06stream\x18\x03 \x01(\v2).sesame.v1alpha1.OpenTunnelRequest.StreamH\x00R\x06stream\x1aP\n" +
+	"\x1csesame/v1alpha1/tunnel.proto\x12\x0fsesame.v1alpha1\x1a\x1fgoogle/api/field_behavior.proto\x1a\x17google/rpc/status.proto\x1a sesame/v1alpha1/grpctunnel.proto\"\xda\x02\n" +
+	"\x17OpenRemoteTunnelRequest\x12\x13\n" +
+	"\x02id\x18\x01 \x01(\x03B\x03\xe0A\x01R\x02id\x12L\n" +
+	"\aconnect\x18\x02 \x01(\v20.sesame.v1alpha1.OpenRemoteTunnelRequest.ConnectH\x00R\aconnect\x12I\n" +
+	"\x06stream\x18\x03 \x01(\v2/.sesame.v1alpha1.OpenRemoteTunnelRequest.StreamH\x00R\x06stream\x1aP\n" +
 	"\aConnect\x12\x1b\n" +
 	"\x06remote\x18\x01 \x01(\tB\x03\xe0A\x02R\x06remote\x12(\n" +
 	"\rstream_buffer\x18\x02 \x01(\x05B\x03\xe0A\x01R\fstreamBuffer\x1a7\n" +
 	"\x06Stream\x12-\n" +
 	"\x05error\x18\x01 \x01(\v2\x12.google.rpc.StatusB\x03\xe0A\x01R\x05errorB\x06\n" +
-	"\x04data\"\xec\x01\n" +
-	"\x12OpenTunnelResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x03R\x02id\x12G\n" +
-	"\aconnect\x18\x02 \x01(\v2+.sesame.v1alpha1.OpenTunnelResponse.ConnectH\x00R\aconnect\x12D\n" +
-	"\x06stream\x18\x03 \x01(\v2*.sesame.v1alpha1.OpenTunnelResponse.StreamH\x00R\x06stream\x1a\t\n" +
+	"\x04data\"\xfe\x01\n" +
+	"\x18OpenRemoteTunnelResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12M\n" +
+	"\aconnect\x18\x02 \x01(\v21.sesame.v1alpha1.OpenRemoteTunnelResponse.ConnectH\x00R\aconnect\x12J\n" +
+	"\x06stream\x18\x03 \x01(\v20.sesame.v1alpha1.OpenRemoteTunnelResponse.StreamH\x00R\x06stream\x1a\t\n" +
 	"\aConnect\x1a$\n" +
 	"\x06Stream\x12\x1a\n" +
 	"\bendpoint\x18\x01 \x01(\tR\bendpointB\x06\n" +
-	"\x04data\"\x93\x02\n" +
-	"\x11OpenStreamRequest\x12F\n" +
-	"\aconnect\x18\x01 \x01(\v2*.sesame.v1alpha1.OpenStreamRequest.ConnectH\x00R\aconnect\x12=\n" +
-	"\x04dial\x18\x02 \x01(\v2'.sesame.v1alpha1.OpenStreamRequest.DialH\x00R\x04dial\x12?\n" +
-	"\x06tunnel\x18\x03 \x01(\v2%.sesame.type.OpenReverseTunnelRequestH\x00R\x06tunnel\x1a&\n" +
+	"\x04data\"\xa9\x02\n" +
+	"\x17OpenRemoteStreamRequest\x12L\n" +
+	"\aconnect\x18\x01 \x01(\v20.sesame.v1alpha1.OpenRemoteStreamRequest.ConnectH\x00R\aconnect\x12C\n" +
+	"\x04dial\x18\x02 \x01(\v2-.sesame.v1alpha1.OpenRemoteStreamRequest.DialH\x00R\x04dial\x12C\n" +
+	"\x06tunnel\x18\x03 \x01(\v2).sesame.v1alpha1.OpenReverseTunnelRequestH\x00R\x06tunnel\x1a&\n" +
 	"\aConnect\x12\x1b\n" +
 	"\x06remote\x18\x01 \x01(\tB\x03\xe0A\x02R\x06remote\x1a\x06\n" +
 	"\x04DialB\x06\n" +
-	"\x04data\"\x96\x02\n" +
-	"\x12OpenStreamResponse\x12G\n" +
-	"\aconnect\x18\x01 \x01(\v2+.sesame.v1alpha1.OpenStreamResponse.ConnectH\x00R\aconnect\x12>\n" +
-	"\x04dial\x18\x02 \x01(\v2(.sesame.v1alpha1.OpenStreamResponse.DialH\x00R\x04dial\x12@\n" +
-	"\x06tunnel\x18\x03 \x01(\v2&.sesame.type.OpenReverseTunnelResponseH\x00R\x06tunnel\x1a\t\n" +
+	"\x04data\"\xac\x02\n" +
+	"\x18OpenRemoteStreamResponse\x12M\n" +
+	"\aconnect\x18\x01 \x01(\v21.sesame.v1alpha1.OpenRemoteStreamResponse.ConnectH\x00R\aconnect\x12D\n" +
+	"\x04dial\x18\x02 \x01(\v2..sesame.v1alpha1.OpenRemoteStreamResponse.DialH\x00R\x04dial\x12D\n" +
+	"\x06tunnel\x18\x03 \x01(\v2*.sesame.v1alpha1.OpenReverseTunnelResponseH\x00R\x06tunnel\x1a\t\n" +
 	"\aConnect\x1a\"\n" +
 	"\x04Dial\x12\x1a\n" +
 	"\bendpoint\x18\x01 \x01(\tR\bendpointB\x06\n" +
-	"\x04data2\xc9\x01\n" +
-	"\rTunnelService\x12[\n" +
-	"\n" +
-	"OpenTunnel\x12\".sesame.v1alpha1.OpenTunnelRequest\x1a#.sesame.v1alpha1.OpenTunnelResponse\"\x00(\x010\x01\x12[\n" +
-	"\n" +
-	"OpenStream\x12\".sesame.v1alpha1.OpenStreamRequest\x1a#.sesame.v1alpha1.OpenStreamResponse\"\x00(\x010\x01B^\n" +
+	"\x04data2\xed\x01\n" +
+	"\rTunnelService\x12m\n" +
+	"\x10OpenRemoteTunnel\x12(.sesame.v1alpha1.OpenRemoteTunnelRequest\x1a).sesame.v1alpha1.OpenRemoteTunnelResponse\"\x00(\x010\x01\x12m\n" +
+	"\x10OpenRemoteStream\x12(.sesame.v1alpha1.OpenRemoteStreamRequest\x1a).sesame.v1alpha1.OpenRemoteStreamResponse\"\x00(\x010\x01B^\n" +
 	"%io.github.joeycumines.sesame.v1alpha1B\vTunnelProtoP\x01Z&github.com/joeycumines/sesame/sesamepbb\x06proto3"
 
 var (
@@ -837,38 +835,38 @@ func file_sesame_v1alpha1_tunnel_proto_rawDescGZIP() []byte {
 
 var file_sesame_v1alpha1_tunnel_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_sesame_v1alpha1_tunnel_proto_goTypes = []any{
-	(*OpenTunnelRequest)(nil),                // 0: sesame.v1alpha1.OpenTunnelRequest
-	(*OpenTunnelResponse)(nil),               // 1: sesame.v1alpha1.OpenTunnelResponse
-	(*OpenStreamRequest)(nil),                // 2: sesame.v1alpha1.OpenStreamRequest
-	(*OpenStreamResponse)(nil),               // 3: sesame.v1alpha1.OpenStreamResponse
-	(*OpenTunnelRequest_Connect)(nil),        // 4: sesame.v1alpha1.OpenTunnelRequest.Connect
-	(*OpenTunnelRequest_Stream)(nil),         // 5: sesame.v1alpha1.OpenTunnelRequest.Stream
-	(*OpenTunnelResponse_Connect)(nil),       // 6: sesame.v1alpha1.OpenTunnelResponse.Connect
-	(*OpenTunnelResponse_Stream)(nil),        // 7: sesame.v1alpha1.OpenTunnelResponse.Stream
-	(*OpenStreamRequest_Connect)(nil),        // 8: sesame.v1alpha1.OpenStreamRequest.Connect
-	(*OpenStreamRequest_Dial)(nil),           // 9: sesame.v1alpha1.OpenStreamRequest.Dial
-	(*OpenStreamResponse_Connect)(nil),       // 10: sesame.v1alpha1.OpenStreamResponse.Connect
-	(*OpenStreamResponse_Dial)(nil),          // 11: sesame.v1alpha1.OpenStreamResponse.Dial
-	(*typepb.OpenReverseTunnelRequest)(nil),  // 12: sesame.type.OpenReverseTunnelRequest
-	(*typepb.OpenReverseTunnelResponse)(nil), // 13: sesame.type.OpenReverseTunnelResponse
+	(*OpenRemoteTunnelRequest)(nil),          // 0: sesame.v1alpha1.OpenRemoteTunnelRequest
+	(*OpenRemoteTunnelResponse)(nil),         // 1: sesame.v1alpha1.OpenRemoteTunnelResponse
+	(*OpenRemoteStreamRequest)(nil),          // 2: sesame.v1alpha1.OpenRemoteStreamRequest
+	(*OpenRemoteStreamResponse)(nil),         // 3: sesame.v1alpha1.OpenRemoteStreamResponse
+	(*OpenRemoteTunnelRequest_Connect)(nil),  // 4: sesame.v1alpha1.OpenRemoteTunnelRequest.Connect
+	(*OpenRemoteTunnelRequest_Stream)(nil),   // 5: sesame.v1alpha1.OpenRemoteTunnelRequest.Stream
+	(*OpenRemoteTunnelResponse_Connect)(nil), // 6: sesame.v1alpha1.OpenRemoteTunnelResponse.Connect
+	(*OpenRemoteTunnelResponse_Stream)(nil),  // 7: sesame.v1alpha1.OpenRemoteTunnelResponse.Stream
+	(*OpenRemoteStreamRequest_Connect)(nil),  // 8: sesame.v1alpha1.OpenRemoteStreamRequest.Connect
+	(*OpenRemoteStreamRequest_Dial)(nil),     // 9: sesame.v1alpha1.OpenRemoteStreamRequest.Dial
+	(*OpenRemoteStreamResponse_Connect)(nil), // 10: sesame.v1alpha1.OpenRemoteStreamResponse.Connect
+	(*OpenRemoteStreamResponse_Dial)(nil),    // 11: sesame.v1alpha1.OpenRemoteStreamResponse.Dial
+	(*OpenReverseTunnelRequest)(nil),         // 12: sesame.v1alpha1.OpenReverseTunnelRequest
+	(*OpenReverseTunnelResponse)(nil),        // 13: sesame.v1alpha1.OpenReverseTunnelResponse
 	(*status.Status)(nil),                    // 14: google.rpc.Status
 }
 var file_sesame_v1alpha1_tunnel_proto_depIdxs = []int32{
-	4,  // 0: sesame.v1alpha1.OpenTunnelRequest.connect:type_name -> sesame.v1alpha1.OpenTunnelRequest.Connect
-	5,  // 1: sesame.v1alpha1.OpenTunnelRequest.stream:type_name -> sesame.v1alpha1.OpenTunnelRequest.Stream
-	6,  // 2: sesame.v1alpha1.OpenTunnelResponse.connect:type_name -> sesame.v1alpha1.OpenTunnelResponse.Connect
-	7,  // 3: sesame.v1alpha1.OpenTunnelResponse.stream:type_name -> sesame.v1alpha1.OpenTunnelResponse.Stream
-	8,  // 4: sesame.v1alpha1.OpenStreamRequest.connect:type_name -> sesame.v1alpha1.OpenStreamRequest.Connect
-	9,  // 5: sesame.v1alpha1.OpenStreamRequest.dial:type_name -> sesame.v1alpha1.OpenStreamRequest.Dial
-	12, // 6: sesame.v1alpha1.OpenStreamRequest.tunnel:type_name -> sesame.type.OpenReverseTunnelRequest
-	10, // 7: sesame.v1alpha1.OpenStreamResponse.connect:type_name -> sesame.v1alpha1.OpenStreamResponse.Connect
-	11, // 8: sesame.v1alpha1.OpenStreamResponse.dial:type_name -> sesame.v1alpha1.OpenStreamResponse.Dial
-	13, // 9: sesame.v1alpha1.OpenStreamResponse.tunnel:type_name -> sesame.type.OpenReverseTunnelResponse
-	14, // 10: sesame.v1alpha1.OpenTunnelRequest.Stream.error:type_name -> google.rpc.Status
-	0,  // 11: sesame.v1alpha1.TunnelService.OpenTunnel:input_type -> sesame.v1alpha1.OpenTunnelRequest
-	2,  // 12: sesame.v1alpha1.TunnelService.OpenStream:input_type -> sesame.v1alpha1.OpenStreamRequest
-	1,  // 13: sesame.v1alpha1.TunnelService.OpenTunnel:output_type -> sesame.v1alpha1.OpenTunnelResponse
-	3,  // 14: sesame.v1alpha1.TunnelService.OpenStream:output_type -> sesame.v1alpha1.OpenStreamResponse
+	4,  // 0: sesame.v1alpha1.OpenRemoteTunnelRequest.connect:type_name -> sesame.v1alpha1.OpenRemoteTunnelRequest.Connect
+	5,  // 1: sesame.v1alpha1.OpenRemoteTunnelRequest.stream:type_name -> sesame.v1alpha1.OpenRemoteTunnelRequest.Stream
+	6,  // 2: sesame.v1alpha1.OpenRemoteTunnelResponse.connect:type_name -> sesame.v1alpha1.OpenRemoteTunnelResponse.Connect
+	7,  // 3: sesame.v1alpha1.OpenRemoteTunnelResponse.stream:type_name -> sesame.v1alpha1.OpenRemoteTunnelResponse.Stream
+	8,  // 4: sesame.v1alpha1.OpenRemoteStreamRequest.connect:type_name -> sesame.v1alpha1.OpenRemoteStreamRequest.Connect
+	9,  // 5: sesame.v1alpha1.OpenRemoteStreamRequest.dial:type_name -> sesame.v1alpha1.OpenRemoteStreamRequest.Dial
+	12, // 6: sesame.v1alpha1.OpenRemoteStreamRequest.tunnel:type_name -> sesame.v1alpha1.OpenReverseTunnelRequest
+	10, // 7: sesame.v1alpha1.OpenRemoteStreamResponse.connect:type_name -> sesame.v1alpha1.OpenRemoteStreamResponse.Connect
+	11, // 8: sesame.v1alpha1.OpenRemoteStreamResponse.dial:type_name -> sesame.v1alpha1.OpenRemoteStreamResponse.Dial
+	13, // 9: sesame.v1alpha1.OpenRemoteStreamResponse.tunnel:type_name -> sesame.v1alpha1.OpenReverseTunnelResponse
+	14, // 10: sesame.v1alpha1.OpenRemoteTunnelRequest.Stream.error:type_name -> google.rpc.Status
+	0,  // 11: sesame.v1alpha1.TunnelService.OpenRemoteTunnel:input_type -> sesame.v1alpha1.OpenRemoteTunnelRequest
+	2,  // 12: sesame.v1alpha1.TunnelService.OpenRemoteStream:input_type -> sesame.v1alpha1.OpenRemoteStreamRequest
+	1,  // 13: sesame.v1alpha1.TunnelService.OpenRemoteTunnel:output_type -> sesame.v1alpha1.OpenRemoteTunnelResponse
+	3,  // 14: sesame.v1alpha1.TunnelService.OpenRemoteStream:output_type -> sesame.v1alpha1.OpenRemoteStreamResponse
 	13, // [13:15] is the sub-list for method output_type
 	11, // [11:13] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
@@ -881,23 +879,24 @@ func file_sesame_v1alpha1_tunnel_proto_init() {
 	if File_sesame_v1alpha1_tunnel_proto != nil {
 		return
 	}
+	file_sesame_v1alpha1_grpctunnel_proto_init()
 	file_sesame_v1alpha1_tunnel_proto_msgTypes[0].OneofWrappers = []any{
-		(*OpenTunnelRequest_Connect_)(nil),
-		(*OpenTunnelRequest_Stream_)(nil),
+		(*OpenRemoteTunnelRequest_Connect_)(nil),
+		(*OpenRemoteTunnelRequest_Stream_)(nil),
 	}
 	file_sesame_v1alpha1_tunnel_proto_msgTypes[1].OneofWrappers = []any{
-		(*OpenTunnelResponse_Connect_)(nil),
-		(*OpenTunnelResponse_Stream_)(nil),
+		(*OpenRemoteTunnelResponse_Connect_)(nil),
+		(*OpenRemoteTunnelResponse_Stream_)(nil),
 	}
 	file_sesame_v1alpha1_tunnel_proto_msgTypes[2].OneofWrappers = []any{
-		(*OpenStreamRequest_Connect_)(nil),
-		(*OpenStreamRequest_Dial_)(nil),
-		(*OpenStreamRequest_Tunnel)(nil),
+		(*OpenRemoteStreamRequest_Connect_)(nil),
+		(*OpenRemoteStreamRequest_Dial_)(nil),
+		(*OpenRemoteStreamRequest_Tunnel)(nil),
 	}
 	file_sesame_v1alpha1_tunnel_proto_msgTypes[3].OneofWrappers = []any{
-		(*OpenStreamResponse_Connect_)(nil),
-		(*OpenStreamResponse_Dial_)(nil),
-		(*OpenStreamResponse_Tunnel)(nil),
+		(*OpenRemoteStreamResponse_Connect_)(nil),
+		(*OpenRemoteStreamResponse_Dial_)(nil),
+		(*OpenRemoteStreamResponse_Tunnel)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

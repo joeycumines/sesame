@@ -2,8 +2,9 @@ package grpc
 
 import (
 	"fmt"
+
 	"github.com/fullstorydev/grpchan"
-	typepb "github.com/joeycumines/sesame/typepb"
+	"github.com/joeycumines/sesame/sesamepb"
 	"google.golang.org/grpc"
 )
 
@@ -96,7 +97,7 @@ var (
 //
 // This option group (ClientStream, ServerStream) must be provided exactly once.
 // This method may be accessed via the OptChannel package variable.
-func (ChannelOptions) ClientStream(stream typepb.TunnelService_OpenTunnelClient) ChannelOption {
+func (ChannelOptions) ClientStream(stream sesamepb.GrpcTunnelService_OpenTunnelClient) ChannelOption {
 	return func(c *channelConfig) {
 		var v channelConfigStream
 		if stream != nil {
@@ -113,7 +114,7 @@ func (ChannelOptions) ClientStream(stream typepb.TunnelService_OpenTunnelClient)
 //
 // This option group (ClientStream, ServerStream) must be provided exactly once.
 // This method may be accessed via the OptChannel package variable.
-func (ChannelOptions) ServerStream(stream typepb.TunnelService_OpenReverseTunnelServer) ChannelOption {
+func (ChannelOptions) ServerStream(stream sesamepb.GrpcTunnelService_OpenReverseTunnelServer) ChannelOption {
 	return func(c *channelConfig) {
 		var v channelConfigStream
 		if stream != nil {
@@ -129,7 +130,7 @@ func (ChannelOptions) ServerStream(stream typepb.TunnelService_OpenReverseTunnel
 //
 // This option group (ClientStream, ServerStream) must be provided exactly once.
 // This method may be accessed via the OptTunnel package variable.
-func (TunnelOptions) ClientStream(stream typepb.TunnelService_OpenReverseTunnelClient) TunnelOption {
+func (TunnelOptions) ClientStream(stream sesamepb.GrpcTunnelService_OpenReverseTunnelClient) TunnelOption {
 	return func(c *tunnelConfig) {
 		if stream != nil {
 			c.stream.set(tunnelConfigStream{stream: reverseTunnelServerAdapter{stream: stream}})
@@ -143,7 +144,7 @@ func (TunnelOptions) ClientStream(stream typepb.TunnelService_OpenReverseTunnelC
 //
 // This option group (ClientStream, ServerStream) must be provided exactly once.
 // This method may be accessed via the OptTunnel package variable.
-func (TunnelOptions) ServerStream(stream typepb.TunnelService_OpenTunnelServer) TunnelOption {
+func (TunnelOptions) ServerStream(stream sesamepb.GrpcTunnelService_OpenTunnelServer) TunnelOption {
 	return func(c *tunnelConfig) { c.stream.set(tunnelConfigStream{stream: stream}) }
 }
 
