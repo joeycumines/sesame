@@ -208,21 +208,22 @@
 
 syntax = "proto3";
 
-package sesame.type;
+package sesame.v1alpha1;
 
 import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
 import "google/rpc/status.proto";
 import "sesame/type/grpcmetadata.proto";
 
-option go_package = "github.com/joeycumines/sesame/typepb";
+option go_package = "github.com/joeycumines/sesame/sesamepb";
 option java_multiple_files = true;
 option java_outer_classname = "GrpctunnelProto";
-option java_package = "io.github.joeycumines.sesame.type";
+option java_package = "io.github.joeycumines.sesame.v1alpha1";
 
-// TunnelService provides the two gRPC tunneling methods, one where the client
-// initiates tunneled RPCs and one (the reverse tunnel) where the server does.
-service TunnelService {
+// GrpcTunnelService provides the two gRPC tunneling methods, one where the
+// client initiates tunneled RPCs and one (the reverse tunnel) where the
+// server does.
+service GrpcTunnelService {
   // OpenTunnel creates a channel to the server which can be used to send
   // additional RPCs, all of which will be sent to the same server via a
   // single underlying gRPC stream. This can provide affinity for a "chatty"
@@ -240,7 +241,7 @@ service TunnelService {
 }
 
 // OpenTunnelRequest is the frame message a client sends on the
-// TunnelService.OpenTunnel stream.
+// GrpcTunnelService.OpenTunnel stream.
 //
 // For a single stream ID, the first such message must include the new_stream
 // field. After that, there can be any number of requests sent, via the
@@ -283,7 +284,7 @@ message OpenTunnelRequest {
 }
 
 // OpenTunnelResponse is the frame message a server sends on the
-// TunnelService.OpenTunnel stream.
+// GrpcTunnelService.OpenTunnel stream.
 //
 // For a single stream ID, the first such message should include the
 // header field unless no headers are to be sent. After the headers,
@@ -319,7 +320,7 @@ message OpenTunnelResponse {
 }
 
 // OpenReverseTunnelRequest is the frame message a client sends on the
-// TunnelService.OpenReverseTunnel stream, carrying the responses to the
+// GrpcTunnelService.OpenReverseTunnel stream, carrying the responses to the
 // RPCs the server initiates.
 //
 // The frames are identical in shape to OpenTunnelResponse: for a single
@@ -356,7 +357,7 @@ message OpenReverseTunnelRequest {
 }
 
 // OpenReverseTunnelResponse is the frame message a server sends on the
-// TunnelService.OpenReverseTunnel stream, carrying the requests for the
+// GrpcTunnelService.OpenReverseTunnel stream, carrying the requests for the
 // RPCs the server initiates.
 //
 // The frames are identical in shape to OpenTunnelRequest: for a single
