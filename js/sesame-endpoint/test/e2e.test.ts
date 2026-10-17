@@ -1922,10 +1922,7 @@ describe('sesame-endpoint E2E Suite', () => {
           break;
         }
         const evt = res.value.data;
-        if (
-          evt.case === 'control' &&
-          evt.value.event.case === 'windowUpdate'
-        ) {
+        if (evt.case === 'control' && evt.value.event.case === 'windowUpdate') {
           continue; // benign flow-control credit; keep watching
         }
         regression = {value: res};
