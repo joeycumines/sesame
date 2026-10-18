@@ -49,11 +49,13 @@ jobs:
         run: |-
           echo "make_command=make -j $env:number_of_cpus ci" >> $env:GITHUB_ENV
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: 'stable'
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install make (Windows)
         if: runner.os == 'Windows'
