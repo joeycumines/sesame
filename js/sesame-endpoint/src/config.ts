@@ -1,6 +1,9 @@
+import * as fs from 'node:fs';
+
 export interface ServerSecrets {
   readonly tlsCert?: string;
   readonly tlsKey?: string;
+  readonly clientCaCert?: string;
   readonly caCert?: string;
   readonly clientCert?: string;
   readonly clientKey?: string;
@@ -54,6 +57,38 @@ function parseStrictBoolean(val: string, flagName: string): boolean {
   }
 }
 
+// Normalizes an environment variable: undefined stays undefined, and blank
+// values (empty or whitespace-only) are treated as unset.
+function nonEmptyEnv(val: string | undefined): string | undefined {
+  if (val === undefined || val.trim().length === 0) {
+    return undefined;
+  }
+  return val;
+}
+
+// Returns true when the value looks like PEM content rather than a path.
+function isPemLiteral(val: string): boolean {
+  return val.includes('-----BEGIN');
+}
+
+// Resolves TLS material to its PEM content: literal PEM is kept as-is,
+// anything else is treated as a file path. Empty values and empty files are
+// rejected loudly instead of resolving to '' - a value that downstream
+// truthiness checks would silently treat as "TLS disabled".
+function readCertOrLiteral(val: string, sourceName: string): string {
+  if (val.trim().length === 0) {
+    throw new Error(`Empty value for ${sourceName}`);
+  }
+  if (isPemLiteral(val)) {
+    return val;
+  }
+  const content = fs.readFileSync(val, 'utf8');
+  if (content.trim().length === 0) {
+    throw new Error(`Empty content for ${sourceName}: ${val}`);
+  }
+  return content;
+}
+
 export function parseConfig(
   argv: readonly string[],
   env: NodeJS.ProcessEnv = {},
@@ -89,6 +124,15 @@ export function parseConfig(
   let allowedNetworks: string[] = env.SESAME_ENDPOINT_ALLOWED_NETWORKS
     ? env.SESAME_ENDPOINT_ALLOWED_NETWORKS.split(',').map(s => s.trim())
     : [...DEFAULT_ALLOWED_NETWORKS];
+
+  // Blank environment variables are treated as unset so an empty value cannot
+  // masquerade as configured TLS material.
+  let tlsCert: string | undefined = nonEmptyEnv(env.SESAME_ENDPOINT_TLS_CERT);
+  let tlsKey: string | undefined = nonEmptyEnv(env.SESAME_ENDPOINT_TLS_KEY);
+  let clientCaCert: string | undefined = nonEmptyEnv(
+    env.SESAME_ENDPOINT_CLIENT_CA_CERT,
+  );
+
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--help' || arg === '-h') {
@@ -167,6 +211,28 @@ export function parseConfig(
         .slice('--allowed-networks='.length)
         .split(',')
         .map(s => s.trim());
+    } else if (arg === '--tls-cert') {
+      if (i + 1 >= argv.length) throw new Error('Missing value for --tls-cert');
+      tlsCert = readCertOrLiteral(argv[++i], '--tls-cert');
+    } else if (arg.startsWith('--tls-cert=')) {
+      tlsCert = readCertOrLiteral(
+        arg.slice('--tls-cert='.length),
+        '--tls-cert',
+      );
+    } else if (arg === '--tls-key') {
+      if (i + 1 >= argv.length) throw new Error('Missing value for --tls-key');
+      tlsKey = readCertOrLiteral(argv[++i], '--tls-key');
+    } else if (arg.startsWith('--tls-key=')) {
+      tlsKey = readCertOrLiteral(arg.slice('--tls-key='.length), '--tls-key');
+    } else if (arg === '--client-ca-cert') {
+      if (i + 1 >= argv.length)
+        throw new Error('Missing value for --client-ca-cert');
+      clientCaCert = readCertOrLiteral(argv[++i], '--client-ca-cert');
+    } else if (arg.startsWith('--client-ca-cert=')) {
+      clientCaCert = readCertOrLiteral(
+        arg.slice('--client-ca-cert='.length),
+        '--client-ca-cert',
+      );
     } else {
       throw new Error(`Unknown CLI argument: ${arg}`);
     }
@@ -223,9 +289,24 @@ export function parseConfig(
     }
   }
 
+  if (clientCaCert && (!tlsCert || !tlsKey)) {
+    throw new Error(
+      'Client CA certificate (--client-ca-cert or SESAME_ENDPOINT_CLIENT_CA_CERT) requires both TLS certificate and key to be configured',
+    );
+  }
+
+  // The TLS listener needs both halves: a lone certificate or key would
+  // otherwise fall through to the plaintext listener on truthiness checks.
+  if ((tlsCert === undefined) !== (tlsKey === undefined)) {
+    throw new Error(
+      'Both TLS certificate (--tls-cert or SESAME_ENDPOINT_TLS_CERT) and TLS key (--tls-key or SESAME_ENDPOINT_TLS_KEY) must be provided together',
+    );
+  }
+
   const secrets: ServerSecrets = {
-    tlsCert: env.SESAME_ENDPOINT_TLS_CERT,
-    tlsKey: env.SESAME_ENDPOINT_TLS_KEY,
+    tlsCert,
+    tlsKey,
+    clientCaCert,
     caCert: env.SESAME_ENDPOINT_CA_CERT,
     clientCert: env.SESAME_ENDPOINT_CLIENT_CERT,
     clientKey: env.SESAME_ENDPOINT_CLIENT_KEY,
@@ -272,6 +353,9 @@ Options:
   --enable-opportunistic-tls <b>  Enable in-stream upgrade_tls (default: true)
   --enable-flow-control <b>       Enable stream flow control (default: true)
   --allowed-networks <list>       Comma-separated allowed target networks (default: tcp,tcp4,tcp6)
+  --tls-cert <path>               Path to PEM server certificate for TLS listener
+  --tls-key <path>                Path to PEM server private key for TLS listener
+  --client-ca-cert <path>         Path to PEM client CA certificate for mTLS listener verification
   -h, --help                      Show this help message
   -v, --version                   Show version
 
@@ -280,6 +364,7 @@ Environment Variables (for Secrets):
   SESAME_ENDPOINT_PORT               Port override
   SESAME_ENDPOINT_TLS_CERT           PEM server certificate for TLS listener
   SESAME_ENDPOINT_TLS_KEY            PEM server private key for TLS listener
+  SESAME_ENDPOINT_CLIENT_CA_CERT     PEM client CA certificate for mTLS listener verification
   SESAME_ENDPOINT_CA_CERT            Custom Root CA PEM
   SESAME_ENDPOINT_CLIENT_CERT        Client certificate PEM for mTLS upstream
   SESAME_ENDPOINT_CLIENT_KEY         Client private key PEM for mTLS upstream

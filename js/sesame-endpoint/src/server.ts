@@ -13,6 +13,23 @@ export interface EndpointServer {
   close(): Promise<void>;
 }
 
+// Resolves operator-provided TLS material to PEM bytes. Literal PEM content
+// is used as-is; anything else is a file path, read eagerly so a missing or
+// empty file fails here with a clear error instead of surfacing as an opaque
+// handshake failure - or worse, silently disabling the TLS listener.
+function loadPemMaterial(val: string, name: string): Buffer {
+  if (val.trim().length === 0) {
+    throw new Error(`${name} must not be empty`);
+  }
+  const content = val.includes('-----BEGIN')
+    ? val
+    : fs.readFileSync(val, 'utf8');
+  if (content.trim().length === 0) {
+    throw new Error(`${name} is empty: ${val}`);
+  }
+  return Buffer.from(content, 'utf8');
+}
+
 export function createEndpointServer(
   config: ServerConfig,
   tlsProvider?: TLSProvider,
@@ -26,17 +43,36 @@ export function createEndpointServer(
 
   const handler = connectNodeAdapter({routes});
 
+  const {tlsCert, tlsKey, clientCaCert} = config.secrets;
+
+  // Defined-ness (not truthiness) decides whether the TLS listener is
+  // requested: a defined-but-empty field fails loudly here instead of
+  // silently falling through to the plaintext listener.
+  if ((tlsCert === undefined) !== (tlsKey === undefined)) {
+    throw new Error(
+      'Both tlsCert and tlsKey must be provided to enable the TLS listener',
+    );
+  }
+  if (clientCaCert !== undefined && tlsCert === undefined) {
+    throw new Error(
+      'clientCaCert requires both tlsCert and tlsKey to be configured',
+    );
+  }
+
   let server: http2.Http2Server | http2.Http2SecureServer;
 
-  if (config.secrets.tlsCert && config.secrets.tlsKey) {
-    const cert = fs.existsSync(config.secrets.tlsCert)
-      ? fs.readFileSync(config.secrets.tlsCert)
-      : Buffer.from(config.secrets.tlsCert);
-    const key = fs.existsSync(config.secrets.tlsKey)
-      ? fs.readFileSync(config.secrets.tlsKey)
-      : Buffer.from(config.secrets.tlsKey);
+  if (tlsCert !== undefined && tlsKey !== undefined) {
+    const secureOptions: http2.SecureServerOptions = {
+      cert: loadPemMaterial(tlsCert, 'TLS certificate'),
+      key: loadPemMaterial(tlsKey, 'TLS key'),
+    };
+    if (clientCaCert !== undefined) {
+      secureOptions.ca = loadPemMaterial(clientCaCert, 'Client CA certificate');
+      secureOptions.requestCert = true;
+      secureOptions.rejectUnauthorized = true;
+    }
 
-    server = http2.createSecureServer({cert, key}, handler);
+    server = http2.createSecureServer(secureOptions, handler);
   } else {
     server = http2.createServer(handler);
   }
