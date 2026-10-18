@@ -1,0 +1,4 @@
+# Normalize the repository to LF line endings, including Windows checkouts
+# (where Git for Windows defaults to CRLF conversion). CRLF working trees
+# break gts/prettier linting and make CI results platform-dependent.
+* text=auto eol=lf
