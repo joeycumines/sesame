@@ -2,245 +2,443 @@ syntax = "proto3";
 
 package sesame.v1alpha1;
 
-import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/api/resource.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
-import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
 import "google/rpc/status.proto";
-import "google/api/annotations.proto";
-import "google/api/field_behavior.proto";
 import "protoc-gen-openapiv2/options/annotations.proto";
 import "sesame/type/grpcmetadata.proto";
 
-option go_package = "github.com/joeycumines/sesame/api";
-
+option go_package = "github.com/joeycumines/sesame/sesamepb";
+option java_multiple_files = true;
+option java_outer_classname = "SesameProto";
+option java_package = "io.github.joeycumines.sesame.v1alpha1";
 option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
   info: {
-    version: "0.1.0-alpha1";
+    version: "0.1.0-alpha1"
     contact: {
-      name: "Sesame project";
-      url: "https://github.com/joeycumines/sesame";
-    };
+      name: "Sesame project"
+      url: "https://github.com/joeycumines/sesame"
+    }
     license: {
-      name: "MIT License";
-      url: "https://github.com/joeycumines/sesame/blob/main/LICENSE";
-    };
-  };
-  external_docs: {
-    url: "https://github.com/joeycumines/sesame";
-    description: "Source repository";
+      name: "MIT License"
+      url: "https://github.com/joeycumines/sesame/blob/main/LICENSE"
+    }
   }
-  schemes: HTTP;
-  schemes: HTTPS;
-  schemes: WSS;
-  consumes: "application/json";
-  produces: "application/json";
+  external_docs: {
+    url: "https://github.com/joeycumines/sesame"
+    description: "Source repository"
+  }
+  schemes: HTTP
+  schemes: HTTPS
+  schemes: WSS
+  consumes: "application/json"
+  produces: "application/json"
 };
 
 // Sesame is the core management and registration API, used to configure and orchestrate access to remotes.
 service Sesame {
-  rpc CreateRemote (CreateRemoteRequest) returns (Remote) {
+  // Creates a remote in the given namespace.
+  rpc CreateRemote(CreateRemoteRequest) returns (Remote) {
     option (google.api.http) = {
       post: "/v1alpha1/{parent=namespaces/*}/remotes"
       body: "remote"
     };
+    option (google.api.method_signature) = "parent,remote,remote_id";
   }
 
-  rpc GetRemote (GetRemoteRequest) returns (Remote) {
-    option (google.api.http) = {
-      get: "/v1alpha1/{name=namespaces/*/remotes/*}"
-    };
+  // Gets a remote by resource name.
+  rpc GetRemote(GetRemoteRequest) returns (Remote) {
+    option (google.api.http) = {get: "/v1alpha1/{name=namespaces/*/remotes/*}"};
+    option (google.api.method_signature) = "name";
   }
 
-  rpc DeleteRemote (DeleteRemoteRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      delete: "/v1alpha1/{name=namespaces/*/remotes/*}"
-    };
+  // Deletes a remote by resource name.
+  rpc DeleteRemote(DeleteRemoteRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/v1alpha1/{name=namespaces/*/remotes/*}"};
+    option (google.api.method_signature) = "name";
   }
 
-  rpc UpdateRemote (UpdateRemoteRequest) returns (Remote) {
+  // Updates a remote.
+  rpc UpdateRemote(UpdateRemoteRequest) returns (Remote) {
     option (google.api.http) = {
-      patch: "/v1alpha1/{name=namespaces/*/remotes/*}"
+      patch: "/v1alpha1/{remote.name=namespaces/*/remotes/*}"
       body: "remote"
     };
+    option (google.api.method_signature) = "remote,update_mask";
   }
 
-  rpc ListRemotes (ListRemotesRequest) returns (ListRemotesResponse) {
-    option (google.api.http) = {
-      get: "/v1alpha1/{parent=namespaces/*}/remotes"
-    };
+  // Lists remotes in the given namespace.
+  rpc ListRemotes(ListRemotesRequest) returns (ListRemotesResponse) {
+    option (google.api.http) = {get: "/v1alpha1/{parent=namespaces/*}/remotes"};
+    option (google.api.method_signature) = "parent";
   }
 
-  rpc CreateEndpoint (CreateEndpointRequest) returns (Endpoint) {
+  // Creates an endpoint in the given remote.
+  rpc CreateEndpoint(CreateEndpointRequest) returns (Endpoint) {
     option (google.api.http) = {
       post: "/v1alpha1/{parent=namespaces/*/remotes/*}/endpoints"
       body: "endpoint"
     };
+    option (google.api.method_signature) = "parent,endpoint,endpoint_id";
   }
 
-  rpc GetEndpoint (GetEndpointRequest) returns (Endpoint) {
-    option (google.api.http) = {
-      get: "/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"
-    };
+  // Gets an endpoint by resource name.
+  rpc GetEndpoint(GetEndpointRequest) returns (Endpoint) {
+    option (google.api.http) = {get: "/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"};
+    option (google.api.method_signature) = "name";
   }
 
-  rpc DeleteEndpoint (DeleteEndpointRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = {
-      delete: "/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"
-    };
+  // Deletes an endpoint by resource name.
+  rpc DeleteEndpoint(DeleteEndpointRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {delete: "/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"};
+    option (google.api.method_signature) = "name";
   }
 
-  rpc UpdateEndpoint (UpdateEndpointRequest) returns (Endpoint) {
+  // Updates an endpoint.
+  rpc UpdateEndpoint(UpdateEndpointRequest) returns (Endpoint) {
     option (google.api.http) = {
-      patch: "/v1alpha1/{name=namespaces/*/remotes/*/endpoints/*}"
+      patch: "/v1alpha1/{endpoint.name=namespaces/*/remotes/*/endpoints/*}"
       body: "endpoint"
     };
+    option (google.api.method_signature) = "endpoint,update_mask";
   }
 
-  rpc ListEndpoints (ListEndpointsRequest) returns (ListEndpointsResponse) {
-    option (google.api.http) = {
-      get: "/v1alpha1/{parent=namespaces/*/remotes/*}/endpoints"
-    };
+  // Lists endpoints in the given remote.
+  rpc ListEndpoints(ListEndpointsRequest) returns (ListEndpointsResponse) {
+    option (google.api.http) = {get: "/v1alpha1/{parent=namespaces/*/remotes/*}/endpoints"};
+    option (google.api.method_signature) = "parent";
   }
 
-  rpc Proxy (stream ProxyRequest) returns (stream ProxyResponse) {
-    option (google.api.http) = {
-      post: "/v1alpha1/proxy"
-      body: "*"
-    };
-  }
-
-  // TODO namespace methods
+  // ProxyCall tunnels a gRPC method call through the addressed endpoint, as a
+  // bi-directional stream of request and response frames.
+  //
+  // Bi-directional streams cannot be natively carried by HTTP/1.1, so this
+  // method carries no HTTP transcoding annotation; it is gRPC-only.
+  rpc ProxyCall(stream ProxyCallRequest) returns (stream ProxyCallResponse) {}
 }
 
 // Remote is a network device or other resource that may be accessed by Sesame clients.
 message Remote {
-  string name = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
-  string display_name = 2;
-  string description = 3;
+  option (google.api.resource) = {
+    type: "sesame/Remote"
+    pattern: "namespaces/{namespace}/remotes/{remote}"
+    singular: "remote"
+    plural: "remotes"
+  };
+
+  // The resource name of the remote.
+  // Format: namespaces/{namespace}/remotes/{remote}
+  string name = 1 [(google.api.field_behavior) = IDENTIFIER];
+
+  // Human-readable name of the remote.
+  string display_name = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Description of the remote.
+  string description = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // Creation timestamp of the remote.
   google.protobuf.Timestamp create_time = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
 // Endpoint is a gRPC service available via a remote.
 message Endpoint {
-  string name = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
-  string display_name = 2;
-  string description = 3;
+  option (google.api.resource) = {
+    type: "sesame/Endpoint"
+    pattern: "namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}"
+    singular: "endpoint"
+    plural: "endpoints"
+  };
+
+  // The resource name of the endpoint.
+  // Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
+  string name = 1 [(google.api.field_behavior) = IDENTIFIER];
+
+  // Human-readable name of the endpoint.
+  string display_name = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Description of the endpoint.
+  string description = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // Creation timestamp of the endpoint.
   google.protobuf.Timestamp create_time = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
-  Spec spec = 11;
+
+  // The endpoint specification, containing configuration around access and
+  // usage behavior.
+  Spec spec = 11 [(google.api.field_behavior) = OPTIONAL];
+
   // Spec models the endpoint specification, containing configuration around access and usage behavior.
   message Spec {
     oneof data {
+      // Tunnel models an endpoint exposed directly over a tunnel provider.
       Tunnel tunnel = 1;
-    };
+    }
   }
+
   // Tunnel models an endpoint exposed directly over a tunnel provider.
-  message Tunnel {
-    // TODO might eventually make this configurable (more than one tunnel pattern)
-  }
+  // TODO might eventually make this configurable (more than one tunnel pattern)
+  message Tunnel {}
 }
 
 // Namespace scopes resources in the Sesame API, and is intended to (eventually) facilitate scoped simple auth.
 message Namespace {
-  string name = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
-}
-
-message CreateRemoteRequest {
-  // The name of the parent Namespace, note that remote.name MUST NOT be set.
-  string parent = 1;
-  // May be specified to request a specific (non-trailing) resource id, note it's a single path segment, w/o any "/".
-  string resource_id = 2;
-  Remote remote = 11;
-}
-
-message GetRemoteRequest {
-  string name = 1;
-}
-
-message DeleteRemoteRequest {
-  string name = 1;
-}
-
-message UpdateRemoteRequest {
-  string name = 1;
-  // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#fieldmask
-  google.protobuf.FieldMask update_mask = 2;
-  Remote remote = 11;
-}
-
-message ListRemotesRequest {
-  string parent = 1;
-  int32 page_size = 2;
-  string page_token = 3;
-}
-
-message ListRemotesResponse {
-  repeated Remote remotes = 1;
-  string next_page_token = 2;
-}
-
-message CreateEndpointRequest {
-  // The name of the parent Remote, note that endpoint.name MUST NOT be set.
-  string parent = 1;
-  // May be specified to request a specific (non-trailing) resource id, note it's a single path segment, w/o any "/".
-  string resource_id = 2;
-  Endpoint endpoint = 11;
-}
-
-message GetEndpointRequest {
-  string name = 1;
-}
-
-message DeleteEndpointRequest {
-  string name = 1;
-}
-
-message UpdateEndpointRequest {
-  string name = 1;
-  // https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#fieldmask
-  google.protobuf.FieldMask update_mask = 2;
-  Endpoint endpoint = 11;
-}
-
-message ListEndpointsRequest {
-  string parent = 1;
-  int32 page_size = 2;
-  string page_token = 3;
-}
-
-message ListEndpointsResponse {
-  repeated Endpoint endpoints = 1;
-  string next_page_token = 2;
-}
-
-message ProxyRequest {
-  oneof data {
-    Dial dial = 1;
-    type.GrpcMetadata header = 2;
-    google.protobuf.Any content = 3;
+  option (google.api.resource) = {
+    type: "sesame/Namespace"
+    pattern: "namespaces/{namespace}"
+    singular: "namespace"
+    plural: "namespaces"
   };
+
+  // The resource name of the namespace.
+  // Format: namespaces/{namespace}
+  string name = 1 [(google.api.field_behavior) = IDENTIFIER];
+}
+
+// CreateRemoteRequest models a Sesame.CreateRemote request.
+message CreateRemoteRequest {
+  // The namespace to create the remote in, by resource name.
+  // Format: namespaces/{namespace}
+  string parent = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {child_type: "sesame/Remote"}
+  ];
+
+  // The ID to use for the remote, which will become the final component of
+  // the remote's resource name. A single path segment, without any "/".
+  // This value should be 4-63 characters, and valid characters are
+  // /[a-z][0-9]-/. May be omitted, in which case a server-assigned ID is
+  // used.
+  string remote_id = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // The remote to create. remote.name MUST NOT be set.
+  Remote remote = 11 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetRemoteRequest models a Sesame.GetRemote request.
+message GetRemoteRequest {
+  // The remote to retrieve, by resource name.
+  // Format: namespaces/{namespace}/remotes/{remote}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "sesame/Remote"}
+  ];
+}
+
+// DeleteRemoteRequest models a Sesame.DeleteRemote request.
+message DeleteRemoteRequest {
+  // The remote to delete, by resource name.
+  // Format: namespaces/{namespace}/remotes/{remote}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "sesame/Remote"}
+  ];
+
+  // If set to true, any endpoints of the remote will also be deleted.
+  // (Otherwise, the request will only succeed if the remote has no
+  // endpoints.)
+  bool force = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// UpdateRemoteRequest models a Sesame.UpdateRemote request.
+message UpdateRemoteRequest {
+  // The remote to update.
+  //
+  // The remote's `name` field is used to identify the remote to update.
+  // Format: namespaces/{namespace}/remotes/{remote}
+  Remote remote = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // The list of fields to update. If omitted, all populated fields are
+  // updated (an implied mask of `*` performs full replacement).
+  google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListRemotesRequest models a Sesame.ListRemotes request.
+message ListRemotesRequest {
+  // The namespace to list remotes in, by resource name.
+  // Format: namespaces/{namespace}
+  string parent = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {child_type: "sesame/Remote"}
+  ];
+
+  // The maximum number of remotes to return. The service may return fewer
+  // than this value. If unspecified, at most 50 remotes will be returned.
+  // The maximum value is 1000; values above 1000 will be coerced to 1000.
+  int32 page_size = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // A page token, received from a previous ListRemotes call.
+  // Provide this to retrieve the subsequent page.
+  //
+  // When paginating, all other parameters provided to ListRemotes must match
+  // the call that provided the page token.
+  string page_token = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListRemotesResponse models a Sesame.ListRemotes response.
+message ListRemotesResponse {
+  // The remotes from the specified namespace.
+  repeated Remote remotes = 1;
+
+  // A token, which can be sent as page_token to retrieve the next page.
+  // If this field is omitted, there are no subsequent pages.
+  string next_page_token = 2;
+}
+
+// CreateEndpointRequest models a Sesame.CreateEndpoint request.
+message CreateEndpointRequest {
+  // The remote to create the endpoint in, by resource name.
+  // Format: namespaces/{namespace}/remotes/{remote}
+  string parent = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {child_type: "sesame/Endpoint"}
+  ];
+
+  // The ID to use for the endpoint, which will become the final component
+  // of the endpoint's resource name. A single path segment, without any "/".
+  // This value should be 4-63 characters, and valid characters are
+  // /[a-z][0-9]-/. May be omitted, in which case a server-assigned ID is
+  // used.
+  string endpoint_id = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // The endpoint to create. endpoint.name MUST NOT be set.
+  Endpoint endpoint = 11 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetEndpointRequest models a Sesame.GetEndpoint request.
+message GetEndpointRequest {
+  // The endpoint to retrieve, by resource name.
+  // Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "sesame/Endpoint"}
+  ];
+}
+
+// DeleteEndpointRequest models a Sesame.DeleteEndpoint request.
+message DeleteEndpointRequest {
+  // The endpoint to delete, by resource name.
+  // Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "sesame/Endpoint"}
+  ];
+}
+
+// UpdateEndpointRequest models a Sesame.UpdateEndpoint request.
+message UpdateEndpointRequest {
+  // The endpoint to update.
+  //
+  // The endpoint's `name` field is used to identify the endpoint to update.
+  // Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
+  Endpoint endpoint = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // The list of fields to update. If omitted, all populated fields are
+  // updated (an implied mask of `*` performs full replacement).
+  google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListEndpointsRequest models a Sesame.ListEndpoints request.
+message ListEndpointsRequest {
+  // The remote to list endpoints in, by resource name.
+  // Format: namespaces/{namespace}/remotes/{remote}
+  string parent = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {child_type: "sesame/Endpoint"}
+  ];
+
+  // The maximum number of endpoints to return. The service may return fewer
+  // than this value. If unspecified, at most 50 endpoints will be returned.
+  // The maximum value is 1000; values above 1000 will be coerced to 1000.
+  int32 page_size = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // A page token, received from a previous ListEndpoints call.
+  // Provide this to retrieve the subsequent page.
+  //
+  // When paginating, all other parameters provided to ListEndpoints must
+  // match the call that provided the page token.
+  string page_token = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListEndpointsResponse models a Sesame.ListEndpoints response.
+message ListEndpointsResponse {
+  // The endpoints from the specified remote.
+  repeated Endpoint endpoints = 1;
+
+  // A token, which can be sent as page_token to retrieve the next page.
+  // If this field is omitted, there are no subsequent pages.
+  string next_page_token = 2;
+}
+
+// ProxyCallRequest models a message sent from a Sesame.ProxyCall client to
+// the server.
+message ProxyCallRequest {
+  oneof data {
+    // Dial models the initial request routing of a method call. MUST be the
+    // first message in the stream.
+    Dial dial = 1;
+
+    // Header carries the inner call's gRPC request header metadata.
+    type.GrpcMetadata header = 2;
+
+    // Content carries one serialized inner-call request message. The
+    // message type is determined by the method being tunneled, exactly as
+    // on the native gRPC wire; large messages may be split across frames,
+    // in order.
+    bytes content = 3;
+  }
+
   // Dial models the initial request routing of a method call.
   message Dial {
-    string endpoint = 1;
-    string method = 2;
-    // conn_mask is an optional field mask for ProxyResponse.conn.
-    google.protobuf.FieldMask conn_mask = 3;
+    // The endpoint to route the call through, by resource name.
+    // Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
+    string endpoint = 1 [(google.api.field_behavior) = REQUIRED];
+
+    // The full method name of the inner call, e.g.
+    // "sesame.v1alpha1.RemoteControl/NetConn".
+    string method = 2 [(google.api.field_behavior) = REQUIRED];
+
+    // An optional field mask for ProxyCallResponse.conn.
+    google.protobuf.FieldMask conn_mask = 3 [(google.api.field_behavior) = OPTIONAL];
   }
 }
 
-message ProxyResponse {
+// ProxyCallResponse models a message sent from a Sesame.ProxyCall server to
+// the client.
+message ProxyCallResponse {
   oneof data {
+    // Conn is the response to ProxyCallRequest.dial.
     Conn conn = 1;
-    // error models an error from the inner call, and may be received any time after conn
+
+    // Error models an error from the inner call, and may be received any
+    // time after conn.
     google.rpc.Status error = 2;
+
+    // Header carries the inner call's gRPC response header metadata.
     type.GrpcMetadata header = 3;
-    google.protobuf.Any content = 4;
+
+    // Content carries one serialized inner-call response message. The
+    // message type is determined by the method being tunneled, exactly as
+    // on the native gRPC wire; large messages may be split across frames,
+    // in order.
+    bytes content = 4;
+
+    // Trailer carries the inner call's gRPC response trailer metadata.
     type.GrpcMetadata trailer = 5;
-  };
-  // Conn is the response to ProxyRequest.dial.
+  }
+
+  // Conn is the response to ProxyCallRequest.dial.
   message Conn {
+    // The namespace the call was routed through.
     Namespace namespace = 1;
+
+    // The remote the call was routed through.
     Remote remote = 2;
+
+    // The endpoint the call was routed through.
     Endpoint endpoint = 3;
   }
 }

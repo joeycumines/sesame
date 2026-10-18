@@ -19,46 +19,11 @@ import (
 
 // EndpointSpec Spec models the endpoint specification, containing configuration around access and usage behavior.
 type EndpointSpec struct {
-	// Tunnel Tunnel models an endpoint exposed directly over a tunnel provider.
-	//
-	// TODO might eventually make this configurable (more than one tunnel pattern)
 	Tunnel *EndpointTunnel `json:"tunnel,omitempty"`
 }
 
-// EndpointTunnel Tunnel models an endpoint exposed directly over a tunnel provider.
-//
-// TODO might eventually make this configurable (more than one tunnel pattern)
+// EndpointTunnel defines model for EndpointTunnel.
 type EndpointTunnel = map[string]interface{}
-
-// GrpcMetadataBin defines model for GrpcMetadataBin.
-type GrpcMetadataBin struct {
-	Values *[][]byte `json:"values,omitempty"`
-}
-
-// GrpcMetadataStr defines model for GrpcMetadataStr.
-type GrpcMetadataStr struct {
-	Values *[]string `json:"values,omitempty"`
-}
-
-// ProxyRequestDial Dial models the initial request routing of a method call.
-type ProxyRequestDial struct {
-	// ConnMask conn_mask is an optional field mask for ProxyResponse.conn.
-	ConnMask *string `json:"connMask,omitempty"`
-	Endpoint *string `json:"endpoint,omitempty"`
-	Method   *string `json:"method,omitempty"`
-}
-
-// ProxyResponseConn Conn is the response to ProxyRequest.dial.
-type ProxyResponseConn struct {
-	// Endpoint Endpoint is a gRPC service available via a remote.
-	Endpoint *V1alpha1Endpoint `json:"endpoint,omitempty"`
-
-	// Namespace Namespace scopes resources in the Sesame API, and is intended to (eventually) facilitate scoped simple auth.
-	Namespace *V1alpha1Namespace `json:"namespace,omitempty"`
-
-	// Remote Remote is a network device or other resource that may be accessed by Sesame clients.
-	Remote *V1alpha1Remote `json:"remote,omitempty"`
-}
 
 // ProtobufAny `Any` contains an arbitrary serialized protocol buffer message along with a
 // URL that describes the type of the serialized message.
@@ -120,8 +85,8 @@ type ProtobufAny struct {
 	// resolution service at these type URLs was considered but Protobuf never
 	// implemented one and considers contacting these URLs to be problematic and
 	// a potential security issue. Do not attempt to contact type URLs.
-	Type                 *string                           `json:"@type,omitempty"`
-	AdditionalProperties map[string]map[string]interface{} `json:"-"`
+	Type                 *string                `json:"@type,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
 // RpcStatus The `Status` type defines a logical error model that is suitable for
@@ -147,179 +112,142 @@ type RpcStatus struct {
 	Message *string `json:"message,omitempty"`
 }
 
-// TypeGrpcMetadata GrpcMetadata represents gRPC request or response (header, trailer) metadata.
-type TypeGrpcMetadata struct {
-	Data *map[string]TypeGrpcMetadataValue `json:"data,omitempty"`
-}
-
-// TypeGrpcMetadataValue defines model for typeGrpcMetadataValue.
-type TypeGrpcMetadataValue struct {
-	Bin *GrpcMetadataBin `json:"bin,omitempty"`
-	Str *GrpcMetadataStr `json:"str,omitempty"`
-}
-
 // V1alpha1Endpoint Endpoint is a gRPC service available via a remote.
 type V1alpha1Endpoint struct {
-	CreateTime  *time.Time `json:"createTime,omitempty"`
-	Description *string    `json:"description,omitempty"`
-	DisplayName *string    `json:"displayName,omitempty"`
-	Name        *string    `json:"name,omitempty"`
+	// CreateTime Creation timestamp of the endpoint.
+	CreateTime *time.Time `json:"createTime,omitempty"`
+
+	// Description Description of the endpoint.
+	Description *string `json:"description,omitempty"`
+
+	// DisplayName Human-readable name of the endpoint.
+	DisplayName *string `json:"displayName,omitempty"`
+	Name        *string `json:"name,omitempty"`
 
 	// Spec Spec models the endpoint specification, containing configuration around access and usage behavior.
 	Spec *EndpointSpec `json:"spec,omitempty"`
 }
 
-// V1alpha1ListEndpointsResponse defines model for v1alpha1ListEndpointsResponse.
+// V1alpha1ListEndpointsResponse ListEndpointsResponse models a Sesame.ListEndpoints response.
 type V1alpha1ListEndpointsResponse struct {
-	Endpoints     *[]V1alpha1Endpoint `json:"endpoints,omitempty"`
-	NextPageToken *string             `json:"nextPageToken,omitempty"`
+	// Endpoints The endpoints from the specified remote.
+	Endpoints *[]V1alpha1Endpoint `json:"endpoints,omitempty"`
+
+	// NextPageToken A token, which can be sent as page_token to retrieve the next page.
+	// If this field is omitted, there are no subsequent pages.
+	NextPageToken *string `json:"nextPageToken,omitempty"`
 }
 
-// V1alpha1ListRemotesResponse defines model for v1alpha1ListRemotesResponse.
+// V1alpha1ListRemotesResponse ListRemotesResponse models a Sesame.ListRemotes response.
 type V1alpha1ListRemotesResponse struct {
-	NextPageToken *string           `json:"nextPageToken,omitempty"`
-	Remotes       *[]V1alpha1Remote `json:"remotes,omitempty"`
-}
+	// NextPageToken A token, which can be sent as page_token to retrieve the next page.
+	// If this field is omitted, there are no subsequent pages.
+	NextPageToken *string `json:"nextPageToken,omitempty"`
 
-// V1alpha1Namespace Namespace scopes resources in the Sesame API, and is intended to (eventually) facilitate scoped simple auth.
-type V1alpha1Namespace struct {
-	Name *string `json:"name,omitempty"`
-}
-
-// V1alpha1ProxyRequest defines model for v1alpha1ProxyRequest.
-type V1alpha1ProxyRequest struct {
-	// Content `Any` contains an arbitrary serialized protocol buffer message along with a
-	// URL that describes the type of the serialized message.
-	//
-	// In its binary encoding, an `Any` is an ordinary message; but in other wire
-	// forms like JSON, it has a special encoding. The format of the type URL is
-	// described on the `type_url` field.
-	//
-	// Protobuf APIs provide utilities to interact with `Any` values:
-	//
-	// - A 'pack' operation accepts a message and constructs a generic `Any` wrapper
-	//   around it.
-	// - An 'unpack' operation reads the content of an `Any` message, either into an
-	//   existing message or a new one. Unpack operations must check the type of the
-	//   value they unpack against the declared `type_url`.
-	// - An 'is' operation decides whether an `Any` contains a message of the given
-	//   type, i.e. whether it can 'unpack' that type.
-	//
-	// The JSON format representation of an `Any` follows one of these cases:
-	//
-	// - For types without special-cased JSON encodings, the JSON format
-	//   representation of the `Any` is the same as that of the message, with an
-	//   additional `@type` field which contains the type URL.
-	// - For types with special-cased JSON encodings (typically called 'well-known'
-	//   types, listed in https://protobuf.dev/programming-guides/json/#any), the
-	//   JSON format representation has a key `@type` which contains the type URL
-	//   and a key `value` which contains the JSON-serialized value.
-	//
-	// The text format representation of an `Any` is like a message with one field
-	// whose name is the type URL in brackets. For example, an `Any` containing a
-	// `foo.Bar` message may be written `[type.googleapis.com/foo.Bar] { a: 2 }`.
-	Content *ProtobufAny `json:"content,omitempty"`
-
-	// Dial Dial models the initial request routing of a method call.
-	Dial *ProxyRequestDial `json:"dial,omitempty"`
-
-	// Header GrpcMetadata represents gRPC request or response (header, trailer) metadata.
-	Header *TypeGrpcMetadata `json:"header,omitempty"`
-}
-
-// V1alpha1ProxyResponse defines model for v1alpha1ProxyResponse.
-type V1alpha1ProxyResponse struct {
-	// Conn Conn is the response to ProxyRequest.dial.
-	Conn *ProxyResponseConn `json:"conn,omitempty"`
-
-	// Content `Any` contains an arbitrary serialized protocol buffer message along with a
-	// URL that describes the type of the serialized message.
-	//
-	// In its binary encoding, an `Any` is an ordinary message; but in other wire
-	// forms like JSON, it has a special encoding. The format of the type URL is
-	// described on the `type_url` field.
-	//
-	// Protobuf APIs provide utilities to interact with `Any` values:
-	//
-	// - A 'pack' operation accepts a message and constructs a generic `Any` wrapper
-	//   around it.
-	// - An 'unpack' operation reads the content of an `Any` message, either into an
-	//   existing message or a new one. Unpack operations must check the type of the
-	//   value they unpack against the declared `type_url`.
-	// - An 'is' operation decides whether an `Any` contains a message of the given
-	//   type, i.e. whether it can 'unpack' that type.
-	//
-	// The JSON format representation of an `Any` follows one of these cases:
-	//
-	// - For types without special-cased JSON encodings, the JSON format
-	//   representation of the `Any` is the same as that of the message, with an
-	//   additional `@type` field which contains the type URL.
-	// - For types with special-cased JSON encodings (typically called 'well-known'
-	//   types, listed in https://protobuf.dev/programming-guides/json/#any), the
-	//   JSON format representation has a key `@type` which contains the type URL
-	//   and a key `value` which contains the JSON-serialized value.
-	//
-	// The text format representation of an `Any` is like a message with one field
-	// whose name is the type URL in brackets. For example, an `Any` containing a
-	// `foo.Bar` message may be written `[type.googleapis.com/foo.Bar] { a: 2 }`.
-	Content *ProtobufAny `json:"content,omitempty"`
-
-	// Error The `Status` type defines a logical error model that is suitable for
-	// different programming environments, including REST APIs and RPC APIs. It is
-	// used by [gRPC](https://github.com/grpc). Each `Status` message contains
-	// three pieces of data: error code, error message, and error details.
-	//
-	// You can find out more about this error model and how to work with it in the
-	// [API Design Guide](https://cloud.google.com/apis/design/errors).
-	Error *RpcStatus `json:"error,omitempty"`
-
-	// Header GrpcMetadata represents gRPC request or response (header, trailer) metadata.
-	Header *TypeGrpcMetadata `json:"header,omitempty"`
-
-	// Trailer GrpcMetadata represents gRPC request or response (header, trailer) metadata.
-	Trailer *TypeGrpcMetadata `json:"trailer,omitempty"`
+	// Remotes The remotes from the specified namespace.
+	Remotes *[]V1alpha1Remote `json:"remotes,omitempty"`
 }
 
 // V1alpha1Remote Remote is a network device or other resource that may be accessed by Sesame clients.
 type V1alpha1Remote struct {
-	CreateTime  *time.Time `json:"createTime,omitempty"`
-	Description *string    `json:"description,omitempty"`
-	DisplayName *string    `json:"displayName,omitempty"`
-	Name        *string    `json:"name,omitempty"`
+	// CreateTime Creation timestamp of the remote.
+	CreateTime *time.Time `json:"createTime,omitempty"`
+
+	// Description Description of the remote.
+	Description *string `json:"description,omitempty"`
+
+	// DisplayName Human-readable name of the remote.
+	DisplayName *string `json:"displayName,omitempty"`
+	Name        *string `json:"name,omitempty"`
+}
+
+// SesameUpdateEndpointJSONBody defines parameters for SesameUpdateEndpoint.
+type SesameUpdateEndpointJSONBody struct {
+	// CreateTime Creation timestamp of the endpoint.
+	CreateTime *time.Time `json:"createTime,omitempty"`
+
+	// Description Description of the endpoint.
+	Description *string `json:"description,omitempty"`
+
+	// DisplayName Human-readable name of the endpoint.
+	DisplayName *string `json:"displayName,omitempty"`
+
+	// Spec Spec models the endpoint specification, containing configuration around access and usage behavior.
+	Spec *EndpointSpec `json:"spec,omitempty"`
+}
+
+// SesameDeleteRemoteParams defines parameters for SesameDeleteRemote.
+type SesameDeleteRemoteParams struct {
+	// Force If set to true, any endpoints of the remote will also be deleted.
+	// (Otherwise, the request will only succeed if the remote has no
+	// endpoints.)
+	Force *bool `form:"force,omitempty" json:"force,omitempty"`
 }
 
 // SesameListEndpointsParams defines parameters for SesameListEndpoints.
 type SesameListEndpointsParams struct {
-	PageSize  *int32  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	// PageSize The maximum number of endpoints to return. The service may return fewer
+	// than this value. If unspecified, at most 50 endpoints will be returned.
+	// The maximum value is 1000; values above 1000 will be coerced to 1000.
+	PageSize *int32 `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+
+	// PageToken A page token, received from a previous ListEndpoints call.
+	// Provide this to retrieve the subsequent page.
+	//
+	// When paginating, all other parameters provided to ListEndpoints must
+	// match the call that provided the page token.
 	PageToken *string `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // SesameCreateEndpointParams defines parameters for SesameCreateEndpoint.
 type SesameCreateEndpointParams struct {
-	// ResourceId May be specified to request a specific (non-trailing) resource id, note it's a single path segment, w/o any "/".
-	ResourceId *string `form:"resourceId,omitempty" json:"resourceId,omitempty"`
+	// EndpointId The ID to use for the endpoint, which will become the final component
+	// of the endpoint's resource name. A single path segment, without any "/".
+	// This value should be 4-63 characters, and valid characters are
+	// /[a-z][0-9]-/. May be omitted, in which case a server-assigned ID is
+	// used.
+	EndpointId *string `form:"endpointId,omitempty" json:"endpointId,omitempty"`
 }
 
 // SesameListRemotesParams defines parameters for SesameListRemotes.
 type SesameListRemotesParams struct {
-	PageSize  *int32  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	// PageSize The maximum number of remotes to return. The service may return fewer
+	// than this value. If unspecified, at most 50 remotes will be returned.
+	// The maximum value is 1000; values above 1000 will be coerced to 1000.
+	PageSize *int32 `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+
+	// PageToken A page token, received from a previous ListRemotes call.
+	// Provide this to retrieve the subsequent page.
+	//
+	// When paginating, all other parameters provided to ListRemotes must match
+	// the call that provided the page token.
 	PageToken *string `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // SesameCreateRemoteParams defines parameters for SesameCreateRemote.
 type SesameCreateRemoteParams struct {
-	// ResourceId May be specified to request a specific (non-trailing) resource id, note it's a single path segment, w/o any "/".
-	ResourceId *string `form:"resourceId,omitempty" json:"resourceId,omitempty"`
+	// RemoteId The ID to use for the remote, which will become the final component of
+	// the remote's resource name. A single path segment, without any "/".
+	// This value should be 4-63 characters, and valid characters are
+	// /[a-z][0-9]-/. May be omitted, in which case a server-assigned ID is
+	// used.
+	RemoteId *string `form:"remoteId,omitempty" json:"remoteId,omitempty"`
 }
 
-// SesameProxyJSONRequestBody defines body for SesameProxy for application/json ContentType.
-type SesameProxyJSONRequestBody = V1alpha1ProxyRequest
+// SesameUpdateRemoteJSONBody defines parameters for SesameUpdateRemote.
+type SesameUpdateRemoteJSONBody struct {
+	// CreateTime Creation timestamp of the remote.
+	CreateTime *time.Time `json:"createTime,omitempty"`
+
+	// Description Description of the remote.
+	Description *string `json:"description,omitempty"`
+
+	// DisplayName Human-readable name of the remote.
+	DisplayName *string `json:"displayName,omitempty"`
+}
 
 // SesameUpdateEndpointJSONRequestBody defines body for SesameUpdateEndpoint for application/json ContentType.
-type SesameUpdateEndpointJSONRequestBody = V1alpha1Endpoint
-
-// SesameUpdateRemoteJSONRequestBody defines body for SesameUpdateRemote for application/json ContentType.
-type SesameUpdateRemoteJSONRequestBody = V1alpha1Remote
+type SesameUpdateEndpointJSONRequestBody SesameUpdateEndpointJSONBody
 
 // SesameCreateEndpointJSONRequestBody defines body for SesameCreateEndpoint for application/json ContentType.
 type SesameCreateEndpointJSONRequestBody = V1alpha1Endpoint
@@ -327,9 +255,12 @@ type SesameCreateEndpointJSONRequestBody = V1alpha1Endpoint
 // SesameCreateRemoteJSONRequestBody defines body for SesameCreateRemote for application/json ContentType.
 type SesameCreateRemoteJSONRequestBody = V1alpha1Remote
 
+// SesameUpdateRemoteJSONRequestBody defines body for SesameUpdateRemote for application/json ContentType.
+type SesameUpdateRemoteJSONRequestBody SesameUpdateRemoteJSONBody
+
 // Getter for additional properties for ProtobufAny. Returns the specified
 // element and whether it was found
-func (a ProtobufAny) Get(fieldName string) (value map[string]interface{}, found bool) {
+func (a ProtobufAny) Get(fieldName string) (value interface{}, found bool) {
 	if a.AdditionalProperties != nil {
 		value, found = a.AdditionalProperties[fieldName]
 	}
@@ -337,9 +268,9 @@ func (a ProtobufAny) Get(fieldName string) (value map[string]interface{}, found 
 }
 
 // Setter for additional properties for ProtobufAny
-func (a *ProtobufAny) Set(fieldName string, value map[string]interface{}) {
+func (a *ProtobufAny) Set(fieldName string, value interface{}) {
 	if a.AdditionalProperties == nil {
-		a.AdditionalProperties = make(map[string]map[string]interface{})
+		a.AdditionalProperties = make(map[string]interface{})
 	}
 	a.AdditionalProperties[fieldName] = value
 }
@@ -361,9 +292,9 @@ func (a *ProtobufAny) UnmarshalJSON(b []byte) error {
 	}
 
 	if len(object) != 0 {
-		a.AdditionalProperties = make(map[string]map[string]interface{})
+		a.AdditionalProperties = make(map[string]interface{})
 		for fieldName, fieldBuf := range object {
-			var fieldVal map[string]interface{}
+			var fieldVal interface{}
 			err := json.Unmarshal(fieldBuf, &fieldVal)
 			if err != nil {
 				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
@@ -469,69 +400,100 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
-	// SesameProxyWithBody performs a POST /v1alpha1/proxy (the `SesameProxy` operationId) request,
-	// with any type of body and a specified content type.
-	SesameProxyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// SesameUpdateEndpointWithBody Updates an endpoint.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1alpha1/{endpoint.name} (the `SesameUpdateEndpoint` operationId).
+	SesameUpdateEndpointWithBody(ctx context.Context, endpointName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameProxy performs a POST /v1alpha1/proxy (the `SesameProxy` operationId) request.
+	// SesameUpdateEndpoint Updates an endpoint.
+	//
 	// Takes a body of the `application/json` content type.
-	SesameProxy(ctx context.Context, body SesameProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	//
+	// Corresponds with PATCH /v1alpha1/{endpoint.name} (the `SesameUpdateEndpoint` operationId).
+	SesameUpdateEndpoint(ctx context.Context, endpointName string, body SesameUpdateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameDeleteEndpoint performs a DELETE /v1alpha1/{name_1} (the `SesameDeleteEndpoint` operationId) request.
+	// SesameDeleteEndpoint Deletes an endpoint by resource name.
+	//
+	// Corresponds with DELETE /v1alpha1/{name_1} (the `SesameDeleteEndpoint` operationId).
 	SesameDeleteEndpoint(ctx context.Context, name1 string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameGetEndpoint performs a GET /v1alpha1/{name_1} (the `SesameGetEndpoint` operationId) request.
+	// SesameGetEndpoint Gets an endpoint by resource name.
+	//
+	// Corresponds with GET /v1alpha1/{name_1} (the `SesameGetEndpoint` operationId).
 	SesameGetEndpoint(ctx context.Context, name1 string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameUpdateEndpointWithBody performs a PATCH /v1alpha1/{name_1} (the `SesameUpdateEndpoint` operationId) request,
-	// with any type of body and a specified content type.
-	SesameUpdateEndpointWithBody(ctx context.Context, name1 string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// SesameDeleteRemote Deletes a remote by resource name.
+	//
+	// Corresponds with DELETE /v1alpha1/{name} (the `SesameDeleteRemote` operationId).
+	SesameDeleteRemote(ctx context.Context, name string, params *SesameDeleteRemoteParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameUpdateEndpoint performs a PATCH /v1alpha1/{name_1} (the `SesameUpdateEndpoint` operationId) request.
-	// Takes a body of the `application/json` content type.
-	SesameUpdateEndpoint(ctx context.Context, name1 string, body SesameUpdateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SesameDeleteRemote performs a DELETE /v1alpha1/{name} (the `SesameDeleteRemote` operationId) request.
-	SesameDeleteRemote(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SesameGetRemote performs a GET /v1alpha1/{name} (the `SesameGetRemote` operationId) request.
+	// SesameGetRemote Gets a remote by resource name.
+	//
+	// Corresponds with GET /v1alpha1/{name} (the `SesameGetRemote` operationId).
 	SesameGetRemote(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameUpdateRemoteWithBody performs a PATCH /v1alpha1/{name} (the `SesameUpdateRemote` operationId) request,
-	// with any type of body and a specified content type.
-	SesameUpdateRemoteWithBody(ctx context.Context, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SesameUpdateRemote performs a PATCH /v1alpha1/{name} (the `SesameUpdateRemote` operationId) request.
-	// Takes a body of the `application/json` content type.
-	SesameUpdateRemote(ctx context.Context, name string, body SesameUpdateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SesameListEndpoints performs a GET /v1alpha1/{parent}/endpoints (the `SesameListEndpoints` operationId) request.
+	// SesameListEndpoints Lists endpoints in the given remote.
+	//
+	// Corresponds with GET /v1alpha1/{parent}/endpoints (the `SesameListEndpoints` operationId).
 	SesameListEndpoints(ctx context.Context, parent string, params *SesameListEndpointsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameCreateEndpointWithBody performs a POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId) request,
-	// with any type of body and a specified content type.
+	// SesameCreateEndpointWithBody Creates an endpoint in the given remote.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId).
 	SesameCreateEndpointWithBody(ctx context.Context, parent string, params *SesameCreateEndpointParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameCreateEndpoint performs a POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId) request.
+	// SesameCreateEndpoint Creates an endpoint in the given remote.
+	//
 	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId).
 	SesameCreateEndpoint(ctx context.Context, parent string, params *SesameCreateEndpointParams, body SesameCreateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameListRemotes performs a GET /v1alpha1/{parent}/remotes (the `SesameListRemotes` operationId) request.
+	// SesameListRemotes Lists remotes in the given namespace.
+	//
+	// Corresponds with GET /v1alpha1/{parent}/remotes (the `SesameListRemotes` operationId).
 	SesameListRemotes(ctx context.Context, parent string, params *SesameListRemotesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameCreateRemoteWithBody performs a POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId) request,
-	// with any type of body and a specified content type.
+	// SesameCreateRemoteWithBody Creates a remote in the given namespace.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId).
 	SesameCreateRemoteWithBody(ctx context.Context, parent string, params *SesameCreateRemoteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SesameCreateRemote performs a POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId) request.
+	// SesameCreateRemote Creates a remote in the given namespace.
+	//
 	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId).
 	SesameCreateRemote(ctx context.Context, parent string, params *SesameCreateRemoteParams, body SesameCreateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SesameUpdateRemoteWithBody Updates a remote.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1alpha1/{remote.name} (the `SesameUpdateRemote` operationId).
+	SesameUpdateRemoteWithBody(ctx context.Context, remoteName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SesameUpdateRemote Updates a remote.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1alpha1/{remote.name} (the `SesameUpdateRemote` operationId).
+	SesameUpdateRemote(ctx context.Context, remoteName string, body SesameUpdateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-// SesameProxyWithBody performs a POST /v1alpha1/proxy (the `SesameProxy` operationId) request,
-// with any type of body and a specified content type.
-func (c *Client) SesameProxyWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSesameProxyRequestWithBody(c.Server, contentType, body)
+// SesameUpdateEndpointWithBody Updates an endpoint.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1alpha1/{endpoint.name} (the `SesameUpdateEndpoint` operationId).
+func (c *Client) SesameUpdateEndpointWithBody(ctx context.Context, endpointName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSesameUpdateEndpointRequestWithBody(c.Server, endpointName, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -542,10 +504,13 @@ func (c *Client) SesameProxyWithBody(ctx context.Context, contentType string, bo
 	return c.Client.Do(req)
 }
 
-// SesameProxy performs a POST /v1alpha1/proxy (the `SesameProxy` operationId) request.
+// SesameUpdateEndpoint Updates an endpoint.
+//
 // Takes a body of the `application/json` content type.
-func (c *Client) SesameProxy(ctx context.Context, body SesameProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSesameProxyRequest(c.Server, body)
+//
+// Corresponds with PATCH /v1alpha1/{endpoint.name} (the `SesameUpdateEndpoint` operationId).
+func (c *Client) SesameUpdateEndpoint(ctx context.Context, endpointName string, body SesameUpdateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSesameUpdateEndpointRequest(c.Server, endpointName, body)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +521,9 @@ func (c *Client) SesameProxy(ctx context.Context, body SesameProxyJSONRequestBod
 	return c.Client.Do(req)
 }
 
-// SesameDeleteEndpoint performs a DELETE /v1alpha1/{name_1} (the `SesameDeleteEndpoint` operationId) request.
+// SesameDeleteEndpoint Deletes an endpoint by resource name.
+//
+// Corresponds with DELETE /v1alpha1/{name_1} (the `SesameDeleteEndpoint` operationId).
 func (c *Client) SesameDeleteEndpoint(ctx context.Context, name1 string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSesameDeleteEndpointRequest(c.Server, name1)
 	if err != nil {
@@ -569,7 +536,9 @@ func (c *Client) SesameDeleteEndpoint(ctx context.Context, name1 string, reqEdit
 	return c.Client.Do(req)
 }
 
-// SesameGetEndpoint performs a GET /v1alpha1/{name_1} (the `SesameGetEndpoint` operationId) request.
+// SesameGetEndpoint Gets an endpoint by resource name.
+//
+// Corresponds with GET /v1alpha1/{name_1} (the `SesameGetEndpoint` operationId).
 func (c *Client) SesameGetEndpoint(ctx context.Context, name1 string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSesameGetEndpointRequest(c.Server, name1)
 	if err != nil {
@@ -582,10 +551,11 @@ func (c *Client) SesameGetEndpoint(ctx context.Context, name1 string, reqEditors
 	return c.Client.Do(req)
 }
 
-// SesameUpdateEndpointWithBody performs a PATCH /v1alpha1/{name_1} (the `SesameUpdateEndpoint` operationId) request,
-// with any type of body and a specified content type.
-func (c *Client) SesameUpdateEndpointWithBody(ctx context.Context, name1 string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSesameUpdateEndpointRequestWithBody(c.Server, name1, contentType, body)
+// SesameDeleteRemote Deletes a remote by resource name.
+//
+// Corresponds with DELETE /v1alpha1/{name} (the `SesameDeleteRemote` operationId).
+func (c *Client) SesameDeleteRemote(ctx context.Context, name string, params *SesameDeleteRemoteParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSesameDeleteRemoteRequest(c.Server, name, params)
 	if err != nil {
 		return nil, err
 	}
@@ -596,34 +566,9 @@ func (c *Client) SesameUpdateEndpointWithBody(ctx context.Context, name1 string,
 	return c.Client.Do(req)
 }
 
-// SesameUpdateEndpoint performs a PATCH /v1alpha1/{name_1} (the `SesameUpdateEndpoint` operationId) request.
-// Takes a body of the `application/json` content type.
-func (c *Client) SesameUpdateEndpoint(ctx context.Context, name1 string, body SesameUpdateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSesameUpdateEndpointRequest(c.Server, name1, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SesameDeleteRemote performs a DELETE /v1alpha1/{name} (the `SesameDeleteRemote` operationId) request.
-func (c *Client) SesameDeleteRemote(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSesameDeleteRemoteRequest(c.Server, name)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SesameGetRemote performs a GET /v1alpha1/{name} (the `SesameGetRemote` operationId) request.
+// SesameGetRemote Gets a remote by resource name.
+//
+// Corresponds with GET /v1alpha1/{name} (the `SesameGetRemote` operationId).
 func (c *Client) SesameGetRemote(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSesameGetRemoteRequest(c.Server, name)
 	if err != nil {
@@ -636,35 +581,9 @@ func (c *Client) SesameGetRemote(ctx context.Context, name string, reqEditors ..
 	return c.Client.Do(req)
 }
 
-// SesameUpdateRemoteWithBody performs a PATCH /v1alpha1/{name} (the `SesameUpdateRemote` operationId) request,
-// with any type of body and a specified content type.
-func (c *Client) SesameUpdateRemoteWithBody(ctx context.Context, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSesameUpdateRemoteRequestWithBody(c.Server, name, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SesameUpdateRemote performs a PATCH /v1alpha1/{name} (the `SesameUpdateRemote` operationId) request.
-// Takes a body of the `application/json` content type.
-func (c *Client) SesameUpdateRemote(ctx context.Context, name string, body SesameUpdateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSesameUpdateRemoteRequest(c.Server, name, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SesameListEndpoints performs a GET /v1alpha1/{parent}/endpoints (the `SesameListEndpoints` operationId) request.
+// SesameListEndpoints Lists endpoints in the given remote.
+//
+// Corresponds with GET /v1alpha1/{parent}/endpoints (the `SesameListEndpoints` operationId).
 func (c *Client) SesameListEndpoints(ctx context.Context, parent string, params *SesameListEndpointsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSesameListEndpointsRequest(c.Server, parent, params)
 	if err != nil {
@@ -677,8 +596,11 @@ func (c *Client) SesameListEndpoints(ctx context.Context, parent string, params 
 	return c.Client.Do(req)
 }
 
-// SesameCreateEndpointWithBody performs a POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId) request,
-// with any type of body and a specified content type.
+// SesameCreateEndpointWithBody Creates an endpoint in the given remote.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId).
 func (c *Client) SesameCreateEndpointWithBody(ctx context.Context, parent string, params *SesameCreateEndpointParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSesameCreateEndpointRequestWithBody(c.Server, parent, params, contentType, body)
 	if err != nil {
@@ -691,8 +613,11 @@ func (c *Client) SesameCreateEndpointWithBody(ctx context.Context, parent string
 	return c.Client.Do(req)
 }
 
-// SesameCreateEndpoint performs a POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId) request.
+// SesameCreateEndpoint Creates an endpoint in the given remote.
+//
 // Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId).
 func (c *Client) SesameCreateEndpoint(ctx context.Context, parent string, params *SesameCreateEndpointParams, body SesameCreateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSesameCreateEndpointRequest(c.Server, parent, params, body)
 	if err != nil {
@@ -705,7 +630,9 @@ func (c *Client) SesameCreateEndpoint(ctx context.Context, parent string, params
 	return c.Client.Do(req)
 }
 
-// SesameListRemotes performs a GET /v1alpha1/{parent}/remotes (the `SesameListRemotes` operationId) request.
+// SesameListRemotes Lists remotes in the given namespace.
+//
+// Corresponds with GET /v1alpha1/{parent}/remotes (the `SesameListRemotes` operationId).
 func (c *Client) SesameListRemotes(ctx context.Context, parent string, params *SesameListRemotesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSesameListRemotesRequest(c.Server, parent, params)
 	if err != nil {
@@ -718,8 +645,11 @@ func (c *Client) SesameListRemotes(ctx context.Context, parent string, params *S
 	return c.Client.Do(req)
 }
 
-// SesameCreateRemoteWithBody performs a POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId) request,
-// with any type of body and a specified content type.
+// SesameCreateRemoteWithBody Creates a remote in the given namespace.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId).
 func (c *Client) SesameCreateRemoteWithBody(ctx context.Context, parent string, params *SesameCreateRemoteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSesameCreateRemoteRequestWithBody(c.Server, parent, params, contentType, body)
 	if err != nil {
@@ -732,8 +662,11 @@ func (c *Client) SesameCreateRemoteWithBody(ctx context.Context, parent string, 
 	return c.Client.Do(req)
 }
 
-// SesameCreateRemote performs a POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId) request.
+// SesameCreateRemote Creates a remote in the given namespace.
+//
 // Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId).
 func (c *Client) SesameCreateRemote(ctx context.Context, parent string, params *SesameCreateRemoteParams, body SesameCreateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSesameCreateRemoteRequest(c.Server, parent, params, body)
 	if err != nil {
@@ -746,27 +679,68 @@ func (c *Client) SesameCreateRemote(ctx context.Context, parent string, params *
 	return c.Client.Do(req)
 }
 
-// NewSesameProxyRequest calls the generic SesameProxy builder with application/json body
-func NewSesameProxyRequest(server string, body SesameProxyJSONRequestBody) (*http.Request, error) {
+// SesameUpdateRemoteWithBody Updates a remote.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1alpha1/{remote.name} (the `SesameUpdateRemote` operationId).
+func (c *Client) SesameUpdateRemoteWithBody(ctx context.Context, remoteName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSesameUpdateRemoteRequestWithBody(c.Server, remoteName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SesameUpdateRemote Updates a remote.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1alpha1/{remote.name} (the `SesameUpdateRemote` operationId).
+func (c *Client) SesameUpdateRemote(ctx context.Context, remoteName string, body SesameUpdateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSesameUpdateRemoteRequest(c.Server, remoteName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// NewSesameUpdateEndpointRequest calls the generic SesameUpdateEndpoint builder with application/json body
+func NewSesameUpdateEndpointRequest(server string, endpointName string, body SesameUpdateEndpointJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewSesameProxyRequestWithBody(server, "application/json", bodyReader)
+	return NewSesameUpdateEndpointRequestWithBody(server, endpointName, "application/json", bodyReader)
 }
 
-// NewSesameProxyRequestWithBody constructs an http.Request for the SesameProxy method, with any body, and a specified content type
-func NewSesameProxyRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewSesameUpdateEndpointRequestWithBody constructs an http.Request for the SesameUpdateEndpoint method, with any body, and a specified content type
+func NewSesameUpdateEndpointRequestWithBody(server string, endpointName string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "endpoint.name", endpointName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1alpha1/proxy")
+	operationPath := fmt.Sprintf("/v1alpha1/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -776,7 +750,7 @@ func NewSesameProxyRequestWithBody(server string, contentType string, body io.Re
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -854,55 +828,8 @@ func NewSesameGetEndpointRequest(server string, name1 string) (*http.Request, er
 	return req, nil
 }
 
-// NewSesameUpdateEndpointRequest calls the generic SesameUpdateEndpoint builder with application/json body
-func NewSesameUpdateEndpointRequest(server string, name1 string, body SesameUpdateEndpointJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewSesameUpdateEndpointRequestWithBody(server, name1, "application/json", bodyReader)
-}
-
-// NewSesameUpdateEndpointRequestWithBody constructs an http.Request for the SesameUpdateEndpoint method, with any body, and a specified content type
-func NewSesameUpdateEndpointRequestWithBody(server string, name1 string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name_1", name1, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1alpha1/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewSesameDeleteRemoteRequest constructs an http.Request for the SesameDeleteRemote method
-func NewSesameDeleteRemoteRequest(server string, name string) (*http.Request, error) {
+func NewSesameDeleteRemoteRequest(server string, name string, params *SesameDeleteRemoteParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -925,6 +852,33 @@ func NewSesameDeleteRemoteRequest(server string, name string) (*http.Request, er
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Force != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "force", *params.Force, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
@@ -965,53 +919,6 @@ func NewSesameGetRemoteRequest(server string, name string) (*http.Request, error
 	if err != nil {
 		return nil, err
 	}
-
-	return req, nil
-}
-
-// NewSesameUpdateRemoteRequest calls the generic SesameUpdateRemote builder with application/json body
-func NewSesameUpdateRemoteRequest(server string, name string, body SesameUpdateRemoteJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewSesameUpdateRemoteRequestWithBody(server, name, "application/json", bodyReader)
-}
-
-// NewSesameUpdateRemoteRequestWithBody constructs an http.Request for the SesameUpdateRemote method, with any body, and a specified content type
-func NewSesameUpdateRemoteRequestWithBody(server string, name string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1alpha1/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -1135,9 +1042,9 @@ func NewSesameCreateEndpointRequestWithBody(server string, parent string, params
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if params.ResourceId != nil {
+		if params.EndpointId != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "resourceId", *params.ResourceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "endpointId", *params.EndpointId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1282,9 +1189,9 @@ func NewSesameCreateRemoteRequestWithBody(server string, parent string, params *
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if params.ResourceId != nil {
+		if params.RemoteId != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "resourceId", *params.ResourceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "remoteId", *params.RemoteId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -1301,6 +1208,53 @@ func NewSesameCreateRemoteRequestWithBody(server string, parent string, params *
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSesameUpdateRemoteRequest calls the generic SesameUpdateRemote builder with application/json body
+func NewSesameUpdateRemoteRequest(server string, remoteName string, body SesameUpdateRemoteJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSesameUpdateRemoteRequestWithBody(server, remoteName, "application/json", bodyReader)
+}
+
+// NewSesameUpdateRemoteRequestWithBody constructs an http.Request for the SesameUpdateRemote method, with any body, and a specified content type
+func NewSesameUpdateRemoteRequestWithBody(server string, remoteName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "remote.name", remoteName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1alpha1/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -1354,133 +1308,131 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
-	// SesameProxyWithBodyWithResponse performs a POST /v1alpha1/proxy (the `SesameProxy` operationId) request,
-	// with any type of body and a specified content type.
+	// SesameUpdateEndpointWithBodyWithResponse Updates an endpoint.
 	//
-	// Returns a wrapper object for the known response body format(s).
-	SesameProxyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameProxyResponse, error)
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1alpha1/{endpoint.name} (the `SesameUpdateEndpoint` operationId).
+	SesameUpdateEndpointWithBodyWithResponse(ctx context.Context, endpointName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameUpdateEndpointResponse, error)
 
-	// SesameProxyWithResponse performs a POST /v1alpha1/proxy (the `SesameProxy` operationId) request.
+	// SesameUpdateEndpointWithResponse Updates an endpoint.
+	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	SesameProxyWithResponse(ctx context.Context, body SesameProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameProxyResponse, error)
+	//
+	// Corresponds with PATCH /v1alpha1/{endpoint.name} (the `SesameUpdateEndpoint` operationId).
+	SesameUpdateEndpointWithResponse(ctx context.Context, endpointName string, body SesameUpdateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameUpdateEndpointResponse, error)
 
-	// SesameDeleteEndpointWithResponse performs a DELETE /v1alpha1/{name_1} (the `SesameDeleteEndpoint` operationId) request.
+	// SesameDeleteEndpointWithResponse Deletes an endpoint by resource name.
 	//
 	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1alpha1/{name_1} (the `SesameDeleteEndpoint` operationId).
 	SesameDeleteEndpointWithResponse(ctx context.Context, name1 string, reqEditors ...RequestEditorFn) (*SesameDeleteEndpointResponse, error)
 
-	// SesameGetEndpointWithResponse performs a GET /v1alpha1/{name_1} (the `SesameGetEndpoint` operationId) request.
+	// SesameGetEndpointWithResponse Gets an endpoint by resource name.
 	//
 	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1alpha1/{name_1} (the `SesameGetEndpoint` operationId).
 	SesameGetEndpointWithResponse(ctx context.Context, name1 string, reqEditors ...RequestEditorFn) (*SesameGetEndpointResponse, error)
 
-	// SesameUpdateEndpointWithBodyWithResponse performs a PATCH /v1alpha1/{name_1} (the `SesameUpdateEndpoint` operationId) request,
-	// with any type of body and a specified content type.
+	// SesameDeleteRemoteWithResponse Deletes a remote by resource name.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	SesameUpdateEndpointWithBodyWithResponse(ctx context.Context, name1 string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameUpdateEndpointResponse, error)
+	//
+	// Corresponds with DELETE /v1alpha1/{name} (the `SesameDeleteRemote` operationId).
+	SesameDeleteRemoteWithResponse(ctx context.Context, name string, params *SesameDeleteRemoteParams, reqEditors ...RequestEditorFn) (*SesameDeleteRemoteResponse, error)
 
-	// SesameUpdateEndpointWithResponse performs a PATCH /v1alpha1/{name_1} (the `SesameUpdateEndpoint` operationId) request.
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	SesameUpdateEndpointWithResponse(ctx context.Context, name1 string, body SesameUpdateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameUpdateEndpointResponse, error)
-
-	// SesameDeleteRemoteWithResponse performs a DELETE /v1alpha1/{name} (the `SesameDeleteRemote` operationId) request.
+	// SesameGetRemoteWithResponse Gets a remote by resource name.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	SesameDeleteRemoteWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*SesameDeleteRemoteResponse, error)
-
-	// SesameGetRemoteWithResponse performs a GET /v1alpha1/{name} (the `SesameGetRemote` operationId) request.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Corresponds with GET /v1alpha1/{name} (the `SesameGetRemote` operationId).
 	SesameGetRemoteWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*SesameGetRemoteResponse, error)
 
-	// SesameUpdateRemoteWithBodyWithResponse performs a PATCH /v1alpha1/{name} (the `SesameUpdateRemote` operationId) request,
-	// with any type of body and a specified content type.
+	// SesameListEndpointsWithResponse Lists endpoints in the given remote.
 	//
 	// Returns a wrapper object for the known response body format(s).
-	SesameUpdateRemoteWithBodyWithResponse(ctx context.Context, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameUpdateRemoteResponse, error)
-
-	// SesameUpdateRemoteWithResponse performs a PATCH /v1alpha1/{name} (the `SesameUpdateRemote` operationId) request.
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	SesameUpdateRemoteWithResponse(ctx context.Context, name string, body SesameUpdateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameUpdateRemoteResponse, error)
-
-	// SesameListEndpointsWithResponse performs a GET /v1alpha1/{parent}/endpoints (the `SesameListEndpoints` operationId) request.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Corresponds with GET /v1alpha1/{parent}/endpoints (the `SesameListEndpoints` operationId).
 	SesameListEndpointsWithResponse(ctx context.Context, parent string, params *SesameListEndpointsParams, reqEditors ...RequestEditorFn) (*SesameListEndpointsResponse, error)
 
-	// SesameCreateEndpointWithBodyWithResponse performs a POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId) request,
-	// with any type of body and a specified content type.
+	// SesameCreateEndpointWithBodyWithResponse Creates an endpoint in the given remote.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId).
 	SesameCreateEndpointWithBodyWithResponse(ctx context.Context, parent string, params *SesameCreateEndpointParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameCreateEndpointResponse, error)
 
-	// SesameCreateEndpointWithResponse performs a POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId) request.
+	// SesameCreateEndpointWithResponse Creates an endpoint in the given remote.
+	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId).
 	SesameCreateEndpointWithResponse(ctx context.Context, parent string, params *SesameCreateEndpointParams, body SesameCreateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameCreateEndpointResponse, error)
 
-	// SesameListRemotesWithResponse performs a GET /v1alpha1/{parent}/remotes (the `SesameListRemotes` operationId) request.
+	// SesameListRemotesWithResponse Lists remotes in the given namespace.
 	//
 	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1alpha1/{parent}/remotes (the `SesameListRemotes` operationId).
 	SesameListRemotesWithResponse(ctx context.Context, parent string, params *SesameListRemotesParams, reqEditors ...RequestEditorFn) (*SesameListRemotesResponse, error)
 
-	// SesameCreateRemoteWithBodyWithResponse performs a POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId) request,
-	// with any type of body and a specified content type.
+	// SesameCreateRemoteWithBodyWithResponse Creates a remote in the given namespace.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId).
 	SesameCreateRemoteWithBodyWithResponse(ctx context.Context, parent string, params *SesameCreateRemoteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameCreateRemoteResponse, error)
 
-	// SesameCreateRemoteWithResponse performs a POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId) request.
+	// SesameCreateRemoteWithResponse Creates a remote in the given namespace.
+	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId).
 	SesameCreateRemoteWithResponse(ctx context.Context, parent string, params *SesameCreateRemoteParams, body SesameCreateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameCreateRemoteResponse, error)
+
+	// SesameUpdateRemoteWithBodyWithResponse Updates a remote.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1alpha1/{remote.name} (the `SesameUpdateRemote` operationId).
+	SesameUpdateRemoteWithBodyWithResponse(ctx context.Context, remoteName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameUpdateRemoteResponse, error)
+
+	// SesameUpdateRemoteWithResponse Updates a remote.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1alpha1/{remote.name} (the `SesameUpdateRemote` operationId).
+	SesameUpdateRemoteWithResponse(ctx context.Context, remoteName string, body SesameUpdateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameUpdateRemoteResponse, error)
 }
 
-type SesameProxyResponse struct {
+type SesameUpdateEndpointResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *struct {
-		// Error The `Status` type defines a logical error model that is suitable for
-		// different programming environments, including REST APIs and RPC APIs. It is
-		// used by [gRPC](https://github.com/grpc). Each `Status` message contains
-		// three pieces of data: error code, error message, and error details.
-		//
-		// You can find out more about this error model and how to work with it in the
-		// [API Design Guide](https://cloud.google.com/apis/design/errors).
-		Error  *RpcStatus             `json:"error,omitempty"`
-		Result *V1alpha1ProxyResponse `json:"result,omitempty"`
-	}
+	JSON200 *V1alpha1Endpoint
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *RpcStatus
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r SesameProxyResponse) GetJSON200() *struct {
-	// Error The `Status` type defines a logical error model that is suitable for
-	// different programming environments, including REST APIs and RPC APIs. It is
-	// used by [gRPC](https://github.com/grpc). Each `Status` message contains
-	// three pieces of data: error code, error message, and error details.
-	//
-	// You can find out more about this error model and how to work with it in the
-	// [API Design Guide](https://cloud.google.com/apis/design/errors).
-	Error  *RpcStatus             `json:"error,omitempty"`
-	Result *V1alpha1ProxyResponse `json:"result,omitempty"`
-} {
+func (r SesameUpdateEndpointResponse) GetJSON200() *V1alpha1Endpoint {
 	return r.JSON200
 }
 
 // GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r SesameProxyResponse) GetJSONDefault() *RpcStatus {
+func (r SesameUpdateEndpointResponse) GetJSONDefault() *RpcStatus {
 	return r.JSONDefault
 }
 
 // GetBody returns the raw response body bytes
-func (r SesameProxyResponse) GetBody() []byte {
+func (r SesameUpdateEndpointResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r SesameProxyResponse) Status() string {
+func (r SesameUpdateEndpointResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -1488,7 +1440,7 @@ func (r SesameProxyResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r SesameProxyResponse) StatusCode() int {
+func (r SesameUpdateEndpointResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1496,7 +1448,7 @@ func (r SesameProxyResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SesameProxyResponse) ContentType() string {
+func (r SesameUpdateEndpointResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -1599,54 +1551,6 @@ func (r SesameGetEndpointResponse) ContentType() string {
 	return ""
 }
 
-type SesameUpdateEndpointResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *V1alpha1Endpoint
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *RpcStatus
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r SesameUpdateEndpointResponse) GetJSON200() *V1alpha1Endpoint {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r SesameUpdateEndpointResponse) GetJSONDefault() *RpcStatus {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r SesameUpdateEndpointResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r SesameUpdateEndpointResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r SesameUpdateEndpointResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SesameUpdateEndpointResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type SesameDeleteRemoteResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1737,54 +1641,6 @@ func (r SesameGetRemoteResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SesameGetRemoteResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type SesameUpdateRemoteResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *V1alpha1Remote
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *RpcStatus
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r SesameUpdateRemoteResponse) GetJSON200() *V1alpha1Remote {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r SesameUpdateRemoteResponse) GetJSONDefault() *RpcStatus {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r SesameUpdateRemoteResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r SesameUpdateRemoteResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r SesameUpdateRemoteResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SesameUpdateRemoteResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -1983,31 +1839,85 @@ func (r SesameCreateRemoteResponse) ContentType() string {
 	return ""
 }
 
-// SesameProxyWithBodyWithResponse performs a POST /v1alpha1/proxy (the `SesameProxy` operationId) request,
-// with any type of body and a specified content type.
+type SesameUpdateRemoteResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *V1alpha1Remote
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *RpcStatus
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SesameUpdateRemoteResponse) GetJSON200() *V1alpha1Remote {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r SesameUpdateRemoteResponse) GetJSONDefault() *RpcStatus {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SesameUpdateRemoteResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SesameUpdateRemoteResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SesameUpdateRemoteResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SesameUpdateRemoteResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// SesameUpdateEndpointWithBodyWithResponse Updates an endpoint.
 //
-// Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) SesameProxyWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameProxyResponse, error) {
-	rsp, err := c.SesameProxyWithBody(ctx, contentType, body, reqEditors...)
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1alpha1/{endpoint.name} (the `SesameUpdateEndpoint` operationId).
+func (c *ClientWithResponses) SesameUpdateEndpointWithBodyWithResponse(ctx context.Context, endpointName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameUpdateEndpointResponse, error) {
+	rsp, err := c.SesameUpdateEndpointWithBody(ctx, endpointName, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSesameProxyResponse(rsp)
+	return ParseSesameUpdateEndpointResponse(rsp)
 }
 
-// SesameProxyWithResponse performs a POST /v1alpha1/proxy (the `SesameProxy` operationId) request.
+// SesameUpdateEndpointWithResponse Updates an endpoint.
+//
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) SesameProxyWithResponse(ctx context.Context, body SesameProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameProxyResponse, error) {
-	rsp, err := c.SesameProxy(ctx, body, reqEditors...)
+//
+// Corresponds with PATCH /v1alpha1/{endpoint.name} (the `SesameUpdateEndpoint` operationId).
+func (c *ClientWithResponses) SesameUpdateEndpointWithResponse(ctx context.Context, endpointName string, body SesameUpdateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameUpdateEndpointResponse, error) {
+	rsp, err := c.SesameUpdateEndpoint(ctx, endpointName, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSesameProxyResponse(rsp)
+	return ParseSesameUpdateEndpointResponse(rsp)
 }
 
-// SesameDeleteEndpointWithResponse performs a DELETE /v1alpha1/{name_1} (the `SesameDeleteEndpoint` operationId) request.
+// SesameDeleteEndpointWithResponse Deletes an endpoint by resource name.
 //
 // Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1alpha1/{name_1} (the `SesameDeleteEndpoint` operationId).
 func (c *ClientWithResponses) SesameDeleteEndpointWithResponse(ctx context.Context, name1 string, reqEditors ...RequestEditorFn) (*SesameDeleteEndpointResponse, error) {
 	rsp, err := c.SesameDeleteEndpoint(ctx, name1, reqEditors...)
 	if err != nil {
@@ -2016,9 +1926,11 @@ func (c *ClientWithResponses) SesameDeleteEndpointWithResponse(ctx context.Conte
 	return ParseSesameDeleteEndpointResponse(rsp)
 }
 
-// SesameGetEndpointWithResponse performs a GET /v1alpha1/{name_1} (the `SesameGetEndpoint` operationId) request.
+// SesameGetEndpointWithResponse Gets an endpoint by resource name.
 //
 // Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1alpha1/{name_1} (the `SesameGetEndpoint` operationId).
 func (c *ClientWithResponses) SesameGetEndpointWithResponse(ctx context.Context, name1 string, reqEditors ...RequestEditorFn) (*SesameGetEndpointResponse, error) {
 	rsp, err := c.SesameGetEndpoint(ctx, name1, reqEditors...)
 	if err != nil {
@@ -2027,42 +1939,24 @@ func (c *ClientWithResponses) SesameGetEndpointWithResponse(ctx context.Context,
 	return ParseSesameGetEndpointResponse(rsp)
 }
 
-// SesameUpdateEndpointWithBodyWithResponse performs a PATCH /v1alpha1/{name_1} (the `SesameUpdateEndpoint` operationId) request,
-// with any type of body and a specified content type.
+// SesameDeleteRemoteWithResponse Deletes a remote by resource name.
 //
 // Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) SesameUpdateEndpointWithBodyWithResponse(ctx context.Context, name1 string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameUpdateEndpointResponse, error) {
-	rsp, err := c.SesameUpdateEndpointWithBody(ctx, name1, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSesameUpdateEndpointResponse(rsp)
-}
-
-// SesameUpdateEndpointWithResponse performs a PATCH /v1alpha1/{name_1} (the `SesameUpdateEndpoint` operationId) request.
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) SesameUpdateEndpointWithResponse(ctx context.Context, name1 string, body SesameUpdateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameUpdateEndpointResponse, error) {
-	rsp, err := c.SesameUpdateEndpoint(ctx, name1, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSesameUpdateEndpointResponse(rsp)
-}
-
-// SesameDeleteRemoteWithResponse performs a DELETE /v1alpha1/{name} (the `SesameDeleteRemote` operationId) request.
 //
-// Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) SesameDeleteRemoteWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*SesameDeleteRemoteResponse, error) {
-	rsp, err := c.SesameDeleteRemote(ctx, name, reqEditors...)
+// Corresponds with DELETE /v1alpha1/{name} (the `SesameDeleteRemote` operationId).
+func (c *ClientWithResponses) SesameDeleteRemoteWithResponse(ctx context.Context, name string, params *SesameDeleteRemoteParams, reqEditors ...RequestEditorFn) (*SesameDeleteRemoteResponse, error) {
+	rsp, err := c.SesameDeleteRemote(ctx, name, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseSesameDeleteRemoteResponse(rsp)
 }
 
-// SesameGetRemoteWithResponse performs a GET /v1alpha1/{name} (the `SesameGetRemote` operationId) request.
+// SesameGetRemoteWithResponse Gets a remote by resource name.
 //
 // Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1alpha1/{name} (the `SesameGetRemote` operationId).
 func (c *ClientWithResponses) SesameGetRemoteWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*SesameGetRemoteResponse, error) {
 	rsp, err := c.SesameGetRemote(ctx, name, reqEditors...)
 	if err != nil {
@@ -2071,31 +1965,11 @@ func (c *ClientWithResponses) SesameGetRemoteWithResponse(ctx context.Context, n
 	return ParseSesameGetRemoteResponse(rsp)
 }
 
-// SesameUpdateRemoteWithBodyWithResponse performs a PATCH /v1alpha1/{name} (the `SesameUpdateRemote` operationId) request,
-// with any type of body and a specified content type.
+// SesameListEndpointsWithResponse Lists endpoints in the given remote.
 //
 // Returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) SesameUpdateRemoteWithBodyWithResponse(ctx context.Context, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameUpdateRemoteResponse, error) {
-	rsp, err := c.SesameUpdateRemoteWithBody(ctx, name, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSesameUpdateRemoteResponse(rsp)
-}
-
-// SesameUpdateRemoteWithResponse performs a PATCH /v1alpha1/{name} (the `SesameUpdateRemote` operationId) request.
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-func (c *ClientWithResponses) SesameUpdateRemoteWithResponse(ctx context.Context, name string, body SesameUpdateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameUpdateRemoteResponse, error) {
-	rsp, err := c.SesameUpdateRemote(ctx, name, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSesameUpdateRemoteResponse(rsp)
-}
-
-// SesameListEndpointsWithResponse performs a GET /v1alpha1/{parent}/endpoints (the `SesameListEndpoints` operationId) request.
 //
-// Returns a wrapper object for the known response body format(s).
+// Corresponds with GET /v1alpha1/{parent}/endpoints (the `SesameListEndpoints` operationId).
 func (c *ClientWithResponses) SesameListEndpointsWithResponse(ctx context.Context, parent string, params *SesameListEndpointsParams, reqEditors ...RequestEditorFn) (*SesameListEndpointsResponse, error) {
 	rsp, err := c.SesameListEndpoints(ctx, parent, params, reqEditors...)
 	if err != nil {
@@ -2104,10 +1978,11 @@ func (c *ClientWithResponses) SesameListEndpointsWithResponse(ctx context.Contex
 	return ParseSesameListEndpointsResponse(rsp)
 }
 
-// SesameCreateEndpointWithBodyWithResponse performs a POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId) request,
-// with any type of body and a specified content type.
+// SesameCreateEndpointWithBodyWithResponse Creates an endpoint in the given remote.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId).
 func (c *ClientWithResponses) SesameCreateEndpointWithBodyWithResponse(ctx context.Context, parent string, params *SesameCreateEndpointParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameCreateEndpointResponse, error) {
 	rsp, err := c.SesameCreateEndpointWithBody(ctx, parent, params, contentType, body, reqEditors...)
 	if err != nil {
@@ -2116,8 +1991,11 @@ func (c *ClientWithResponses) SesameCreateEndpointWithBodyWithResponse(ctx conte
 	return ParseSesameCreateEndpointResponse(rsp)
 }
 
-// SesameCreateEndpointWithResponse performs a POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId) request.
+// SesameCreateEndpointWithResponse Creates an endpoint in the given remote.
+//
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1alpha1/{parent}/endpoints (the `SesameCreateEndpoint` operationId).
 func (c *ClientWithResponses) SesameCreateEndpointWithResponse(ctx context.Context, parent string, params *SesameCreateEndpointParams, body SesameCreateEndpointJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameCreateEndpointResponse, error) {
 	rsp, err := c.SesameCreateEndpoint(ctx, parent, params, body, reqEditors...)
 	if err != nil {
@@ -2126,9 +2004,11 @@ func (c *ClientWithResponses) SesameCreateEndpointWithResponse(ctx context.Conte
 	return ParseSesameCreateEndpointResponse(rsp)
 }
 
-// SesameListRemotesWithResponse performs a GET /v1alpha1/{parent}/remotes (the `SesameListRemotes` operationId) request.
+// SesameListRemotesWithResponse Lists remotes in the given namespace.
 //
 // Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1alpha1/{parent}/remotes (the `SesameListRemotes` operationId).
 func (c *ClientWithResponses) SesameListRemotesWithResponse(ctx context.Context, parent string, params *SesameListRemotesParams, reqEditors ...RequestEditorFn) (*SesameListRemotesResponse, error) {
 	rsp, err := c.SesameListRemotes(ctx, parent, params, reqEditors...)
 	if err != nil {
@@ -2137,10 +2017,11 @@ func (c *ClientWithResponses) SesameListRemotesWithResponse(ctx context.Context,
 	return ParseSesameListRemotesResponse(rsp)
 }
 
-// SesameCreateRemoteWithBodyWithResponse performs a POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId) request,
-// with any type of body and a specified content type.
+// SesameCreateRemoteWithBodyWithResponse Creates a remote in the given namespace.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId).
 func (c *ClientWithResponses) SesameCreateRemoteWithBodyWithResponse(ctx context.Context, parent string, params *SesameCreateRemoteParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameCreateRemoteResponse, error) {
 	rsp, err := c.SesameCreateRemoteWithBody(ctx, parent, params, contentType, body, reqEditors...)
 	if err != nil {
@@ -2149,8 +2030,11 @@ func (c *ClientWithResponses) SesameCreateRemoteWithBodyWithResponse(ctx context
 	return ParseSesameCreateRemoteResponse(rsp)
 }
 
-// SesameCreateRemoteWithResponse performs a POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId) request.
+// SesameCreateRemoteWithResponse Creates a remote in the given namespace.
+//
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1alpha1/{parent}/remotes (the `SesameCreateRemote` operationId).
 func (c *ClientWithResponses) SesameCreateRemoteWithResponse(ctx context.Context, parent string, params *SesameCreateRemoteParams, body SesameCreateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameCreateRemoteResponse, error) {
 	rsp, err := c.SesameCreateRemote(ctx, parent, params, body, reqEditors...)
 	if err != nil {
@@ -2159,32 +2043,48 @@ func (c *ClientWithResponses) SesameCreateRemoteWithResponse(ctx context.Context
 	return ParseSesameCreateRemoteResponse(rsp)
 }
 
-// ParseSesameProxyResponse parses an HTTP response from a SesameProxyWithResponse call
-func ParseSesameProxyResponse(rsp *http.Response) (*SesameProxyResponse, error) {
+// SesameUpdateRemoteWithBodyWithResponse Updates a remote.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1alpha1/{remote.name} (the `SesameUpdateRemote` operationId).
+func (c *ClientWithResponses) SesameUpdateRemoteWithBodyWithResponse(ctx context.Context, remoteName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SesameUpdateRemoteResponse, error) {
+	rsp, err := c.SesameUpdateRemoteWithBody(ctx, remoteName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSesameUpdateRemoteResponse(rsp)
+}
+
+// SesameUpdateRemoteWithResponse Updates a remote.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1alpha1/{remote.name} (the `SesameUpdateRemote` operationId).
+func (c *ClientWithResponses) SesameUpdateRemoteWithResponse(ctx context.Context, remoteName string, body SesameUpdateRemoteJSONRequestBody, reqEditors ...RequestEditorFn) (*SesameUpdateRemoteResponse, error) {
+	rsp, err := c.SesameUpdateRemote(ctx, remoteName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSesameUpdateRemoteResponse(rsp)
+}
+
+// ParseSesameUpdateEndpointResponse parses an HTTP response from a SesameUpdateEndpointWithResponse call
+func ParseSesameUpdateEndpointResponse(rsp *http.Response) (*SesameUpdateEndpointResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &SesameProxyResponse{
+	response := &SesameUpdateEndpointResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			// Error The `Status` type defines a logical error model that is suitable for
-			// different programming environments, including REST APIs and RPC APIs. It is
-			// used by [gRPC](https://github.com/grpc). Each `Status` message contains
-			// three pieces of data: error code, error message, and error details.
-			//
-			// You can find out more about this error model and how to work with it in the
-			// [API Design Guide](https://cloud.google.com/apis/design/errors).
-			Error  *RpcStatus             `json:"error,omitempty"`
-			Result *V1alpha1ProxyResponse `json:"result,omitempty"`
-		}
+		var dest V1alpha1Endpoint
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2268,39 +2168,6 @@ func ParseSesameGetEndpointResponse(rsp *http.Response) (*SesameGetEndpointRespo
 	return response, nil
 }
 
-// ParseSesameUpdateEndpointResponse parses an HTTP response from a SesameUpdateEndpointWithResponse call
-func ParseSesameUpdateEndpointResponse(rsp *http.Response) (*SesameUpdateEndpointResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SesameUpdateEndpointResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest V1alpha1Endpoint
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest RpcStatus
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseSesameDeleteRemoteResponse parses an HTTP response from a SesameDeleteRemoteWithResponse call
 func ParseSesameDeleteRemoteResponse(rsp *http.Response) (*SesameDeleteRemoteResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2343,39 +2210,6 @@ func ParseSesameGetRemoteResponse(rsp *http.Response) (*SesameGetRemoteResponse,
 	}
 
 	response := &SesameGetRemoteResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest V1alpha1Remote
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest RpcStatus
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseSesameUpdateRemoteResponse parses an HTTP response from a SesameUpdateRemoteWithResponse call
-func ParseSesameUpdateRemoteResponse(rsp *http.Response) (*SesameUpdateRemoteResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SesameUpdateRemoteResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -2508,6 +2342,39 @@ func ParseSesameCreateRemoteResponse(rsp *http.Response) (*SesameCreateRemoteRes
 	}
 
 	response := &SesameCreateRemoteResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest V1alpha1Remote
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest RpcStatus
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSesameUpdateRemoteResponse parses an HTTP response from a SesameUpdateRemoteWithResponse call
+func ParseSesameUpdateRemoteResponse(rsp *http.Response) (*SesameUpdateRemoteResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SesameUpdateRemoteResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

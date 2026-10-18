@@ -1,19 +1,19 @@
 package grpc_test
 
 import (
-	"github.com/joeycumines/sesame/rc"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 )
 
 type (
 	mockRemoteControlServer struct {
-		rc.UnimplementedRemoteControlServer
-		netConn func(stream rc.RemoteControl_NetConnServer) error
+		sesamepb.UnimplementedRemoteControlServer
+		netConn func(stream sesamepb.RemoteControl_NetConnServer) error
 	}
 
 	mockStreamRecvMsg struct{ recvMsg func(m interface{}) error }
 )
 
-func (x *mockRemoteControlServer) NetConn(stream rc.RemoteControl_NetConnServer) error {
+func (x *mockRemoteControlServer) NetConn(stream sesamepb.RemoteControl_NetConnServer) error {
 	if x.netConn != nil {
 		return x.netConn(stream)
 	}

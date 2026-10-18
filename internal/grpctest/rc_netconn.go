@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"github.com/joeycumines/sesame/internal/nettest"
 	"github.com/joeycumines/sesame/internal/testutil"
-	"github.com/joeycumines/sesame/rc"
 	"github.com/joeycumines/sesame/rc/netconn"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	streamutil "github.com/joeycumines/sesame/stream"
-	"github.com/joeycumines/sesame/type/netaddr"
+	typepb "github.com/joeycumines/sesame/typepb"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -26,7 +26,7 @@ type (
 	}
 
 	mockDialFactoryWrapperState struct {
-		request          *rc.NetConnRequest_Dial
+		request          *sesamepb.NetConnRequest_Dial
 		factory          chan struct{}
 		ctx              context.Context
 		network, address string
@@ -42,11 +42,11 @@ func mockDialFactory(network, dialer, listener string) (netconn.DialerFactory, *
 	}
 	a := &mockDialFactoryWrapper{
 		av,
-		(&netaddr.NetAddr{
+		(&typepb.NetAddr{
 			Network: network,
 			Address: dialer,
 		}).AsGoNetAddr(),
-		(&netaddr.NetAddr{
+		(&typepb.NetAddr{
 			Network: network,
 			Address: listener,
 		}).AsGoNetAddr(),
@@ -54,11 +54,11 @@ func mockDialFactory(network, dialer, listener string) (netconn.DialerFactory, *
 	}
 	b := &mockDialFactoryWrapper{
 		bv,
-		(&netaddr.NetAddr{
+		(&typepb.NetAddr{
 			Network: network,
 			Address: listener,
 		}).AsGoNetAddr(),
-		(&netaddr.NetAddr{
+		(&typepb.NetAddr{
 			Network: network,
 			Address: dialer,
 		}).AsGoNetAddr(),
@@ -71,7 +71,7 @@ func (x *mockDialFactoryWrapper) LocalAddr() net.Addr { return x.local }
 
 func (x *mockDialFactoryWrapper) RemoteAddr() net.Addr { return x.remote }
 
-func (x *mockDialFactoryWrapper) DialFactory(req *rc.NetConnRequest_Dial) (netconn.Dialer, error) {
+func (x *mockDialFactoryWrapper) DialFactory(req *sesamepb.NetConnRequest_Dial) (netconn.Dialer, error) {
 	x.state.request = req
 	close(x.state.factory)
 	return x, nil
@@ -103,11 +103,11 @@ func RC_NetConn_TestClient_DialContext(t testutil.TB, ccFactory testutil.ClientC
 
 	server := netconn.Server{Dialer: dialerFactory}
 
-	gc := ccFactory(func(h testutil.GRPCServer) { rc.RegisterRemoteControlServer(h, &server) })
+	gc := ccFactory(func(h testutil.GRPCServer) { sesamepb.RegisterRemoteControlServer(h, &server) })
 	defer gc.Close()
 
 	client := netconn.Client{
-		API:     rc.NewRemoteControlClient(gc),
+		API:     sesamepb.NewRemoteControlClient(gc),
 		Timeout: connTimeout,
 	}
 
@@ -131,8 +131,8 @@ func RC_NetConn_TestClient_DialContext(t testutil.TB, ccFactory testutil.ClientC
 
 	select {
 	case <-listenConn.state.factory:
-		if !proto.Equal(listenConn.state.request, &rc.NetConnRequest_Dial{
-			Address: &netaddr.NetAddr{
+		if !proto.Equal(listenConn.state.request, &sesamepb.NetConnRequest_Dial{
+			Address: &typepb.NetAddr{
 				Network: connNetwork,
 				Address: connAddress,
 			},
@@ -217,7 +217,9 @@ func RC_NetConn_Test_nettest(
 			dialerValue        = `dialer`
 			listenerValue      = `listener`
 			clientNetworkValue = `client_network`
-			clientAddressValue = `client_address`
+			// Must parse as host:port: the server validates dial requests
+			// at the boundary (validateDialRequest).
+			clientAddressValue = `client.example:443`
 		)
 		dialerFactory, listenConn := mockDialFactory(networkValue, dialerValue, listenerValue)
 		t.Cleanup(func() {
@@ -226,7 +228,7 @@ func RC_NetConn_Test_nettest(
 			}
 			select {
 			case <-listenConn.state.factory:
-				if !proto.Equal(listenConn.state.request.GetAddress(), &netaddr.NetAddr{
+				if !proto.Equal(listenConn.state.request.GetAddress(), &typepb.NetAddr{
 					Network: clientNetworkValue,
 					Address: clientAddressValue,
 				}) {
@@ -257,7 +259,7 @@ func RC_NetConn_Test_nettest(
 
 		server := netconn.Server{Dialer: dialerFactory}
 
-		client := ccFactory(func(h testutil.GRPCServer) { rc.RegisterRemoteControlServer(h, &server) })
+		client := ccFactory(func(h testutil.GRPCServer) { sesamepb.RegisterRemoteControlServer(h, &server) })
 		t.Cleanup(func() {
 			if err := client.Close(); err != nil {
 				t.Error(err)
@@ -265,7 +267,7 @@ func RC_NetConn_Test_nettest(
 		})
 
 		conn, err := (&netconn.Client{
-			API:         rc.NewRemoteControlClient(client),
+			API:         sesamepb.NewRemoteControlClient(client),
 			Timeout:     timeout,
 			ClosePolicy: closePolicy,
 		}).DialContext(ctx, clientNetworkValue, clientAddressValue)
@@ -374,7 +376,7 @@ func RC_NetConn_Test_nettest(
 
 					server := netconn.Server{}
 
-					client := ccFactory(func(h testutil.GRPCServer) { rc.RegisterRemoteControlServer(h, &server) })
+					client := ccFactory(func(h testutil.GRPCServer) { sesamepb.RegisterRemoteControlServer(h, &server) })
 					defer func() {
 						if err != nil {
 							_ = client.Close()
@@ -382,7 +384,7 @@ func RC_NetConn_Test_nettest(
 					}()
 
 					c1, err = (&netconn.Client{
-						API:     rc.NewRemoteControlClient(client),
+						API:     sesamepb.NewRemoteControlClient(client),
 						Timeout: time.Second * 30,
 					}).DialContext(ctx, listener.Addr().Network(), listener.Addr().String())
 					if err != nil {

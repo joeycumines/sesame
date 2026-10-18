@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/joeycumines/sesame/internal/testutil"
-	"github.com/joeycumines/sesame/type/grpctunnel"
+	"github.com/joeycumines/sesame/sesamepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -30,7 +30,7 @@ func Test_readMsgLocked_contextCancellation(t *testing.T) {
 		ctx:            ctx,
 		cncl:           cancel,
 		ch:             ch,
-		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:         make(chan *sesamepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal:   make(chan struct{}),
 		doneSignal:     make(chan struct{}),
 		isServerStream: true,
@@ -73,7 +73,7 @@ func Test_readMsgLocked_channelContextCancellation(t *testing.T) {
 		ctx:            ctx,
 		cncl:           cancel,
 		ch:             ch,
-		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:         make(chan *sesamepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal:   make(chan struct{}),
 		doneSignal:     make(chan struct{}),
 		isServerStream: true,
@@ -115,7 +115,7 @@ func Test_readMsgLocked_bufferCloseTakesPriority(t *testing.T) {
 		ctx:            ctx,
 		cncl:           cancel,
 		ch:             ch,
-		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:         make(chan *sesamepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal:   make(chan struct{}),
 		doneSignal:     make(chan struct{}),
 		isServerStream: true,
@@ -151,7 +151,7 @@ func Test_acceptServerFrame_closedBufferRecover(t *testing.T) {
 		cncl:         cancel,
 		ch:           ch,
 		streamID:     1,
-		buffer:       make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:       make(chan *sesamepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal: make(chan struct{}),
 		doneSignal:   make(chan struct{}),
 	}
@@ -169,9 +169,9 @@ func Test_acceptServerFrame_closedBufferRecover(t *testing.T) {
 				t.Fatalf("acceptServerFrame panicked: %v", r)
 			}
 		}()
-		st.acceptServerFrame(&grpctunnel.ServerToClient{
+		st.acceptServerFrame(&sesamepb.OpenTunnelResponse{
 			StreamId: 1,
-			Frame: &grpctunnel.ServerToClient_MessageData{
+			Frame: &sesamepb.OpenTunnelResponse_MessageData{
 				MessageData: []byte("test"),
 			},
 		})
@@ -188,30 +188,30 @@ func Test_acceptServerFrame_fullBuffer_contextCancel(t *testing.T) {
 	ch := &Channel{
 		ctx:          chCtx,
 		streams:      make(map[uint64]*tunnelClientStream),
-		updateWindow: func(msg *grpctunnel.ServerToClient) {},
+		updateWindow: func(msg *sesamepb.OpenTunnelResponse) {},
 	}
 	st := &tunnelClientStream{
 		ctx:          ctx,
 		cncl:         cancel,
 		ch:           ch,
 		streamID:     1,
-		buffer:       make(chan *grpctunnel.ServerToClient, 1), // tiny buffer
+		buffer:       make(chan *sesamepb.OpenTunnelResponse, 1), // tiny buffer
 		headerSignal: make(chan struct{}),
 		doneSignal:   make(chan struct{}),
 	}
 
 	// Fill the buffer.
-	st.buffer <- &grpctunnel.ServerToClient{
+	st.buffer <- &sesamepb.OpenTunnelResponse{
 		StreamId: 1,
-		Frame:    &grpctunnel.ServerToClient_MessageData{MessageData: []byte("fill")},
+		Frame:    &sesamepb.OpenTunnelResponse_MessageData{MessageData: []byte("fill")},
 	}
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		st.acceptServerFrame(&grpctunnel.ServerToClient{
+		st.acceptServerFrame(&sesamepb.OpenTunnelResponse{
 			StreamId: 1,
-			Frame:    &grpctunnel.ServerToClient_MessageData{MessageData: []byte("overflow")},
+			Frame:    &sesamepb.OpenTunnelResponse_MessageData{MessageData: []byte("overflow")},
 		})
 	}()
 
@@ -238,30 +238,30 @@ func Test_acceptServerFrame_finishStreamBreaksDeadlock(t *testing.T) {
 	ch := &Channel{
 		ctx:          chCtx,
 		streams:      make(map[uint64]*tunnelClientStream),
-		updateWindow: func(msg *grpctunnel.ServerToClient) {},
+		updateWindow: func(msg *sesamepb.OpenTunnelResponse) {},
 	}
 	st := &tunnelClientStream{
 		ctx:          ctx,
 		cncl:         cancel,
 		ch:           ch,
 		streamID:     1,
-		buffer:       make(chan *grpctunnel.ServerToClient, 1),
+		buffer:       make(chan *sesamepb.OpenTunnelResponse, 1),
 		headerSignal: make(chan struct{}),
 		doneSignal:   make(chan struct{}),
 	}
 
 	// Fill the buffer to force blocking in acceptServerFrame.
-	st.buffer <- &grpctunnel.ServerToClient{
+	st.buffer <- &sesamepb.OpenTunnelResponse{
 		StreamId: 1,
-		Frame:    &grpctunnel.ServerToClient_MessageData{MessageData: []byte("fill")},
+		Frame:    &sesamepb.OpenTunnelResponse_MessageData{MessageData: []byte("fill")},
 	}
 
 	acceptDone := make(chan struct{})
 	go func() {
 		defer close(acceptDone)
-		st.acceptServerFrame(&grpctunnel.ServerToClient{
+		st.acceptServerFrame(&sesamepb.OpenTunnelResponse{
 			StreamId: 1,
-			Frame:    &grpctunnel.ServerToClient_MessageData{MessageData: []byte("overflow")},
+			Frame:    &sesamepb.OpenTunnelResponse_MessageData{MessageData: []byte("overflow")},
 		})
 	}()
 
@@ -316,11 +316,11 @@ func Test_channelClose_pendingRecv(t *testing.T) {
 	}, &holdOpenImpl)
 
 	cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) {
-		grpctunnel.RegisterTunnelServiceServer(srv, &ts)
+		sesamepb.RegisterGrpcTunnelServiceServer(srv, &ts)
 	})
 	defer cc.Close()
 
-	tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+	tunnel, err := sesamepb.NewGrpcTunnelServiceClient(cc).OpenTunnel(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,11 +393,11 @@ func Test_channelClose_pendingRecv_withHeader(t *testing.T) {
 	}, &holdOpenImpl2)
 
 	cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) {
-		grpctunnel.RegisterTunnelServiceServer(srv, &ts)
+		sesamepb.RegisterGrpcTunnelServiceServer(srv, &ts)
 	})
 	defer cc.Close()
 
-	tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+	tunnel, err := sesamepb.NewGrpcTunnelServiceClient(cc).OpenTunnel(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,10 +473,10 @@ func Test_concurrentCancelAndFinish(t *testing.T) {
 		}, &concCloseImpl)
 
 		cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) {
-			grpctunnel.RegisterTunnelServiceServer(srv, &ts)
+			sesamepb.RegisterGrpcTunnelServiceServer(srv, &ts)
 		})
 
-		tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+		tunnel, err := sesamepb.NewGrpcTunnelServiceClient(cc).OpenTunnel(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -522,5 +522,78 @@ func Test_concurrentCancelAndFinish(t *testing.T) {
 		}
 
 		cc.Close()
+	}
+}
+
+// Test_readMsgLocked_trailerVisibleAtEOF pins the post-EOF contract:
+// once RecvMsg observes the stream end (buffer close), the stream's
+// terminal state must already be observable - a caller that reads to
+// EOF and immediately calls Trailer() must see the trailers, not a
+// nil MD.
+//
+// Regression for a race (flaky grpchantesting trailer checks under
+// race + load, e.g. TestTunnelServer/forward/*/success reporting
+// "wrong trailers echoed back ... instead was []"): finishStream
+// closes the buffer before doneSignal, so a reader scheduled between
+// the two closes returned EOF while Trailer() still took its
+// not-yet-closed default branch and returned nil.
+func Test_readMsgLocked_trailerVisibleAtEOF(t *testing.T) {
+	chCtx, chCancel := context.WithCancel(context.Background())
+	defer chCancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	ch := &Channel{ctx: chCtx, streams: make(map[uint64]*tunnelClientStream)}
+	trailer := metadata.MD{"4foo4": []string{"7bar7"}}
+	st := &tunnelClientStream{
+		ctx:            ctx,
+		cncl:           cancel,
+		ch:             ch,
+		streamID:       1,
+		buffer:         make(chan *sesamepb.OpenTunnelResponse, windowMaxBuffer),
+		headerSignal:   make(chan struct{}),
+		doneSignal:     make(chan struct{}),
+		isServerStream: true,
+	}
+
+	// A reader parked on the open, empty buffer.
+	type result struct {
+		ok  bool
+		err error
+	}
+	read := make(chan result, 1)
+	go func() {
+		_, ok, err := st.readMsg()
+		read <- result{ok, err}
+	}()
+
+	// Simulate finishStream having applied the terminal state but not
+	// yet having closed doneSignal - the buggy window, exaggerated.
+	st.ingestMu.Lock()
+	st.trailer = trailer
+	st.done = io.EOF
+	close(st.buffer)
+	st.ingestMu.Unlock()
+
+	// The reader must NOT observe EOF while doneSignal is still open.
+	select {
+	case r := <-read:
+		t.Fatalf("readMsg returned (ok=%v err=%v) before doneSignal closed: EOF was observable ahead of the terminal state", r.ok, r.err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Completing the terminal sequence unblocks the reader...
+	close(st.doneSignal)
+	select {
+	case r := <-read:
+		if !r.ok || r.err != io.EOF {
+			t.Fatalf("expected ok=true io.EOF, got ok=%v err=%v", r.ok, r.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("readMsg did not return after doneSignal closed")
+	}
+
+	// ...and the trailers are visible immediately, with no further
+	// synchronization step for the caller to race.
+	if v := st.Trailer()["4foo4"]; len(v) != 1 || v[0] != "7bar7" {
+		t.Fatalf("trailers not visible at EOF: got %v", st.Trailer())
 	}
 }

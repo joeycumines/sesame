@@ -1,0 +1,54 @@
+# Buf workspace: schema/ is the proto include root (mirrors protoc's -I layout).
+# The sesame module is linted; vendored trees are built for import resolution
+# but never linted.
+version: v2
+modules:
+  # Sesame's own protos live at sesame/... import paths, matching protoc's -I .
+  - path: .
+    includes:
+      - sesame
+    lint:
+      use:
+        - STANDARD
+      except:
+        # AIP-190: interface names are intuitive nouns; the Service suffix is
+        # only for disambiguation (Sesame, RemoteControl).
+        - SERVICE_SUFFIX
+        # AIP-133/134/135: standard Create/Get/Update methods return the
+        # resource itself and Delete returns google.protobuf.Empty, so the
+        # response message is deliberately not named {Method}Response
+        # (RPC_RESPONSE_STANDARD_NAME) and the resource/Empty messages are
+        # shared across methods (RPC_REQUEST_RESPONSE_UNIQUE). The tunnel
+        # protocols' bidirectional payload messages are likewise shared
+        # between stream directions by design.
+        - RPC_RESPONSE_STANDARD_NAME
+        - RPC_REQUEST_RESPONSE_UNIQUE
+      ignore_only:
+        # AIP-213: organization common component packages end in .type and
+        # are unversioned by design; PACKAGE_VERSION_SUFFIX does not apply.
+        PACKAGE_VERSION_SUFFIX:
+          - sesame/type
+    breaking:
+      use:
+        - FILE
+      ignore_unstable_packages: true
+  # Vendored grpc-gateway openapiv2 options, at protoc-gen-openapiv2/...
+  # import paths.
+  - path: .
+    includes:
+      - protoc-gen-openapiv2
+    lint:
+      use: []
+      disable_builtin: true
+    breaking:
+      use: []
+      disable_builtin: true
+  # Vendored googleapis git submodule; its files sit at google/... and
+  # grafeas/... import paths, matching protoc's -I ./googleapis.
+  - path: googleapis
+    lint:
+      use: []
+      disable_builtin: true
+    breaking:
+      use: []
+      disable_builtin: true

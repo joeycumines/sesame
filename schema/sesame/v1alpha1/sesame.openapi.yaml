@@ -18,103 +18,50 @@ tags:
   description: "Sesame is the core management and registration API, used to configure\
     \ and orchestrate access to remotes."
 paths:
-  /v1alpha1/proxy:
-    post:
-      tags:
-      - Sesame
-      operationId: Sesame_Proxy
-      requestBody:
-        description: ' (streaming inputs)'
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/v1alpha1ProxyRequest'
-        required: true
-      responses:
-        "200":
-          description: A successful response.(streaming responses)
-          content:
-            application/json:
-              schema:
-                title: Stream result of v1alpha1ProxyResponse
-                type: object
-                properties:
-                  result:
-                    $ref: '#/components/schemas/v1alpha1ProxyResponse'
-                  error:
-                    $ref: '#/components/schemas/rpcStatus'
-        default:
-          description: An unexpected error response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/rpcStatus'
-      x-codegen-request-body-name: body
-  /v1alpha1/{name_1}:
-    get:
-      tags:
-      - Sesame
-      operationId: Sesame_GetEndpoint
-      parameters:
-      - name: name_1
-        in: path
-        required: true
-        schema:
-          pattern: "namespaces/[^/]+/remotes/[^/]+/endpoints/[^/]+"
-          type: string
-      responses:
-        "200":
-          description: A successful response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/v1alpha1Endpoint'
-        default:
-          description: An unexpected error response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/rpcStatus'
-    delete:
-      tags:
-      - Sesame
-      operationId: Sesame_DeleteEndpoint
-      parameters:
-      - name: name_1
-        in: path
-        required: true
-        schema:
-          pattern: "namespaces/[^/]+/remotes/[^/]+/endpoints/[^/]+"
-          type: string
-      responses:
-        "200":
-          description: A successful response.
-          content:
-            application/json:
-              schema:
-                type: object
-        default:
-          description: An unexpected error response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/rpcStatus'
+  /v1alpha1/{endpoint.name}:
     patch:
       tags:
       - Sesame
+      summary: Updates an endpoint.
       operationId: Sesame_UpdateEndpoint
       parameters:
-      - name: name_1
+      - name: endpoint.name
         in: path
+        description: |-
+          The resource name of the endpoint.
+          Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
         required: true
         schema:
           pattern: "namespaces/[^/]+/remotes/[^/]+/endpoints/[^/]+"
           type: string
       requestBody:
+        description: |-
+          The endpoint to update.
+
+          The endpoint's `name` field is used to identify the endpoint to update.
+          Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/v1alpha1Endpoint'
+              title: The endpoint to update.
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  description: Human-readable name of the endpoint.
+                description:
+                  type: string
+                  description: Description of the endpoint.
+                createTime:
+                  type: string
+                  description: Creation timestamp of the endpoint.
+                  format: date-time
+                  readOnly: true
+                spec:
+                  $ref: '#/components/schemas/EndpointSpec'
+              description: |-
+                The endpoint's `name` field is used to identify the endpoint to update.
+                Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
         required: true
       responses:
         "200":
@@ -130,14 +77,75 @@ paths:
               schema:
                 $ref: '#/components/schemas/rpcStatus'
       x-codegen-request-body-name: endpoint
+  /v1alpha1/{name_1}:
+    get:
+      tags:
+      - Sesame
+      summary: Gets an endpoint by resource name.
+      operationId: Sesame_GetEndpoint
+      parameters:
+      - name: name_1
+        in: path
+        description: |-
+          The endpoint to retrieve, by resource name.
+          Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
+        required: true
+        schema:
+          pattern: "namespaces/[^/]+/remotes/[^/]+/endpoints/[^/]+"
+          type: string
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1alpha1Endpoint'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+    delete:
+      tags:
+      - Sesame
+      summary: Deletes an endpoint by resource name.
+      operationId: Sesame_DeleteEndpoint
+      parameters:
+      - name: name_1
+        in: path
+        description: |-
+          The endpoint to delete, by resource name.
+          Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
+        required: true
+        schema:
+          pattern: "namespaces/[^/]+/remotes/[^/]+/endpoints/[^/]+"
+          type: string
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                type: object
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
   /v1alpha1/{name}:
     get:
       tags:
       - Sesame
+      summary: Gets a remote by resource name.
       operationId: Sesame_GetRemote
       parameters:
       - name: name
         in: path
+        description: |-
+          The remote to retrieve, by resource name.
+          Format: namespaces/{namespace}/remotes/{remote}
         required: true
         schema:
           pattern: "namespaces/[^/]+/remotes/[^/]+"
@@ -158,14 +166,26 @@ paths:
     delete:
       tags:
       - Sesame
+      summary: Deletes a remote by resource name.
       operationId: Sesame_DeleteRemote
       parameters:
       - name: name
         in: path
+        description: |-
+          The remote to delete, by resource name.
+          Format: namespaces/{namespace}/remotes/{remote}
         required: true
         schema:
           pattern: "namespaces/[^/]+/remotes/[^/]+"
           type: string
+      - name: force
+        in: query
+        description: |-
+          If set to true, any endpoints of the remote will also be deleted.
+          (Otherwise, the request will only succeed if the remote has no
+          endpoints.)
+        schema:
+          type: boolean
       responses:
         "200":
           description: A successful response.
@@ -179,56 +199,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/rpcStatus'
-    patch:
-      tags:
-      - Sesame
-      operationId: Sesame_UpdateRemote
-      parameters:
-      - name: name
-        in: path
-        required: true
-        schema:
-          pattern: "namespaces/[^/]+/remotes/[^/]+"
-          type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/v1alpha1Remote'
-        required: true
-      responses:
-        "200":
-          description: A successful response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/v1alpha1Remote'
-        default:
-          description: An unexpected error response.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/rpcStatus'
-      x-codegen-request-body-name: remote
   /v1alpha1/{parent}/endpoints:
     get:
       tags:
       - Sesame
+      summary: Lists endpoints in the given remote.
       operationId: Sesame_ListEndpoints
       parameters:
       - name: parent
         in: path
+        description: |-
+          The remote to list endpoints in, by resource name.
+          Format: namespaces/{namespace}/remotes/{remote}
         required: true
         schema:
           pattern: "namespaces/[^/]+/remotes/[^/]+"
           type: string
       - name: pageSize
         in: query
+        description: |-
+          The maximum number of endpoints to return. The service may return fewer
+          than this value. If unspecified, at most 50 endpoints will be returned.
+          The maximum value is 1000; values above 1000 will be coerced to 1000.
         schema:
           type: integer
           format: int32
       - name: pageToken
         in: query
+        description: |-
+          A page token, received from a previous ListEndpoints call.
+          Provide this to retrieve the subsequent page.
+
+          When paginating, all other parameters provided to ListEndpoints must
+          match the call that provided the page token.
         schema:
           type: string
       responses:
@@ -247,23 +250,30 @@ paths:
     post:
       tags:
       - Sesame
+      summary: Creates an endpoint in the given remote.
       operationId: Sesame_CreateEndpoint
       parameters:
       - name: parent
         in: path
-        description: "The name of the parent Remote, note that endpoint.name MUST\
-          \ NOT be set."
+        description: |-
+          The remote to create the endpoint in, by resource name.
+          Format: namespaces/{namespace}/remotes/{remote}
         required: true
         schema:
           pattern: "namespaces/[^/]+/remotes/[^/]+"
           type: string
-      - name: resourceId
+      - name: endpointId
         in: query
-        description: "May be specified to request a specific (non-trailing) resource\
-          \ id, note it's a single path segment, w/o any \"/\"."
+        description: |-
+          The ID to use for the endpoint, which will become the final component
+          of the endpoint's resource name. A single path segment, without any "/".
+          This value should be 4-63 characters, and valid characters are
+          /[a-z][0-9]-/. May be omitted, in which case a server-assigned ID is
+          used.
         schema:
           type: string
       requestBody:
+        description: The endpoint to create. endpoint.name MUST NOT be set.
         content:
           application/json:
             schema:
@@ -287,21 +297,35 @@ paths:
     get:
       tags:
       - Sesame
+      summary: Lists remotes in the given namespace.
       operationId: Sesame_ListRemotes
       parameters:
       - name: parent
         in: path
+        description: |-
+          The namespace to list remotes in, by resource name.
+          Format: namespaces/{namespace}
         required: true
         schema:
           pattern: "namespaces/[^/]+"
           type: string
       - name: pageSize
         in: query
+        description: |-
+          The maximum number of remotes to return. The service may return fewer
+          than this value. If unspecified, at most 50 remotes will be returned.
+          The maximum value is 1000; values above 1000 will be coerced to 1000.
         schema:
           type: integer
           format: int32
       - name: pageToken
         in: query
+        description: |-
+          A page token, received from a previous ListRemotes call.
+          Provide this to retrieve the subsequent page.
+
+          When paginating, all other parameters provided to ListRemotes must match
+          the call that provided the page token.
         schema:
           type: string
       responses:
@@ -320,27 +344,91 @@ paths:
     post:
       tags:
       - Sesame
+      summary: Creates a remote in the given namespace.
       operationId: Sesame_CreateRemote
       parameters:
       - name: parent
         in: path
-        description: "The name of the parent Namespace, note that remote.name MUST\
-          \ NOT be set."
+        description: |-
+          The namespace to create the remote in, by resource name.
+          Format: namespaces/{namespace}
         required: true
         schema:
           pattern: "namespaces/[^/]+"
           type: string
-      - name: resourceId
+      - name: remoteId
         in: query
-        description: "May be specified to request a specific (non-trailing) resource\
-          \ id, note it's a single path segment, w/o any \"/\"."
+        description: |-
+          The ID to use for the remote, which will become the final component of
+          the remote's resource name. A single path segment, without any "/".
+          This value should be 4-63 characters, and valid characters are
+          /[a-z][0-9]-/. May be omitted, in which case a server-assigned ID is
+          used.
         schema:
           type: string
       requestBody:
+        description: The remote to create. remote.name MUST NOT be set.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/v1alpha1Remote'
+        required: true
+      responses:
+        "200":
+          description: A successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/v1alpha1Remote'
+        default:
+          description: An unexpected error response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/rpcStatus'
+      x-codegen-request-body-name: remote
+  /v1alpha1/{remote.name}:
+    patch:
+      tags:
+      - Sesame
+      summary: Updates a remote.
+      operationId: Sesame_UpdateRemote
+      parameters:
+      - name: remote.name
+        in: path
+        description: |-
+          The resource name of the remote.
+          Format: namespaces/{namespace}/remotes/{remote}
+        required: true
+        schema:
+          pattern: "namespaces/[^/]+/remotes/[^/]+"
+          type: string
+      requestBody:
+        description: |-
+          The remote to update.
+
+          The remote's `name` field is used to identify the remote to update.
+          Format: namespaces/{namespace}/remotes/{remote}
+        content:
+          application/json:
+            schema:
+              title: The remote to update.
+              type: object
+              properties:
+                displayName:
+                  type: string
+                  description: Human-readable name of the remote.
+                description:
+                  type: string
+                  description: Description of the remote.
+                createTime:
+                  type: string
+                  description: Creation timestamp of the remote.
+                  format: date-time
+                  readOnly: true
+              description: |-
+                The remote's `name` field is used to identify the remote to update.
+                Format: namespaces/{namespace}/remotes/{remote}
         required: true
       responses:
         "200":
@@ -366,48 +454,10 @@ components:
       description: "Spec models the endpoint specification, containing configuration\
         \ around access and usage behavior."
     EndpointTunnel:
-      type: object
-      description: |-
+      title: |-
         Tunnel models an endpoint exposed directly over a tunnel provider.
-
         TODO might eventually make this configurable (more than one tunnel pattern)
-    GrpcMetadataBin:
       type: object
-      properties:
-        values:
-          type: array
-          items:
-            pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
-            type: string
-            format: byte
-    GrpcMetadataStr:
-      type: object
-      properties:
-        values:
-          type: array
-          items:
-            type: string
-    ProxyRequestDial:
-      type: object
-      properties:
-        endpoint:
-          type: string
-        method:
-          type: string
-        connMask:
-          type: string
-          description: conn_mask is an optional field mask for ProxyResponse.conn.
-      description: Dial models the initial request routing of a method call.
-    ProxyResponseConn:
-      type: object
-      properties:
-        namespace:
-          $ref: '#/components/schemas/v1alpha1Namespace'
-        remote:
-          $ref: '#/components/schemas/v1alpha1Remote'
-        endpoint:
-          $ref: '#/components/schemas/v1alpha1Endpoint'
-      description: Conn is the response to ProxyRequest.dial.
     protobufAny:
       type: object
       properties:
@@ -443,8 +493,7 @@ components:
             resolution service at these type URLs was considered but Protobuf never
             implemented one and considers contacting these URLs to be problematic and
             a potential security issue. Do not attempt to contact type URLs.
-      additionalProperties:
-        type: object
+      additionalProperties: true
       description: |-
         `Any` contains an arbitrary serialized protocol buffer message along with a
         URL that describes the type of the serialized message.
@@ -507,34 +556,23 @@ components:
 
         You can find out more about this error model and how to work with it in the
         [API Design Guide](https://cloud.google.com/apis/design/errors).
-    typeGrpcMetadata:
-      type: object
-      properties:
-        data:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/typeGrpcMetadataValue'
-      description: "GrpcMetadata represents gRPC request or response (header, trailer)\
-        \ metadata."
-    typeGrpcMetadataValue:
-      type: object
-      properties:
-        str:
-          $ref: '#/components/schemas/GrpcMetadataStr'
-        bin:
-          $ref: '#/components/schemas/GrpcMetadataBin'
     v1alpha1Endpoint:
       type: object
       properties:
         name:
+          title: |-
+            The resource name of the endpoint.
+            Format: namespaces/{namespace}/remotes/{remote}/endpoints/{endpoint}
           type: string
-          readOnly: true
         displayName:
           type: string
+          description: Human-readable name of the endpoint.
         description:
           type: string
+          description: Description of the endpoint.
         createTime:
           type: string
+          description: Creation timestamp of the endpoint.
           format: date-time
           readOnly: true
         spec:
@@ -545,61 +583,46 @@ components:
       properties:
         endpoints:
           type: array
+          description: The endpoints from the specified remote.
           items:
             $ref: '#/components/schemas/v1alpha1Endpoint'
         nextPageToken:
           type: string
+          description: |-
+            A token, which can be sent as page_token to retrieve the next page.
+            If this field is omitted, there are no subsequent pages.
+      description: ListEndpointsResponse models a Sesame.ListEndpoints response.
     v1alpha1ListRemotesResponse:
       type: object
       properties:
         remotes:
           type: array
+          description: The remotes from the specified namespace.
           items:
             $ref: '#/components/schemas/v1alpha1Remote'
         nextPageToken:
           type: string
-    v1alpha1Namespace:
-      type: object
-      properties:
-        name:
-          type: string
-          readOnly: true
-      description: "Namespace scopes resources in the Sesame API, and is intended\
-        \ to (eventually) facilitate scoped simple auth."
-    v1alpha1ProxyRequest:
-      type: object
-      properties:
-        dial:
-          $ref: '#/components/schemas/ProxyRequestDial'
-        header:
-          $ref: '#/components/schemas/typeGrpcMetadata'
-        content:
-          $ref: '#/components/schemas/protobufAny'
-    v1alpha1ProxyResponse:
-      type: object
-      properties:
-        conn:
-          $ref: '#/components/schemas/ProxyResponseConn'
-        error:
-          $ref: '#/components/schemas/rpcStatus'
-        header:
-          $ref: '#/components/schemas/typeGrpcMetadata'
-        content:
-          $ref: '#/components/schemas/protobufAny'
-        trailer:
-          $ref: '#/components/schemas/typeGrpcMetadata'
+          description: |-
+            A token, which can be sent as page_token to retrieve the next page.
+            If this field is omitted, there are no subsequent pages.
+      description: ListRemotesResponse models a Sesame.ListRemotes response.
     v1alpha1Remote:
       type: object
       properties:
         name:
+          title: |-
+            The resource name of the remote.
+            Format: namespaces/{namespace}/remotes/{remote}
           type: string
-          readOnly: true
         displayName:
           type: string
+          description: Human-readable name of the remote.
         description:
           type: string
+          description: Description of the remote.
         createTime:
           type: string
+          description: Creation timestamp of the remote.
           format: date-time
           readOnly: true
       description: Remote is a network device or other resource that may be accessed

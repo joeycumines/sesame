@@ -17,17 +17,18 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/fullstorydev/grpchan/grpchantesting"
-	"github.com/joeycumines/sesame/internal/testutil"
-	"github.com/joeycumines/sesame/type/grpctunnel"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
-	refl "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
-	"google.golang.org/grpc/test/bufconn"
 	"runtime"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/fullstorydev/grpchan/grpchantesting"
+	"github.com/joeycumines/sesame/internal/testutil"
+	"github.com/joeycumines/sesame/sesamepb"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+	refl "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 func TestTunnelServer(t *testing.T) {
@@ -35,7 +36,13 @@ func TestTunnelServer(t *testing.T) {
 
 	var svr grpchantesting.TestServer
 
-	ready := make(chan struct{})
+	// Buffered: the server handler fires OnReverseTunnelConnect the
+	// moment the reverse tunnel is accepted, which can race ahead of
+	// the test goroutine reaching the <-ready receive below. With an
+	// unbuffered channel the non-blocking send in the callback was
+	// dropped in that window and the test waited forever (observed as
+	// a 25m hang of TestTunnelServer/reverse under race + load).
+	ready := make(chan struct{}, 1)
 	ts := TunnelServer{
 		OnReverseTunnelConnect: func(*Channel) {
 			// don't block; just make sure there's something in the channel
@@ -49,10 +56,10 @@ func TestTunnelServer(t *testing.T) {
 
 	t.Run("forward", func(t *testing.T) {
 		checkForGoroutineLeak(t, func() {
-			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { grpctunnel.RegisterTunnelServiceServer(srv, &ts) })
+			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { sesamepb.RegisterGrpcTunnelServiceServer(srv, &ts) })
 			defer cc.Close()
 
-			tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenTunnel(context.Background())
+			tunnel, err := sesamepb.NewGrpcTunnelServiceClient(cc).OpenTunnel(context.Background())
 			if err != nil {
 				t.Fatalf("failed to open tunnel: %v", err)
 			}
@@ -69,10 +76,10 @@ func TestTunnelServer(t *testing.T) {
 
 	t.Run("reverse", func(t *testing.T) {
 		checkForGoroutineLeak(t, func() {
-			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { grpctunnel.RegisterTunnelServiceServer(srv, &ts) })
+			cc := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { sesamepb.RegisterGrpcTunnelServiceServer(srv, &ts) })
 			defer cc.Close()
 
-			tunnel, err := grpctunnel.NewTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
+			tunnel, err := sesamepb.NewGrpcTunnelServiceClient(cc).OpenReverseTunnel(context.Background())
 			if err != nil {
 				t.Fatalf("failed to open reverse tunnel: %v", err)
 			}
@@ -118,10 +125,10 @@ func ExampleTunnelServer_reflection() {
 	reflection.Register(svc)
 	grpchantesting.RegisterTestServiceServer(svc, new(grpchantesting.TestServer))
 
-	conn := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { grpctunnel.RegisterTunnelServiceServer(srv, svc) })
+	conn := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { sesamepb.RegisterGrpcTunnelServiceServer(srv, svc) })
 	defer conn.Close()
 
-	tunnel, err := grpctunnel.NewTunnelServiceClient(conn).OpenTunnel(context.Background())
+	tunnel, err := sesamepb.NewGrpcTunnelServiceClient(conn).OpenTunnel(context.Background())
 	if err != nil {
 		panic(err)
 	}

@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/joeycumines/sesame/internal/flowcontrol"
-	"github.com/joeycumines/sesame/type/grpctunnel"
 	"io"
 	"math"
 	"sync"
+
+	"github.com/joeycumines/sesame/internal/flowcontrol"
+	"github.com/joeycumines/sesame/sesamepb"
 )
 
 const (
@@ -33,7 +34,7 @@ type (
 	tunnelStreamClientWrapper struct {
 		stream   tunnelStreamClient
 		tearDown func() error
-		in       chan *grpctunnel.ClientToServer
+		in       chan *sesamepb.OpenTunnelRequest
 		out      chan error
 		once     sync.Once
 		stop     chan struct{}
@@ -70,17 +71,66 @@ var (
 	_ io.Closer          = (*tunnelStreamClientWrapper)(nil)
 	_ tunnelStreamServer = (*tunnelStreamServerWrapper)(nil)
 
+	_ tunnelStreamClient = reverseTunnelClientAdapter{}
+	_ tunnelStreamServer = reverseTunnelServerAdapter{}
+
 	_ = map[bool]struct{}{false: {}, windowMaxSize > 0: {}}
 	_ = map[bool]struct{}{false: {}, windowMaxBuffer > 1: {}}
 	_ = map[bool]struct{}{false: {}, windowMinConsume > 0 && windowMinConsume*(windowMaxBuffer-1) > windowMaxSize: {}}
 	_ = map[bool]struct{}{false: {}, windowUpdateSize >= 1 && windowUpdateSize <= windowMaxSize: {}}
 )
 
+// reverseTunnelClientAdapter adapts the server side of an OpenReverseTunnel
+// stream - on which the server initiates the tunneled RPCs - to the
+// client-oriented tunnelStreamClient interface. The reverse tunnel's frames
+// are wire-identical to the forward tunnel's; the adapter shallow-copies
+// between the mirrored message vocabularies (OpenReverseTunnelResponse carries
+// the client-shaped frames, OpenReverseTunnelRequest the server-shaped ones).
+type reverseTunnelClientAdapter struct {
+	stream sesamepb.GrpcTunnelService_OpenReverseTunnelServer
+}
+
+func (x reverseTunnelClientAdapter) Context() context.Context { return x.stream.Context() }
+
+func (x reverseTunnelClientAdapter) Send(msg *sesamepb.OpenTunnelRequest) error {
+	return x.stream.Send(sesamepb.ReverseResponseFromTunnelRequest(msg))
+}
+
+func (x reverseTunnelClientAdapter) Recv() (*sesamepb.OpenTunnelResponse, error) {
+	msg, err := x.stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	return sesamepb.TunnelResponseFromReverseRequest(msg), nil
+}
+
+// reverseTunnelServerAdapter adapts the client side of an OpenReverseTunnel
+// stream - on which the endpoint serves the RPCs the server initiates - to
+// the server-oriented tunnelStreamServer interface, mirroring
+// reverseTunnelClientAdapter.
+type reverseTunnelServerAdapter struct {
+	stream sesamepb.GrpcTunnelService_OpenReverseTunnelClient
+}
+
+func (x reverseTunnelServerAdapter) Context() context.Context { return x.stream.Context() }
+
+func (x reverseTunnelServerAdapter) Send(msg *sesamepb.OpenTunnelResponse) error {
+	return x.stream.Send(sesamepb.ReverseRequestFromTunnelResponse(msg))
+}
+
+func (x reverseTunnelServerAdapter) Recv() (*sesamepb.OpenTunnelRequest, error) {
+	msg, err := x.stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	return sesamepb.TunnelRequestFromReverseResponse(msg), nil
+}
+
 func newTunnelStreamClientWrapper(stream tunnelStreamClient, tearDown func() error) *tunnelStreamClientWrapper {
 	r := tunnelStreamClientWrapper{
 		stream:   stream,
 		tearDown: tearDown,
-		in:       make(chan *grpctunnel.ClientToServer),
+		in:       make(chan *sesamepb.OpenTunnelRequest),
 		out:      make(chan error),
 		stop:     make(chan struct{}),
 		done:     make(chan struct{}),
@@ -91,11 +141,11 @@ func newTunnelStreamClientWrapper(stream tunnelStreamClient, tearDown func() err
 
 func (x *tunnelStreamClientWrapper) Context() context.Context { return x.stream.Context() }
 
-func (x *tunnelStreamClientWrapper) Recv() (*grpctunnel.ServerToClient, error) {
+func (x *tunnelStreamClientWrapper) Recv() (*sesamepb.OpenTunnelResponse, error) {
 	return x.stream.Recv()
 }
 
-func (x *tunnelStreamClientWrapper) Send(msg *grpctunnel.ClientToServer) error {
+func (x *tunnelStreamClientWrapper) Send(msg *sesamepb.OpenTunnelRequest) error {
 	// wait for a send attempt / result
 	// note we don't need to pre-emptively check x.stop, it's checked in the worker
 	select {
@@ -158,33 +208,37 @@ func newTunnelStreamServerWrapper(stream tunnelStreamServer) *tunnelStreamServer
 
 func (x *tunnelStreamServerWrapper) Context() context.Context { return x.stream.Context() }
 
-func (x *tunnelStreamServerWrapper) Send(msg *grpctunnel.ServerToClient) error {
+func (x *tunnelStreamServerWrapper) Send(msg *sesamepb.OpenTunnelResponse) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	return x.stream.Send(msg)
 }
 
-func (x *tunnelStreamServerWrapper) Recv() (*grpctunnel.ClientToServer, error) {
+func (x *tunnelStreamServerWrapper) Recv() (*sesamepb.OpenTunnelRequest, error) {
 	return x.stream.Recv()
 }
 
-func (x *flowControlClient) SendWindowUpdate(streamID uint64, windowUpdate uint32) *grpctunnel.ClientToServer {
-	return &grpctunnel.ClientToServer{StreamId: streamID, Frame: &grpctunnel.ClientToServer_WindowUpdate{WindowUpdate: windowUpdate}}
+func (x *flowControlClient) SendWindowUpdate(streamID uint64, windowUpdate uint32) *sesamepb.OpenTunnelRequest {
+	return &sesamepb.OpenTunnelRequest{StreamId: int64(streamID), Frame: &sesamepb.OpenTunnelRequest_WindowUpdate{WindowUpdate: int32(windowUpdate)}}
 }
-func (x *flowControlClient) RecvWindowUpdate(msg *grpctunnel.ServerToClient) (uint32, bool) {
-	if v, ok := msg.GetFrame().(*grpctunnel.ServerToClient_WindowUpdate); ok {
-		return v.WindowUpdate, true
+func (x *flowControlClient) RecvWindowUpdate(msg *sesamepb.OpenTunnelResponse) (uint32, bool) {
+	if v, ok := msg.GetFrame().(*sesamepb.OpenTunnelResponse_WindowUpdate); ok {
+		return uint32(v.WindowUpdate), true
 	}
 	return 0, false
 }
-func (x *flowControlClient) SendSize(msg *grpctunnel.ClientToServer) (uint32, bool) {
+func (x *flowControlClient) SendSize(msg *sesamepb.OpenTunnelRequest) (uint32, bool) {
 	return clientToServerMessageSize(msg)
 }
-func (x *flowControlClient) RecvSize(msg *grpctunnel.ServerToClient) (uint32, bool) {
+func (x *flowControlClient) RecvSize(msg *sesamepb.OpenTunnelResponse) (uint32, bool) {
 	return serverToClientMessageSize(msg)
 }
-func (x *flowControlClient) SendKey(msg *grpctunnel.ClientToServer) uint64 { return msg.GetStreamId() }
-func (x *flowControlClient) RecvKey(msg *grpctunnel.ServerToClient) uint64 { return msg.GetStreamId() }
+func (x *flowControlClient) SendKey(msg *sesamepb.OpenTunnelRequest) uint64 {
+	return uint64(msg.GetStreamId())
+}
+func (x *flowControlClient) RecvKey(msg *sesamepb.OpenTunnelResponse) uint64 {
+	return uint64(msg.GetStreamId())
+}
 func (x *flowControlClient) SendLoad(streamID uint64) int64 {
 	x.ch.mu.RLock()
 	defer x.ch.mu.RUnlock()
@@ -224,23 +278,27 @@ func (x *flowControlClient) StreamContext(streamID uint64) context.Context {
 	return flowcontrol.StreamNotFound
 }
 
-func (x *flowControlServer) SendWindowUpdate(streamID uint64, windowUpdate uint32) *grpctunnel.ServerToClient {
-	return &grpctunnel.ServerToClient{StreamId: streamID, Frame: &grpctunnel.ServerToClient_WindowUpdate{WindowUpdate: windowUpdate}}
+func (x *flowControlServer) SendWindowUpdate(streamID uint64, windowUpdate uint32) *sesamepb.OpenTunnelResponse {
+	return &sesamepb.OpenTunnelResponse{StreamId: int64(streamID), Frame: &sesamepb.OpenTunnelResponse_WindowUpdate{WindowUpdate: int32(windowUpdate)}}
 }
-func (x *flowControlServer) RecvWindowUpdate(msg *grpctunnel.ClientToServer) (uint32, bool) {
-	if v, ok := msg.GetFrame().(*grpctunnel.ClientToServer_WindowUpdate); ok {
-		return v.WindowUpdate, true
+func (x *flowControlServer) RecvWindowUpdate(msg *sesamepb.OpenTunnelRequest) (uint32, bool) {
+	if v, ok := msg.GetFrame().(*sesamepb.OpenTunnelRequest_WindowUpdate); ok {
+		return uint32(v.WindowUpdate), true
 	}
 	return 0, false
 }
-func (x *flowControlServer) SendSize(msg *grpctunnel.ServerToClient) (uint32, bool) {
+func (x *flowControlServer) SendSize(msg *sesamepb.OpenTunnelResponse) (uint32, bool) {
 	return serverToClientMessageSize(msg)
 }
-func (x *flowControlServer) RecvSize(msg *grpctunnel.ClientToServer) (uint32, bool) {
+func (x *flowControlServer) RecvSize(msg *sesamepb.OpenTunnelRequest) (uint32, bool) {
 	return clientToServerMessageSize(msg)
 }
-func (x *flowControlServer) SendKey(msg *grpctunnel.ServerToClient) uint64 { return msg.GetStreamId() }
-func (x *flowControlServer) RecvKey(msg *grpctunnel.ClientToServer) uint64 { return msg.GetStreamId() }
+func (x *flowControlServer) SendKey(msg *sesamepb.OpenTunnelResponse) uint64 {
+	return uint64(msg.GetStreamId())
+}
+func (x *flowControlServer) RecvKey(msg *sesamepb.OpenTunnelRequest) uint64 {
+	return uint64(msg.GetStreamId())
+}
 func (x *flowControlServer) SendLoad(streamID uint64) int64 {
 	x.tun.mu.RLock()
 	defer x.tun.mu.RUnlock()
@@ -293,12 +351,12 @@ func (flowControlConfig) RecvConfig(streamID uint64) flowcontrol.Config {
 	}
 }
 
-func clientToServerMessageSize(msg *grpctunnel.ClientToServer) (uint32, bool) {
+func clientToServerMessageSize(msg *sesamepb.OpenTunnelRequest) (uint32, bool) {
 	var size int64
 	switch frame := msg.GetFrame().(type) {
-	case *grpctunnel.ClientToServer_Message:
+	case *sesamepb.OpenTunnelRequest_Message:
 		size = int64(len(frame.Message.GetData()))
-	case *grpctunnel.ClientToServer_MessageData:
+	case *sesamepb.OpenTunnelRequest_MessageData:
 		size = int64(len(frame.MessageData))
 	default:
 		return 0, false
@@ -308,12 +366,12 @@ func clientToServerMessageSize(msg *grpctunnel.ClientToServer) (uint32, bool) {
 	}
 	return uint32(size), true
 }
-func serverToClientMessageSize(msg *grpctunnel.ServerToClient) (uint32, bool) {
+func serverToClientMessageSize(msg *sesamepb.OpenTunnelResponse) (uint32, bool) {
 	var size int64
 	switch frame := msg.GetFrame().(type) {
-	case *grpctunnel.ServerToClient_Message:
+	case *sesamepb.OpenTunnelResponse_Message:
 		size = int64(len(frame.Message.GetData()))
-	case *grpctunnel.ServerToClient_MessageData:
+	case *sesamepb.OpenTunnelResponse_MessageData:
 		size = int64(len(frame.MessageData))
 	default:
 		return 0, false

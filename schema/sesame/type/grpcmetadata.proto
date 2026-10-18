@@ -2,21 +2,40 @@ syntax = "proto3";
 
 package sesame.type;
 
-option go_package = "github.com/joeycumines/sesame/type/grpcmetadata";
+import "google/api/field_behavior.proto";
+
+option go_package = "github.com/joeycumines/sesame/typepb";
+option java_multiple_files = true;
+option java_outer_classname = "GrpcmetadataProto";
+option java_package = "io.github.joeycumines.sesame.type";
 
 // GrpcMetadata represents gRPC request or response (header, trailer) metadata.
 message GrpcMetadata {
-  map <string, Value> data = 1;
+  // The metadata entries, by lowercase key.
+  map<string, Value> data = 1 [(google.api.field_behavior) = OPTIONAL];
+
+  // Value models one metadata entry's value(s).
   message Value {
     oneof data {
+      // Str models a string-valued metadata entry.
       Str str = 1;
+
+      // Bin models a binary-valued metadata entry.
       Bin bin = 2;
-    };
+    }
   }
+
+  // Str models a string-valued metadata entry (the "-bin" key suffix is
+  // implied by Bin and must not be present for Str entries).
   message Str {
-    repeated string values = 1;
+    // The entry's string values, in wire order.
+    repeated string values = 1 [(google.api.field_behavior) = OPTIONAL];
   }
+
+  // Bin models a binary-valued metadata entry (the key carries the "-bin"
+  // suffix on the wire).
   message Bin {
-    repeated bytes values = 1;
+    // The entry's binary values, in wire order.
+    repeated bytes values = 1 [(google.api.field_behavior) = OPTIONAL];
   }
 }

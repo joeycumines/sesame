@@ -21,6 +21,9 @@ STATICCHECK_FLAGS ?=
 GO_PACKAGES ?= ./...
 GO_TEST_FLAGS ?=
 
+GO_INTEGRATION_PACKAGE ?= ./internal/integration/...
+GO_INTEGRATION_FLAGS ?= -integration
+
 # provides default timeout for tests if not set by the user
 resolve_go_test_flags = $(if $(filter -timeout -timeout=%,$(GO_TEST_FLAGS)),,-timeout=15m) $(GO_TEST_FLAGS)
 
@@ -38,17 +41,26 @@ LOOP_VAR ?= $$t
 LOOP_END ?= ; ); then echo "ERROR: exit code $$?" >&2; exit 1; fi; done
 endif
 
+.DEFAULT_GOAL := check
+
+SESAME_ENDPOINT_DIR ?= js/sesame-endpoint
+BUN ?= bun
+BUF ?= buf
+
+.PHONY: check
+check: all test-ts test-integration
+
 .PHONY: all
 all: lint build test
 
 .PHONY: clean
-clean:
+clean: sesame-endpoint.clean
 
 .PHONY: lint
-lint: vet staticcheck
+lint: vet staticcheck proto-lint sesame-endpoint.lint
 
 .PHONY: build
-build:
+build: sesame-endpoint.build
 	$(GO) build $(GO_FLAGS) $(GO_PACKAGES)
 
 .PHONY: test
@@ -62,6 +74,73 @@ test-cover: build
 test-race: build
 	$(GO) test $(GO_FLAGS) $(resolve_go_test_flags) -race $(GO_PACKAGES)
 
+.PHONY: test-integration
+test-integration: test-integration-cover test-integration-race
+
+# sesame-endpoint (TypeScript) targets, aligned with sesame-endpoint/package.json scripts.
+# Canonical targets use the `sesame-endpoint.` prefix; the legacy `*-ts`
+# names below are thin backwards-compat aliases.
+.PHONY: sesame-endpoint.build
+sesame-endpoint.build:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run compile
+
+.PHONY: sesame-endpoint.lint
+sesame-endpoint.lint:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run lint
+
+.PHONY: sesame-endpoint.fix
+sesame-endpoint.fix:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run fix
+
+.PHONY: sesame-endpoint.clean
+sesame-endpoint.clean:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run clean
+
+.PHONY: sesame-endpoint.generate
+sesame-endpoint.generate:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run generate
+
+.PHONY: sesame-endpoint.test
+sesame-endpoint.test: sesame-endpoint.test-bun sesame-endpoint.test-node
+
+.PHONY: sesame-endpoint.test-bun
+sesame-endpoint.test-bun: sesame-endpoint.build
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) test
+
+# The runner loads build/src/index.js, so it must build first even when
+# invoked directly rather than through sesame-endpoint.test.
+.PHONY: sesame-endpoint.test-node
+sesame-endpoint.test-node: sesame-endpoint.build
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run test:node
+
+.PHONY: sesame-endpoint.install
+sesame-endpoint.install:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) install
+
+.PHONY: sesame-endpoint.update
+sesame-endpoint.update:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) update
+
+.PHONY: test-ts
+test-ts: sesame-endpoint.test
+
+.PHONY: build-ts
+build-ts: sesame-endpoint.build
+
+.PHONY: test-ts-bun
+test-ts-bun: sesame-endpoint.test-bun
+
+.PHONY: test-ts-node
+test-ts-node: sesame-endpoint.test-node
+
+.PHONY: test-integration-cover
+test-integration-cover: build
+	$(GO) test $(GO_FLAGS) $(resolve_go_test_flags) -cover $(GO_INTEGRATION_PACKAGE) $(GO_INTEGRATION_FLAGS)
+
+.PHONY: test-integration-race
+test-integration-race: build
+	$(GO) test $(GO_FLAGS) $(resolve_go_test_flags) -race $(GO_INTEGRATION_PACKAGE) $(GO_INTEGRATION_FLAGS)
+
 .PHONY: vet
 vet:
 	$(GO) vet $(GO_FLAGS) $(GO_PACKAGES)
@@ -71,23 +150,62 @@ staticcheck:
 	$(STATICCHECK) $(STATICCHECK_FLAGS) $(GO_PACKAGES)
 
 .PHONY: fmt
-fmt:
+fmt: sesame-endpoint.fix
 	$(GO) fmt $(GO_PACKAGES)
 
+.PHONY: fix
+fix: fmt
+	$(GO) fix $(GO_FLAGS) $(GO_PACKAGES)
+
 .PHONY: update
-update:
+update: sesame-endpoint.update
 	$(GO) get -u -t ./...
 	@$(LOOP_START) $(GO) get -u $(LOOP_VAR)$(LOOP_END)
 	$(GO) mod tidy
 
 .PHONY: tools
-tools:
+tools: sesame-endpoint.install
 	@$(LOOP_START) $(GO) install $(LOOP_VAR)$(LOOP_END)
+
+# Proto linting: the Google api-linter (design rules from https://google.aip.dev,
+# pinned in hack/google-api-linter) plus buf lint (STANDARD, configured in
+# schema/buf.yaml). No rule-disables apply to sesame protos; see
+# google-api-linter.yaml and schema/buf.yaml for the vendored-tree carve-outs.
+.PHONY: proto-lint
+proto-lint: google-api-linter buf.lint
+
+.PHONY: google-api-linter
+google-api-linter:
+	hack/google-api-linter.sh
+
+.PHONY: buf.lint
+buf.lint:
+	cd schema && $(BUF) lint
+
+# Rewrites sesame protos into buf's canonical form (schema/buf.yaml workspace;
+# --path keeps the vendored googleapis submodule untouched).
+.PHONY: buf.format
+buf.format:
+	cd schema && $(BUF) format -w --path sesame
+
+.PHONY: buf.format-check
+buf.format-check:
+	cd schema && $(BUF) format --check --path sesame
 
 # this won't work on all systems
 .PHONY: generate
-generate:
+generate: sesame-endpoint.generate
 	hack/generate.sh
+
+# Manual TLS ClientHello verification utility (internal/cmd/quick-test-tls).
+# Not part of check: the endpoint track needs a running bun/node subprocess.
+.PHONY: quick-test-tls
+quick-test-tls: sesame-endpoint.build
+	@mkdir -p scratch/testdata/quick-test-tls
+	$(GO) run $(GO_FLAGS) ./internal/cmd/quick-test-tls -endpoint \
+		-cli $(SESAME_ENDPOINT_DIR)/build/src/cli.js \
+		-json scratch/testdata/quick-test-tls/results.json \
+		-html scratch/tls-report.html
 
 .PHONY: ci
 ci:

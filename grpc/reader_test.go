@@ -8,7 +8,7 @@ import (
 	"fmt"
 	grpcutil "github.com/joeycumines/sesame/grpc"
 	"github.com/joeycumines/sesame/internal/testutil"
-	"github.com/joeycumines/sesame/rc"
+	sesamepb "github.com/joeycumines/sesame/sesamepb"
 	streamutil "github.com/joeycumines/sesame/stream"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
@@ -27,10 +27,10 @@ import (
 func ExampleNewReaderMessageFactory() {
 	// construct a ReaderMessageFactory to handle sesame.v1alpha1.NetConnResponse messages
 	factory := grpcutil.NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
-		var msg rc.NetConnResponse
+		var msg sesamepb.NetConnResponse
 		value = &msg
 		chunk = func() ([]byte, bool) {
-			if v, ok := msg.GetData().(*rc.NetConnResponse_Bytes); ok {
+			if v, ok := msg.GetData().(*sesamepb.NetConnResponse_Bytes); ok {
 				return v.Bytes, true
 			}
 			return nil, false
@@ -89,7 +89,7 @@ func ExampleNewReaderMessageFactory() {
 	//-> ok=false chunk="";
 }
 
-// ExampleReader demonstrates how to use Reader by partially implementing the NetConn method of rc.RemoteControlServer.
+// ExampleReader demonstrates how to use Reader by partially implementing the NetConn method of sesamepb.RemoteControlServer.
 func ExampleReader() {
 	defer testutil.CheckNumGoroutines(nil, runtime.NumGoroutine(), false, time.Second*15)
 
@@ -123,17 +123,17 @@ func ExampleReader() {
 
 	// implement a simple proxy impl with no support for the proper conn flow
 	out := make(chan error, 1)
-	control := mockRemoteControlServer{netConn: func(stream rc.RemoteControl_NetConnServer) (err error) {
+	control := mockRemoteControlServer{netConn: func(stream sesamepb.RemoteControl_NetConnServer) (err error) {
 		defer func() { out <- err }()
 
 		// pretend there was something useful here, that to initialised targetConn
 		defer targetConn.Close()
 
 		reader := grpcutil.Reader{Stream: stream, Factory: grpcutil.NewReaderMessageFactory(func() (value interface{}, chunk func() ([]byte, bool)) {
-			var msg rc.NetConnRequest
+			var msg sesamepb.NetConnRequest
 			value = &msg
 			chunk = func() ([]byte, bool) {
-				if v, ok := msg.GetData().(*rc.NetConnRequest_Bytes); ok {
+				if v, ok := msg.GetData().(*sesamepb.NetConnRequest_Bytes); ok {
 					return v.Bytes, true
 				}
 				return nil, false
@@ -142,7 +142,7 @@ func ExampleReader() {
 		})}
 
 		writer := streamutil.ChunkWriter(func(b []byte) (int, error) {
-			if err := stream.Send(&rc.NetConnResponse{Data: &rc.NetConnResponse_Bytes{Bytes: b}}); err != nil {
+			if err := stream.Send(&sesamepb.NetConnResponse{Data: &sesamepb.NetConnResponse_Bytes{Bytes: b}}); err != nil {
 				return 0, err
 			}
 			return len(b), nil
@@ -174,9 +174,9 @@ func ExampleReader() {
 	}}
 
 	// connect to the server
-	conn := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { rc.RegisterRemoteControlServer(srv, &control) })
+	conn := testutil.NewBufconnClient(0, func(_ *bufconn.Listener, srv *grpc.Server) { sesamepb.RegisterRemoteControlServer(srv, &control) })
 	defer conn.Close()
-	stream, err := rc.NewRemoteControlClient(conn).NetConn(ctx)
+	stream, err := sesamepb.NewRemoteControlClient(conn).NetConn(ctx)
 	if err != nil {
 		panic(err)
 	}
@@ -184,7 +184,7 @@ func ExampleReader() {
 	// communicates with targetListener over stream
 	pingPong := func(name string) {
 		fmt.Printf("send %q\n", name)
-		if err := stream.Send(&rc.NetConnRequest{Data: &rc.NetConnRequest_Bytes{Bytes: append(append(make([]byte, 0, len(name)+1), name...), '\n')}}); err != nil {
+		if err := stream.Send(&sesamepb.NetConnRequest{Data: &sesamepb.NetConnRequest_Bytes{Bytes: append(append(make([]byte, 0, len(name)+1), name...), '\n')}}); err != nil {
 			panic(err)
 		}
 		msg, err := stream.Recv()

@@ -18,8 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math"
+	"sync"
+
 	"github.com/joeycumines/sesame/internal/flowcontrol"
-	"github.com/joeycumines/sesame/type/grpctunnel"
+	"github.com/joeycumines/sesame/sesamepb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -27,9 +31,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"io"
-	"math"
-	"sync"
 )
 
 func NewChannel(options ...ChannelOption) (*Channel, error) {
@@ -45,15 +46,15 @@ func NewChannel(options ...ChannelOption) (*Channel, error) {
 
 type tunnelStreamClient interface {
 	Context() context.Context
-	Send(*grpctunnel.ClientToServer) error
-	Recv() (*grpctunnel.ServerToClient, error)
+	Send(*sesamepb.OpenTunnelRequest) error
+	Recv() (*sesamepb.OpenTunnelResponse, error)
 }
 
 // Channel is a tunnel client, and implements grpc.ClientConnInterface.
 // It is backed by a single stream, though this stream may be either a tunnel client, or a reverse tunnel server.
 type Channel struct {
 	stream       tunnelStreamClient
-	updateWindow func(msg *grpctunnel.ServerToClient)
+	updateWindow func(msg *sesamepb.OpenTunnelResponse)
 	ctx          context.Context
 	cancel       context.CancelFunc
 	tearDown     func() error
@@ -84,7 +85,7 @@ func newChannel(c *channelConfig) *Channel {
 	// initialise flow control, wrapping stream
 	// WARNING not ready for use yet (needs to be wired up with the ChanneL)
 	fcInterface := &flowControlClient{tunnelStreamClient: stream}
-	fcConn := flowcontrol.NewConn[uint64, *grpctunnel.ClientToServer, *grpctunnel.ServerToClient](fcInterface)
+	fcConn := flowcontrol.NewConn[uint64, *sesamepb.OpenTunnelRequest, *sesamepb.OpenTunnelResponse](fcInterface)
 	stream = fcConn
 
 	ch := Channel{
@@ -158,10 +159,10 @@ func (c *Channel) newStream(ctx context.Context, clientStreams, serverStreams bo
 	if err != nil {
 		return nil, err
 	}
-	err = c.stream.Send(&grpctunnel.ClientToServer{
-		StreamId: str.streamID,
-		Frame: &grpctunnel.ClientToServer_NewStream_{
-			NewStream: &grpctunnel.ClientToServer_NewStream{
+	err = c.stream.Send(&sesamepb.OpenTunnelRequest{
+		StreamId: int64(str.streamID),
+		Frame: &sesamepb.OpenTunnelRequest_NewStream{
+			NewStream: &sesamepb.NewStream{
 				Method: methodName,
 				Header: toProto(md),
 			},
@@ -258,7 +259,7 @@ func (c *Channel) allocateStream(ctx context.Context, clientStreams, serverStrea
 		trailerTargets: tlrs,
 		isClientStream: clientStreams,
 		isServerStream: serverStreams,
-		buffer:         make(chan *grpctunnel.ServerToClient, windowMaxBuffer),
+		buffer:         make(chan *sesamepb.OpenTunnelResponse, windowMaxBuffer),
 		headerSignal:   make(chan struct{}),
 		doneSignal:     make(chan struct{}),
 	}
@@ -280,13 +281,13 @@ func (c *Channel) recvLoop() {
 			return
 		}
 
-		str, err := c.getStream(msg.StreamId)
+		str, err := c.getStream(uint64(msg.StreamId))
 		if err != nil {
 			_ = c.close(err)
 			return
 		}
 
-		if _, ok := msg.GetFrame().(*grpctunnel.ServerToClient_WindowUpdate); ok {
+		if _, ok := msg.GetFrame().(*sesamepb.OpenTunnelResponse_WindowUpdate); ok {
 			// handled in the flow control wrapper impl.
 			continue
 		}
@@ -360,7 +361,7 @@ type tunnelClientStream struct {
 	isServerStream bool
 
 	ingestMu     sync.Mutex
-	buffer       chan *grpctunnel.ServerToClient
+	buffer       chan *sesamepb.OpenTunnelResponse
 	header       metadata.MD
 	headerSignal chan struct{}
 	trailer      metadata.MD
@@ -408,9 +409,9 @@ func (st *tunnelClientStream) CloseSend() error {
 		return nil
 	default:
 	}
-	_ = st.stream.Send(&grpctunnel.ClientToServer{
-		StreamId: st.streamID,
-		Frame: &grpctunnel.ClientToServer_HalfClose{
+	_ = st.stream.Send(&sesamepb.OpenTunnelRequest{
+		StreamId: int64(st.streamID),
+		Frame: &sesamepb.OpenTunnelRequest_HalfClose{
 			HalfClose: &emptypb.Empty{},
 		},
 	})
@@ -446,19 +447,19 @@ func (st *tunnelClientStream) SendMsg(m interface{}) error {
 		}
 
 		if i == 0 {
-			err = st.stream.Send(&grpctunnel.ClientToServer{
-				StreamId: st.streamID,
-				Frame: &grpctunnel.ClientToServer_Message{
-					Message: &grpctunnel.EncodedMessage{
+			err = st.stream.Send(&sesamepb.OpenTunnelRequest{
+				StreamId: int64(st.streamID),
+				Frame: &sesamepb.OpenTunnelRequest_Message{
+					Message: &sesamepb.EncodedMessage{
 						Size: int32(len(b)),
 						Data: chunk,
 					},
 				},
 			})
 		} else {
-			err = st.stream.Send(&grpctunnel.ClientToServer{
-				StreamId: st.streamID,
-				Frame: &grpctunnel.ClientToServer_MessageData{
+			err = st.stream.Send(&sesamepb.OpenTunnelRequest{
+				StreamId: int64(st.streamID),
+				Frame: &sesamepb.OpenTunnelRequest_MessageData{
 					MessageData: chunk,
 				},
 			})
@@ -527,7 +528,7 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 	var b []byte
 	for {
 		var (
-			msg  *grpctunnel.ServerToClient
+			msg  *sesamepb.OpenTunnelResponse
 			open bool
 		)
 
@@ -572,15 +573,24 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 		}
 
 		if !open {
-			// don't need lock to read st.done; observing
-			// input channel close provides safe visibility
+			// The buffer is only ever closed by finishStream, which
+			// closes doneSignal immediately after. Waiting for it
+			// here makes the post-EOF contract structural: once
+			// RecvMsg has returned the stream's EOF/error, Trailer()
+			// and err() are already deterministic. Without the wait,
+			// a reader scheduled in the window between the two closes
+			// observed EOF and Trailer() returned nil (seen in the
+			// wild: grpchantesting trailer checks under race + load).
+			// Observing the channel close provides safe visibility of
+			// st.done.
+			<-st.doneSignal
 			return nil, true, st.done
 		}
 
 		st.ch.updateWindow(msg)
 
 		switch frame := msg.GetFrame().(type) {
-		case *grpctunnel.ServerToClient_Message:
+		case *sesamepb.OpenTunnelResponse_Message:
 			if msgLen != -1 {
 				return nil, false, status.Errorf(codes.Internal, "server sent redundant response message envelope")
 			}
@@ -593,7 +603,7 @@ func (st *tunnelClientStream) readMsgLocked() (data []byte, ok bool, err error) 
 				return b, true, nil
 			}
 
-		case *grpctunnel.ServerToClient_MessageData:
+		case *sesamepb.OpenTunnelResponse_MessageData:
 			if msgLen == -1 {
 				return nil, false, status.Errorf(codes.Internal, "server never sent envelope for response message")
 			}
@@ -620,7 +630,7 @@ func (st *tunnelClientStream) err() error {
 	}
 }
 
-func (st *tunnelClientStream) acceptServerFrame(msg *grpctunnel.ServerToClient) {
+func (st *tunnelClientStream) acceptServerFrame(msg *sesamepb.OpenTunnelResponse) {
 	if st == nil {
 		// can happen if client decided that the stream ID was recently used
 		// yet inactive -- it returns nil error but also nil stream, which
@@ -630,7 +640,7 @@ func (st *tunnelClientStream) acceptServerFrame(msg *grpctunnel.ServerToClient) 
 	}
 
 	switch frame := msg.GetFrame().(type) {
-	case *grpctunnel.ServerToClient_Header:
+	case *sesamepb.OpenTunnelResponse_Header:
 		st.ingestMu.Lock()
 		defer st.ingestMu.Unlock()
 		select {
@@ -644,7 +654,7 @@ func (st *tunnelClientStream) acceptServerFrame(msg *grpctunnel.ServerToClient) 
 		}
 		return
 
-	case *grpctunnel.ServerToClient_CloseStream_:
+	case *sesamepb.OpenTunnelResponse_CloseStream:
 		trailer := fromProto(frame.CloseStream.Trailer)
 		err := status.FromProto(frame.CloseStream.Status).Err()
 		st.finishStream(err, trailer)
@@ -670,9 +680,9 @@ func (st *tunnelClientStream) acceptServerFrame(msg *grpctunnel.ServerToClient) 
 func (st *tunnelClientStream) cancel(err error) error {
 	st.finishStream(err, nil)
 	// let server know
-	return st.stream.Send(&grpctunnel.ClientToServer{
-		StreamId: st.streamID,
-		Frame: &grpctunnel.ClientToServer_Cancel{
+	return st.stream.Send(&sesamepb.OpenTunnelRequest{
+		StreamId: int64(st.streamID),
+		Frame: &sesamepb.OpenTunnelRequest_Cancel{
 			Cancel: &emptypb.Empty{},
 		},
 	})
