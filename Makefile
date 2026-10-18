@@ -174,9 +174,19 @@ tools: sesame-endpoint.install
 .PHONY: proto-lint
 proto-lint: google-api-linter buf.lint
 
+# The api-linter runner is a bash script, so it cannot execute under the
+# default Windows shell (cmd.exe). Like `generate`, it requires a POSIX
+# system (or WSL); buf lint still runs on Windows, and the Linux/macOS CI
+# jobs cover the api-linter for the (platform-independent) proto files.
+ifeq ($(OS),Windows_NT)
+.PHONY: google-api-linter
+google-api-linter:
+	@echo "google-api-linter: skipped on Windows (requires bash; see hack/google-api-linter.sh)"
+else
 .PHONY: google-api-linter
 google-api-linter:
 	hack/google-api-linter.sh
+endif
 
 .PHONY: buf.lint
 buf.lint:

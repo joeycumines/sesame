@@ -50,12 +50,18 @@ jobs:
           echo "make_command=make -j $env:number_of_cpus ci" >> $env:GITHUB_ENV
 
       - uses: actions/checkout@v7
+        with:
+          # schema/googleapis (vendored google/api/* protos) is a git
+          # submodule required by proto linting (make lint).
+          submodules: recursive
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
           go-version: 'stable'
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
+      - name: Set up Buf
+        uses: bufbuild/buf-setup-action@v1
 
       - name: Install make (Windows)
         if: runner.os == 'Windows'
