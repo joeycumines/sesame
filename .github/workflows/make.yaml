@@ -63,7 +63,7 @@ jobs:
       - name: Set up Buf
         uses: bufbuild/buf-setup-action@v1
         with:
-          github-token: ${{ github.token }}
+          github_token: ${{ github.token }}
 
       - name: Install make (Windows)
         if: runner.os == 'Windows'
