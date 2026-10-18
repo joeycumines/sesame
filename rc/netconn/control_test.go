@@ -17,6 +17,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -138,7 +139,11 @@ func TestClientServer_InStream_Ping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Ping failed: %v", err)
 	}
-	if rtt <= 0 {
+	// Ping reports time.Since(start), which can measure as exactly zero on
+	// Windows: its monotonic clock is too coarse to observe a round-trip over
+	// an in-memory pipe. Zero is a valid measurement there; elsewhere the RTT
+	// of a real round-trip is always observable and must be positive.
+	if rtt <= 0 && runtime.GOOS != "windows" {
 		t.Errorf("expected positive RTT, got %v", rtt)
 	}
 
