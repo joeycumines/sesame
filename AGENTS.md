@@ -25,3 +25,6 @@
   - Runtime servers (such as `sesame-endpoint`) MUST NOT read configuration files (no YAML, JSON, TOML, `.env`).
   - Configuration MUST be parsed strictly from CLI flags and environment variables at entrypoint.
   - Environment variables for secrets MUST be carefully scoped (e.g. `SESAME_ENDPOINT_*`).
+
+- **Eager Configuration Resolution**:
+  - Environment variable resolution and configuration verification MUST happen as early as possible - eagerly at the configuration-parsing entrypoint - never deferred or resolved lazily at first use.
