@@ -14,9 +14,10 @@ export interface EndpointServer {
 }
 
 // Resolves operator-provided TLS material to PEM bytes. Literal PEM content
-// is used as-is; anything else is a file path, read eagerly so a missing or
-// empty file fails here with a clear error instead of surfacing as an opaque
-// handshake failure - or worse, silently disabling the TLS listener.
+// is used as-is; anything else is a file path, read eagerly so a missing,
+// empty, or non-PEM file fails here with a clear error instead of surfacing
+// as an opaque handshake failure - or worse, silently disabling the TLS
+// listener.
 function loadPemMaterial(val: string, name: string): Buffer {
   if (val.trim().length === 0) {
     throw new Error(`${name} must not be empty`);
@@ -26,6 +27,9 @@ function loadPemMaterial(val: string, name: string): Buffer {
     : fs.readFileSync(val, 'utf8');
   if (content.trim().length === 0) {
     throw new Error(`${name} is empty: ${val}`);
+  }
+  if (!content.includes('-----BEGIN')) {
+    throw new Error(`Invalid PEM content for ${name}: ${val}`);
   }
   return Buffer.from(content, 'utf8');
 }

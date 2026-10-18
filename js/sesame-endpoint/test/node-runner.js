@@ -5,6 +5,8 @@ const tls = require('node:tls');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
+const { execFileSync } = require('node:child_process');
 const { create } = require('@bufbuild/protobuf');
 const { createGrpcTransport } = require('@connectrpc/connect-node');
 const { createClient, Code, ConnectError } = require('@connectrpc/connect');
@@ -731,6 +733,45 @@ async function run() {
     reqStream13.close();
   } finally {
     await new Promise(r => halfCloseUpstream.close(() => r()));
+  }
+
+  // Test 14: CLI reports TLS material errors as a friendly one-liner,
+  // never a raw stack. Malformed PEM fails at TLS context construction
+  // under Node.js (createSecureServer), the path the CLI's
+  // construction-time error handling exists to cover.
+  console.log('14. Testing CLI TLS error reporting under Node.js...');
+  {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sesame-cli-node-'));
+    try {
+      const badCert = path.join(tmp, 'bad-cert.pem');
+      const badKey = path.join(tmp, 'bad-key.pem');
+      fs.writeFileSync(badCert, '-----BEGIN CERTIFICATE-----\nnot-base64\n-----END CERTIFICATE-----\n');
+      fs.writeFileSync(badKey, '-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----\n');
+
+      let status = 0;
+      let stderr = '';
+      try {
+        execFileSync(process.execPath, [path.join(__dirname, '..', 'build', 'src', 'cli.js')], {
+          // Capture stderr (asserted below) instead of letting execFileSync
+          // echo it to this runner's stderr: the failure is expected.
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            SESAME_ENDPOINT_TLS_CERT: badCert,
+            SESAME_ENDPOINT_TLS_KEY: badKey,
+          },
+          encoding: 'utf8',
+          timeout: 30000,
+        });
+      } catch (err) {
+        status = err.status;
+        stderr = String(err.stderr);
+      }
+      assert.strictEqual(status, 1, `expected exit 1, got ${status}`);
+      assert.ok(stderr.startsWith('sesame-endpoint'), `expected a friendly CLI error, got: ${stderr}`);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   }
 
   console.log('All Node.js runtime tests passed cleanly!');

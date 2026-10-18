@@ -3,7 +3,7 @@ import * as http2 from 'node:http2';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import {execFileSync} from 'node:child_process';
+import {execFileSync, spawnSync} from 'node:child_process';
 import {X509Certificate} from 'node:crypto';
 import {parseConfig} from '../src/config';
 import {createEndpointServer, EndpointServer} from '../src/server';
@@ -13,6 +13,7 @@ const FIXTURES_DIR = fs.existsSync(path.join(__dirname, 'fixtures'))
   : path.join(__dirname, '../../test/fixtures');
 const SERVER_CERT = path.join(FIXTURES_DIR, 'cert.pem');
 const SERVER_KEY = path.join(FIXTURES_DIR, 'key.pem');
+const CLI_PATH = path.join(__dirname, '..', 'src', 'cli.ts');
 
 // Runs an openssl command as an argument vector. execFileSync never invokes a
 // shell, so temp-directory paths cannot break out of the command line.
@@ -254,7 +255,8 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
 
       expect(() =>
         parseConfig([], {
-          SESAME_ENDPOINT_CLIENT_CA_CERT: 'mock-ca',
+          SESAME_ENDPOINT_CLIENT_CA_CERT:
+            '-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----',
         }),
       ).toThrow('Client CA certificate');
     });
@@ -356,10 +358,10 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       });
       expect(res.config).toBeDefined();
       const secrets = res.config!.secrets;
-      // CLI values are read eagerly; environment values stay as provided and
-      // are resolved by the server, so an environment path stays a path here.
+      // Every value is resolved inside the parser: the environment path
+      // arrives as PEM content, never as a path for a later component.
       expect(secrets.tlsCert).toContain('BEGIN CERTIFICATE');
-      expect(secrets.tlsKey).toBe(SERVER_KEY);
+      expect(secrets.tlsKey).toBe(fs.readFileSync(SERVER_KEY, 'utf8'));
       expect(secrets.clientCaCert).toBe(caContent);
     });
 
@@ -374,16 +376,78 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       expect(res.config!.secrets.tlsCert).toBe(certContent);
     });
 
-    it('treats empty TLS environment variables as unset', () => {
+    it('resolves environment TLS file paths to PEM content at parse time', () => {
       const res = parseConfig([], {
-        SESAME_ENDPOINT_TLS_CERT: '',
-        SESAME_ENDPOINT_TLS_KEY: '   ',
-        SESAME_ENDPOINT_CLIENT_CA_CERT: '',
+        SESAME_ENDPOINT_TLS_CERT: SERVER_CERT,
+        SESAME_ENDPOINT_TLS_KEY: SERVER_KEY,
+        SESAME_ENDPOINT_CLIENT_CA_CERT: clientCaCertPath,
       });
       expect(res.config).toBeDefined();
-      expect(res.config!.secrets.tlsCert).toBeUndefined();
-      expect(res.config!.secrets.tlsKey).toBeUndefined();
-      expect(res.config!.secrets.clientCaCert).toBeUndefined();
+      const secrets = res.config!.secrets;
+      // No unresolved path may leave the parser: every secret arrives as PEM
+      // content, ready for the server without further I/O.
+      expect(secrets.tlsCert).toContain('BEGIN CERTIFICATE');
+      expect(secrets.tlsKey).toContain('BEGIN PRIVATE KEY');
+      expect(secrets.clientCaCert).toContain('BEGIN CERTIFICATE');
+    });
+
+    it('rejects blank TLS environment variables instead of treating them as unset', () => {
+      expect(() => parseConfig([], {SESAME_ENDPOINT_TLS_CERT: ''})).toThrow(
+        'Empty value for SESAME_ENDPOINT_TLS_CERT',
+      );
+      expect(() => parseConfig([], {SESAME_ENDPOINT_TLS_KEY: '   '})).toThrow(
+        'Empty value for SESAME_ENDPOINT_TLS_KEY',
+      );
+      expect(() =>
+        parseConfig([], {SESAME_ENDPOINT_CLIENT_CA_CERT: ''}),
+      ).toThrow('Empty value for SESAME_ENDPOINT_CLIENT_CA_CERT');
+    });
+
+    it('lets CLI flags take precedence over environment TLS paths', () => {
+      // The overridden environment paths do not exist: parsing succeeds only
+      // because the flags win and the overridden values are never read.
+      const res = parseConfig(
+        [
+          `--tls-cert=${fs.readFileSync(SERVER_CERT, 'utf8')}`,
+          `--tls-key=${fs.readFileSync(SERVER_KEY, 'utf8')}`,
+        ],
+        {
+          SESAME_ENDPOINT_TLS_CERT: path.join(tmpDir, 'unread-env-cert.pem'),
+          SESAME_ENDPOINT_TLS_KEY: path.join(tmpDir, 'unread-env-key.pem'),
+        },
+      );
+      expect(res.config).toBeDefined();
+      expect(res.config!.secrets.tlsCert).toContain('BEGIN CERTIFICATE');
+    });
+
+    it('throws ENOENT at parse time when an environment TLS path does not exist', () => {
+      expect(() =>
+        parseConfig([], {
+          SESAME_ENDPOINT_TLS_CERT: path.join(tmpDir, 'missing-cert.pem'),
+          SESAME_ENDPOINT_TLS_KEY: path.join(tmpDir, 'missing-key.pem'),
+        }),
+      ).toThrow('ENOENT');
+    });
+
+    it('rejects an empty environment-provided TLS file at parse time', () => {
+      const emptyCert = path.join(tmpDir, 'empty-env-file-cert.pem');
+      const emptyKey = path.join(tmpDir, 'empty-env-file-key.pem');
+      fs.writeFileSync(emptyCert, '');
+      fs.writeFileSync(emptyKey, '');
+      expect(() =>
+        parseConfig([], {
+          SESAME_ENDPOINT_TLS_CERT: emptyCert,
+          SESAME_ENDPOINT_TLS_KEY: emptyKey,
+        }),
+      ).toThrow('Empty content for SESAME_ENDPOINT_TLS_CERT');
+    });
+
+    it('rejects a certificate file whose content is not PEM', () => {
+      const garbageCert = path.join(tmpDir, 'not-pem-cert.pem');
+      fs.writeFileSync(garbageCert, 'this is not a certificate\n');
+      expect(() =>
+        parseConfig([`--tls-cert=${garbageCert}`, `--tls-key=${SERVER_KEY}`]),
+      ).toThrow('Invalid PEM content for --tls-cert');
     });
 
     it('fails closed on multi-line non-PEM input', () => {
@@ -398,16 +462,10 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
 
   describe('createEndpointServer fail-closed validation', () => {
     let validConfig: ReturnType<typeof parseConfig>['config'];
-    let emptyCertPath: string;
-    let emptyKeyPath: string;
     let emptyCaPath: string;
 
     beforeAll(() => {
-      emptyCertPath = path.join(tmpDir, 'empty-env-cert.pem');
-      emptyKeyPath = path.join(tmpDir, 'empty-env-key.pem');
       emptyCaPath = path.join(tmpDir, 'empty-env-ca.pem');
-      fs.writeFileSync(emptyCertPath, '');
-      fs.writeFileSync(emptyKeyPath, '');
       fs.writeFileSync(emptyCaPath, '');
 
       validConfig = parseConfig([
@@ -417,22 +475,28 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       ]).config;
     });
 
-    it('throws ENOENT when an environment-provided TLS path does not exist', () => {
-      const res = parseConfig([], {
-        SESAME_ENDPOINT_TLS_CERT: path.join(tmpDir, 'missing-cert.pem'),
-        SESAME_ENDPOINT_TLS_KEY: path.join(tmpDir, 'missing-key.pem'),
-      });
-      expect(() => createEndpointServer(res.config!)).toThrow('ENOENT');
+    it('throws ENOENT when a hand-built config points at a missing TLS path', () => {
+      expect(() =>
+        createEndpointServer({
+          ...validConfig!,
+          secrets: {
+            ...validConfig!.secrets,
+            tlsCert: path.join(tmpDir, 'missing-hand-built-cert.pem'),
+            tlsKey: path.join(tmpDir, 'missing-hand-built-key.pem'),
+          },
+        }),
+      ).toThrow('ENOENT');
     });
 
-    it('throws when an environment-provided TLS file is empty', () => {
-      const res = parseConfig([], {
-        SESAME_ENDPOINT_TLS_CERT: emptyCertPath,
-        SESAME_ENDPOINT_TLS_KEY: emptyKeyPath,
-      });
-      expect(() => createEndpointServer(res.config!)).toThrow(
-        'TLS certificate is empty',
-      );
+    it('throws when a hand-built config points at a non-PEM file', () => {
+      const garbageCert = path.join(tmpDir, 'not-pem-hand-built.pem');
+      fs.writeFileSync(garbageCert, 'still not a certificate\n');
+      expect(() =>
+        createEndpointServer({
+          ...validConfig!,
+          secrets: {...validConfig!.secrets, tlsCert: garbageCert},
+        }),
+      ).toThrow('Invalid PEM content for TLS certificate');
     });
 
     it('throws on a hand-built config with partial TLS material', () => {
@@ -584,6 +648,51 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
         rejectUnauthorized: false,
       });
       expect(rejected).toBe(false);
+    });
+  });
+
+  describe('CLI startup error reporting', () => {
+    it('reports an unresolvable environment TLS path as a friendly error', () => {
+      const res = spawnSync(process.execPath, [CLI_PATH], {
+        env: {
+          ...process.env,
+          SESAME_ENDPOINT_TLS_CERT: path.join(tmpDir, 'cli-missing-cert.pem'),
+          SESAME_ENDPOINT_TLS_KEY: path.join(tmpDir, 'cli-missing-key.pem'),
+        },
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+      expect(res.status).toBe(1);
+      // Friendly one-liner with the parse error; not a raw stack trace.
+      expect(res.stderr.startsWith('sesame-endpoint: ')).toBe(true);
+      expect(res.stderr).toContain('ENOENT');
+    });
+
+    it('reports malformed TLS material as a friendly error, not a raw stack', () => {
+      const badCert = path.join(tmpDir, 'cli-bad-cert.pem');
+      const badKey = path.join(tmpDir, 'cli-bad-key.pem');
+      fs.writeFileSync(
+        badCert,
+        '-----BEGIN CERTIFICATE-----\nnot-base64\n-----END CERTIFICATE-----\n',
+      );
+      fs.writeFileSync(
+        badKey,
+        '-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----\n',
+      );
+      const res = spawnSync(process.execPath, [CLI_PATH], {
+        env: {
+          ...process.env,
+          SESAME_ENDPOINT_TLS_CERT: badCert,
+          SESAME_ENDPOINT_TLS_KEY: badKey,
+        },
+        encoding: 'utf8',
+        timeout: 30000,
+      });
+      expect(res.status).toBe(1);
+      // Depending on the runtime, malformed PEM fails at TLS context
+      // construction or at listen; both must surface as a friendly one-line
+      // error rather than an unhandled stack trace.
+      expect(res.stderr.startsWith('sesame-endpoint')).toBe(true);
     });
   });
 });

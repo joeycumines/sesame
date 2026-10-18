@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import {parseConfig, formatHelp} from './config';
-import {createEndpointServer} from './server';
+import {createEndpointServer, EndpointServer} from './server';
 
 const VERSION = '0.1.0';
 
@@ -30,7 +30,17 @@ async function main() {
     process.exit(1);
   }
 
-  const server = createEndpointServer(result.config);
+  // createEndpointServer resolves and validates TLS material eagerly, so a
+  // construction failure (e.g. malformed PEM) must surface as the same
+  // friendly one-line error as configuration failures, not a raw stack.
+  let server: EndpointServer;
+  try {
+    server = createEndpointServer(result.config);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`sesame-endpoint: ${msg}\n`);
+    process.exit(1);
+  }
 
   const shutdown = async (signal: string) => {
     process.stderr.write(`\nReceived ${signal}, shutting down...\n`);

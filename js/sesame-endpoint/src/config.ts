@@ -57,24 +57,16 @@ function parseStrictBoolean(val: string, flagName: string): boolean {
   }
 }
 
-// Normalizes an environment variable: undefined stays undefined, and blank
-// values (empty or whitespace-only) are treated as unset.
-function nonEmptyEnv(val: string | undefined): string | undefined {
-  if (val === undefined || val.trim().length === 0) {
-    return undefined;
-  }
-  return val;
-}
-
 // Returns true when the value looks like PEM content rather than a path.
 function isPemLiteral(val: string): boolean {
   return val.includes('-----BEGIN');
 }
 
 // Resolves TLS material to its PEM content: literal PEM is kept as-is,
-// anything else is treated as a file path. Empty values and empty files are
-// rejected loudly instead of resolving to '' - a value that downstream
-// truthiness checks would silently treat as "TLS disabled".
+// anything else is treated as a file path. Empty values, empty files, and
+// files whose content is not PEM are rejected loudly: a value resolving to
+// '' would be silently treated as "TLS disabled" by downstream truthiness
+// checks, and arbitrary file content would be re-interpreted as a path.
 function readCertOrLiteral(val: string, sourceName: string): string {
   if (val.trim().length === 0) {
     throw new Error(`Empty value for ${sourceName}`);
@@ -85,6 +77,9 @@ function readCertOrLiteral(val: string, sourceName: string): string {
   const content = fs.readFileSync(val, 'utf8');
   if (content.trim().length === 0) {
     throw new Error(`Empty content for ${sourceName}: ${val}`);
+  }
+  if (!isPemLiteral(content)) {
+    throw new Error(`Invalid PEM content for ${sourceName}: ${val}`);
   }
   return content;
 }
@@ -125,13 +120,14 @@ export function parseConfig(
     ? env.SESAME_ENDPOINT_ALLOWED_NETWORKS.split(',').map(s => s.trim())
     : [...DEFAULT_ALLOWED_NETWORKS];
 
-  // Blank environment variables are treated as unset so an empty value cannot
-  // masquerade as configured TLS material.
-  let tlsCert: string | undefined = nonEmptyEnv(env.SESAME_ENDPOINT_TLS_CERT);
-  let tlsKey: string | undefined = nonEmptyEnv(env.SESAME_ENDPOINT_TLS_KEY);
-  let clientCaCert: string | undefined = nonEmptyEnv(
-    env.SESAME_ENDPOINT_CLIENT_CA_CERT,
-  );
+  // TLS material is resolved inside this function. The flag loop below
+  // applies CLI precedence, and then every value that ends up in the
+  // returned config is read (path -> PEM content) and verified before
+  // parsing finishes: no unresolved path may leave the parser for a later
+  // component to read.
+  let tlsCert: string | undefined;
+  let tlsKey: string | undefined;
+  let clientCaCert: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -238,6 +234,31 @@ export function parseConfig(
     }
   }
 
+  // Resolve environment-provided TLS material now that flag precedence is
+  // known. Present-but-blank values are rejected rather than treated as
+  // unset: empty TLS material must fail closed, not silently disable TLS.
+  if (tlsCert === undefined && env.SESAME_ENDPOINT_TLS_CERT !== undefined) {
+    tlsCert = readCertOrLiteral(
+      env.SESAME_ENDPOINT_TLS_CERT,
+      'SESAME_ENDPOINT_TLS_CERT',
+    );
+  }
+  if (tlsKey === undefined && env.SESAME_ENDPOINT_TLS_KEY !== undefined) {
+    tlsKey = readCertOrLiteral(
+      env.SESAME_ENDPOINT_TLS_KEY,
+      'SESAME_ENDPOINT_TLS_KEY',
+    );
+  }
+  if (
+    clientCaCert === undefined &&
+    env.SESAME_ENDPOINT_CLIENT_CA_CERT !== undefined
+  ) {
+    clientCaCert = readCertOrLiteral(
+      env.SESAME_ENDPOINT_CLIENT_CA_CERT,
+      'SESAME_ENDPOINT_CLIENT_CA_CERT',
+    );
+  }
+
   // Validate values
   if (!host || host.trim().length === 0) {
     throw new Error('Host cannot be empty');
@@ -289,7 +310,10 @@ export function parseConfig(
     }
   }
 
-  if (clientCaCert && (!tlsCert || !tlsKey)) {
+  if (
+    clientCaCert !== undefined &&
+    (tlsCert === undefined || tlsKey === undefined)
+  ) {
     throw new Error(
       'Client CA certificate (--client-ca-cert or SESAME_ENDPOINT_CLIENT_CA_CERT) requires both TLS certificate and key to be configured',
     );
@@ -353,18 +377,18 @@ Options:
   --enable-opportunistic-tls <b>  Enable in-stream upgrade_tls (default: true)
   --enable-flow-control <b>       Enable stream flow control (default: true)
   --allowed-networks <list>       Comma-separated allowed target networks (default: tcp,tcp4,tcp6)
-  --tls-cert <path>               Path to PEM server certificate for TLS listener
-  --tls-key <path>                Path to PEM server private key for TLS listener
-  --client-ca-cert <path>         Path to PEM client CA certificate for mTLS listener verification
+  --tls-cert <path|pem>           Server certificate for the TLS listener (file path or literal PEM)
+  --tls-key <path|pem>            Server private key for the TLS listener (file path or literal PEM)
+  --client-ca-cert <path|pem>     Client CA certificate for mTLS verification (file path or literal PEM)
   -h, --help                      Show this help message
   -v, --version                   Show version
 
 Environment Variables (for Secrets):
   SESAME_ENDPOINT_HOST               Host override
   SESAME_ENDPOINT_PORT               Port override
-  SESAME_ENDPOINT_TLS_CERT           PEM server certificate for TLS listener
-  SESAME_ENDPOINT_TLS_KEY            PEM server private key for TLS listener
-  SESAME_ENDPOINT_CLIENT_CA_CERT     PEM client CA certificate for mTLS listener verification
+  SESAME_ENDPOINT_TLS_CERT           Server certificate for the TLS listener (file path or literal PEM)
+  SESAME_ENDPOINT_TLS_KEY            Server private key for the TLS listener (file path or literal PEM)
+  SESAME_ENDPOINT_CLIENT_CA_CERT     Client CA certificate for mTLS verification (file path or literal PEM)
   SESAME_ENDPOINT_CA_CERT            Custom Root CA PEM
   SESAME_ENDPOINT_CLIENT_CERT        Client certificate PEM for mTLS upstream
   SESAME_ENDPOINT_CLIENT_KEY         Client private key PEM for mTLS upstream

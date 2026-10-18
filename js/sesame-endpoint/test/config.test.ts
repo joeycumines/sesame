@@ -159,8 +159,13 @@ describe('config parser', () => {
     expect(() =>
       parseConfig([], {SESAME_ENDPOINT_ALLOWED_NETWORKS: ','}),
     ).toThrow('Allowed networks must not contain empty entries');
-    // An empty env var is treated as unset (defaults apply), matching
-    // the parser's uniform env handling.
+    // An empty env var is treated as unset (defaults apply), the parser's
+    // convention for non-secret configuration; TLS material deviates by
+    // design and fails closed on blank values.
+    expect(
+      parseConfig([], {SESAME_ENDPOINT_ALLOWED_NETWORKS: ''}).config!
+        .allowedNetworks,
+    ).toEqual(['tcp', 'tcp4', 'tcp6']);
 
     // Trimmed, fully-specified lists are unaffected.
     expect(
@@ -230,5 +235,10 @@ describe('config parser', () => {
     expect(help).toContain('sesame-endpoint [options]');
     expect(help).toContain('SESAME_ENDPOINT_TLS_CERT');
     expect(help).toContain('SESAME_ENDPOINT_PROXY_PASSWORD');
+    // TLS flags accept PEM content as well as file paths; the help text
+    // must say so (regression pin for <path|pem>).
+    expect(help).toContain('--tls-cert <path|pem>');
+    expect(help).toContain('--tls-key <path|pem>');
+    expect(help).toContain('--client-ca-cert <path|pem>');
   });
 });
