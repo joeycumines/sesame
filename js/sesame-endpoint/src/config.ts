@@ -9,6 +9,8 @@ export interface ServerSecrets {
   readonly clientKey?: string;
   readonly proxyAuthToken?: string;
   readonly proxyPassword?: string;
+  /** Inbound endpoint bearer token: every RPC must carry it as "Authorization: Bearer <token>". */
+  readonly authToken?: string;
 }
 
 export interface ServerConfig {
@@ -319,6 +321,19 @@ export function parseConfig(
     );
   }
 
+  // Inbound endpoint bearer token: present-but-blank fails closed like the
+  // other secrets. Unset means no application-layer enforcement (mTLS stays
+  // the channel authentication). The value is trimmed to match the client
+  // side's trimming, never logged, and compared constant-time at the door.
+  let authToken: string | undefined;
+  if (env.SESAME_ENDPOINT_TOKEN !== undefined) {
+    const trimmed = env.SESAME_ENDPOINT_TOKEN.trim();
+    if (trimmed.length === 0) {
+      throw new Error('SESAME_ENDPOINT_TOKEN must not be blank');
+    }
+    authToken = trimmed;
+  }
+
   // Validate values
   if (!host || host.trim().length === 0) {
     throw new Error('Host cannot be empty');
@@ -396,6 +411,7 @@ export function parseConfig(
     clientKey,
     proxyAuthToken: env.SESAME_ENDPOINT_PROXY_AUTH_TOKEN,
     proxyPassword: env.SESAME_ENDPOINT_PROXY_PASSWORD,
+    authToken,
   };
 
   return {
@@ -454,5 +470,6 @@ Environment Variables (for Secrets):
   SESAME_ENDPOINT_CLIENT_KEY         Client private key for mTLS upstream (file path or literal PEM)
   SESAME_ENDPOINT_PROXY_AUTH_TOKEN   Proxy authentication bearer/token
   SESAME_ENDPOINT_PROXY_PASSWORD     Proxy authentication password
+  SESAME_ENDPOINT_TOKEN             Inbound endpoint bearer token: every RPC must carry it as "Authorization: Bearer <token>" (pair with the shaper's -sesame-token-env); unset disables the check
 `;
 }
