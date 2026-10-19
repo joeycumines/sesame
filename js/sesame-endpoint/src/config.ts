@@ -58,8 +58,10 @@ function parseStrictBoolean(val: string, flagName: string): boolean {
 }
 
 // Returns true when the value looks like PEM content rather than a path.
+// Real PEM starts with '-----BEGIN ' and has a matching '-----END '.
 function isPemLiteral(val: string): boolean {
-  return val.includes('-----BEGIN');
+  const trimmed = val.trim();
+  return trimmed.startsWith('-----BEGIN ') && trimmed.includes('-----END ');
 }
 
 // Resolves TLS material to its PEM content: literal PEM is kept as-is,
@@ -67,12 +69,23 @@ function isPemLiteral(val: string): boolean {
 // files whose content is not PEM are rejected loudly: a value resolving to
 // '' would be silently treated as "TLS disabled" by downstream truthiness
 // checks, and arbitrary file content would be re-interpreted as a path.
+// If an input contains newlines, carriage returns, or null bytes, it is
+// treated as an inline string attempt, never passed to fs.readFileSync (which
+// would echo raw secret material in ENOENT/ENAMETOOLONG error messages).
 function readCertOrLiteral(val: string, sourceName: string): string {
   if (val.trim().length === 0) {
     throw new Error(`Empty value for ${sourceName}`);
   }
   if (isPemLiteral(val)) {
     return val;
+  }
+  if (
+    val.includes('\n') ||
+    val.includes('\r') ||
+    val.includes('\0') ||
+    val.includes('-----END')
+  ) {
+    throw new Error(`Invalid PEM content for ${sourceName}`);
   }
   const content = fs.readFileSync(val, 'utf8');
   if (content.trim().length === 0) {
@@ -120,14 +133,12 @@ export function parseConfig(
     ? env.SESAME_ENDPOINT_ALLOWED_NETWORKS.split(',').map(s => s.trim())
     : [...DEFAULT_ALLOWED_NETWORKS];
 
-  // TLS material is resolved inside this function. The flag loop below
-  // applies CLI precedence, and then every value that ends up in the
-  // returned config is read (path -> PEM content) and verified before
-  // parsing finishes: no unresolved path may leave the parser for a later
-  // component to read.
-  let tlsCert: string | undefined;
-  let tlsKey: string | undefined;
-  let clientCaCert: string | undefined;
+  // TLS material is resolved after the flag loop has completed so that
+  // --help and --version are respected before any file I/O occurs, and
+  // earlier flags can be cleanly overridden by later flags.
+  let rawTlsCert: {val: string; source: string} | undefined;
+  let rawTlsKey: {val: string; source: string} | undefined;
+  let rawClientCaCert: {val: string; source: string} | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -208,54 +219,103 @@ export function parseConfig(
         .split(',')
         .map(s => s.trim());
     } else if (arg === '--tls-cert') {
-      if (i + 1 >= argv.length) throw new Error('Missing value for --tls-cert');
-      tlsCert = readCertOrLiteral(argv[++i], '--tls-cert');
+      if (i + 1 >= argv.length || argv[i + 1].startsWith('-'))
+        throw new Error('Missing value for --tls-cert');
+      rawTlsCert = {val: argv[++i], source: '--tls-cert'};
     } else if (arg.startsWith('--tls-cert=')) {
-      tlsCert = readCertOrLiteral(
-        arg.slice('--tls-cert='.length),
-        '--tls-cert',
-      );
+      rawTlsCert = {
+        val: arg.slice('--tls-cert='.length),
+        source: '--tls-cert',
+      };
     } else if (arg === '--tls-key') {
-      if (i + 1 >= argv.length) throw new Error('Missing value for --tls-key');
-      tlsKey = readCertOrLiteral(argv[++i], '--tls-key');
+      if (i + 1 >= argv.length || argv[i + 1].startsWith('-'))
+        throw new Error('Missing value for --tls-key');
+      rawTlsKey = {val: argv[++i], source: '--tls-key'};
     } else if (arg.startsWith('--tls-key=')) {
-      tlsKey = readCertOrLiteral(arg.slice('--tls-key='.length), '--tls-key');
+      rawTlsKey = {
+        val: arg.slice('--tls-key='.length),
+        source: '--tls-key',
+      };
     } else if (arg === '--client-ca-cert') {
-      if (i + 1 >= argv.length)
+      if (i + 1 >= argv.length || argv[i + 1].startsWith('-'))
         throw new Error('Missing value for --client-ca-cert');
-      clientCaCert = readCertOrLiteral(argv[++i], '--client-ca-cert');
+      rawClientCaCert = {val: argv[++i], source: '--client-ca-cert'};
     } else if (arg.startsWith('--client-ca-cert=')) {
-      clientCaCert = readCertOrLiteral(
-        arg.slice('--client-ca-cert='.length),
-        '--client-ca-cert',
-      );
+      rawClientCaCert = {
+        val: arg.slice('--client-ca-cert='.length),
+        source: '--client-ca-cert',
+      };
     } else {
       throw new Error(`Unknown CLI argument: ${arg}`);
     }
   }
 
-  // Resolve environment-provided TLS material now that flag precedence is
-  // known. Present-but-blank values are rejected rather than treated as
-  // unset: empty TLS material must fail closed, not silently disable TLS.
-  if (tlsCert === undefined && env.SESAME_ENDPOINT_TLS_CERT !== undefined) {
+  // Resolve TLS listener material after flag loop completes: CLI precedence
+  // applies first, then environment variables fill gaps. Present-but-blank
+  // values are rejected loudly rather than treated as unset.
+  let tlsCert: string | undefined;
+  let tlsKey: string | undefined;
+  let clientCaCert: string | undefined;
+
+  if (rawTlsCert !== undefined) {
+    tlsCert = readCertOrLiteral(rawTlsCert.val, rawTlsCert.source);
+  } else if (env.SESAME_ENDPOINT_TLS_CERT !== undefined) {
     tlsCert = readCertOrLiteral(
       env.SESAME_ENDPOINT_TLS_CERT,
       'SESAME_ENDPOINT_TLS_CERT',
     );
   }
-  if (tlsKey === undefined && env.SESAME_ENDPOINT_TLS_KEY !== undefined) {
+
+  if (rawTlsKey !== undefined) {
+    tlsKey = readCertOrLiteral(rawTlsKey.val, rawTlsKey.source);
+  } else if (env.SESAME_ENDPOINT_TLS_KEY !== undefined) {
     tlsKey = readCertOrLiteral(
       env.SESAME_ENDPOINT_TLS_KEY,
       'SESAME_ENDPOINT_TLS_KEY',
     );
   }
-  if (
-    clientCaCert === undefined &&
-    env.SESAME_ENDPOINT_CLIENT_CA_CERT !== undefined
-  ) {
+
+  if (rawClientCaCert !== undefined) {
+    clientCaCert = readCertOrLiteral(
+      rawClientCaCert.val,
+      rawClientCaCert.source,
+    );
+  } else if (env.SESAME_ENDPOINT_CLIENT_CA_CERT !== undefined) {
     clientCaCert = readCertOrLiteral(
       env.SESAME_ENDPOINT_CLIENT_CA_CERT,
       'SESAME_ENDPOINT_CLIENT_CA_CERT',
+    );
+  }
+
+  // Resolve upstream TLS secrets eagerly at the configuration entrypoint
+  // per the AGENTS.md invariant: file paths are read into PEM content,
+  // blank values fail closed, and clientCert/Key pairing is enforced.
+  let caCert: string | undefined;
+  let clientCert: string | undefined;
+  let clientKey: string | undefined;
+
+  if (env.SESAME_ENDPOINT_CA_CERT !== undefined) {
+    caCert = readCertOrLiteral(
+      env.SESAME_ENDPOINT_CA_CERT,
+      'SESAME_ENDPOINT_CA_CERT',
+    );
+  }
+  if (env.SESAME_ENDPOINT_CLIENT_CERT !== undefined) {
+    clientCert = readCertOrLiteral(
+      env.SESAME_ENDPOINT_CLIENT_CERT,
+      'SESAME_ENDPOINT_CLIENT_CERT',
+    );
+  }
+  if (env.SESAME_ENDPOINT_CLIENT_KEY !== undefined) {
+    clientKey = readCertOrLiteral(
+      env.SESAME_ENDPOINT_CLIENT_KEY,
+      'SESAME_ENDPOINT_CLIENT_KEY',
+    );
+  }
+
+  if ((clientCert === undefined) !== (clientKey === undefined)) {
+    throw new Error(
+      'Both client certificate (SESAME_ENDPOINT_CLIENT_CERT) and client key (SESAME_ENDPOINT_CLIENT_KEY) must be provided together',
     );
   }
 
@@ -331,9 +391,9 @@ export function parseConfig(
     tlsCert,
     tlsKey,
     clientCaCert,
-    caCert: env.SESAME_ENDPOINT_CA_CERT,
-    clientCert: env.SESAME_ENDPOINT_CLIENT_CERT,
-    clientKey: env.SESAME_ENDPOINT_CLIENT_KEY,
+    caCert,
+    clientCert,
+    clientKey,
     proxyAuthToken: env.SESAME_ENDPOINT_PROXY_AUTH_TOKEN,
     proxyPassword: env.SESAME_ENDPOINT_PROXY_PASSWORD,
   };
@@ -389,9 +449,9 @@ Environment Variables (for Secrets):
   SESAME_ENDPOINT_TLS_CERT           Server certificate for the TLS listener (file path or literal PEM)
   SESAME_ENDPOINT_TLS_KEY            Server private key for the TLS listener (file path or literal PEM)
   SESAME_ENDPOINT_CLIENT_CA_CERT     Client CA certificate for mTLS verification (file path or literal PEM)
-  SESAME_ENDPOINT_CA_CERT            Custom Root CA PEM
-  SESAME_ENDPOINT_CLIENT_CERT        Client certificate PEM for mTLS upstream
-  SESAME_ENDPOINT_CLIENT_KEY         Client private key PEM for mTLS upstream
+  SESAME_ENDPOINT_CA_CERT            Custom Root CA (file path or literal PEM)
+  SESAME_ENDPOINT_CLIENT_CERT        Client certificate for mTLS upstream (file path or literal PEM)
+  SESAME_ENDPOINT_CLIENT_KEY         Client private key for mTLS upstream (file path or literal PEM)
   SESAME_ENDPOINT_PROXY_AUTH_TOKEN   Proxy authentication bearer/token
   SESAME_ENDPOINT_PROXY_PASSWORD     Proxy authentication password
 `;

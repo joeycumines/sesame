@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const net = require('node:net');
 const tls = require('node:tls');
 const http = require('node:http');
+const http2 = require('node:http2');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -748,6 +749,10 @@ async function run() {
       fs.writeFileSync(badCert, '-----BEGIN CERTIFICATE-----\nnot-base64\n-----END CERTIFICATE-----\n');
       fs.writeFileSync(badKey, '-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----\n');
 
+      const cleanEnv = Object.fromEntries(
+        Object.entries(process.env).filter(([k]) => !k.startsWith('SESAME_ENDPOINT_')),
+      );
+
       let status = 0;
       let stderr = '';
       try {
@@ -756,7 +761,7 @@ async function run() {
           // echo it to this runner's stderr: the failure is expected.
           stdio: ['ignore', 'pipe', 'pipe'],
           env: {
-            ...process.env,
+            ...cleanEnv,
             SESAME_ENDPOINT_TLS_CERT: badCert,
             SESAME_ENDPOINT_TLS_KEY: badKey,
           },
@@ -768,8 +773,101 @@ async function run() {
         stderr = String(err.stderr);
       }
       assert.strictEqual(status, 1, `expected exit 1, got ${status}`);
-      assert.ok(stderr.startsWith('sesame-endpoint'), `expected a friendly CLI error, got: ${stderr}`);
+      assert.ok(stderr.startsWith('sesame-endpoint: '), `expected a friendly CLI error, got: ${stderr}`);
+      assert.ok(!stderr.includes('\n    at '), `expected no raw stack trace, got: ${stderr}`);
     } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  }
+
+  // Test 15: Endpoint mTLS Listener Handshake under Node.js runtime
+  // Proves that Node.js accepts trusted client certs and rejects missing or untrusted client certs.
+  console.log('15. Testing Endpoint mTLS Listener Handshake under Node.js...');
+  {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sesame-mtls-node-'));
+    let epServer;
+    try {
+      const caExt = path.join(tmp, 'ca.ext');
+      fs.writeFileSync(caExt, '[v3_ca]\nbasicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n');
+      const leafExt = path.join(tmp, 'leaf.ext');
+      fs.writeFileSync(leafExt, '[v3_leaf]\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=clientAuth\n');
+
+      function genPair(prefix, cn) {
+        const caKey = path.join(tmp, `${prefix}-ca.key`);
+        const caCsr = path.join(tmp, `${prefix}-ca.csr`);
+        const caCert = path.join(tmp, `${prefix}-ca.crt`);
+        const leafKey = path.join(tmp, `${prefix}.key`);
+        const leafCsr = path.join(tmp, `${prefix}.csr`);
+        const leafCert = path.join(tmp, `${prefix}.crt`);
+
+        execFileSync('openssl', ['req', '-nodes', '-newkey', 'rsa:2048', '-keyout', caKey, '-out', caCsr, '-subj', `/CN=${cn} CA`], { stdio: 'pipe' });
+        execFileSync('openssl', ['x509', '-req', '-in', caCsr, '-signkey', caKey, '-out', caCert, '-days', '1', '-extfile', caExt, '-extensions', 'v3_ca'], { stdio: 'pipe' });
+        execFileSync('openssl', ['req', '-nodes', '-newkey', 'rsa:2048', '-keyout', leafKey, '-out', leafCsr, '-subj', `/CN=${cn}`], { stdio: 'pipe' });
+        execFileSync('openssl', ['x509', '-req', '-in', leafCsr, '-CA', caCert, '-CAkey', caKey, '-CAcreateserial', '-out', leafCert, '-days', '1', '-extfile', leafExt, '-extensions', 'v3_leaf'], { stdio: 'pipe' });
+
+        return { caCert, leafCert, leafKey };
+      }
+
+      const trusted = genPair('trusted', 'Node Trusted');
+      const untrusted = genPair('untrusted', 'Node Untrusted');
+
+      const { config } = parseConfig([
+        '--host=127.0.0.1',
+        `--tls-cert=${path.join(FIXTURES_DIR, 'cert.pem')}`,
+        `--tls-key=${path.join(FIXTURES_DIR, 'key.pem')}`,
+        `--client-ca-cert=${trusted.caCert}`,
+      ]);
+      epServer = createEndpointServer(config);
+      const bound = await epServer.listen(0, '127.0.0.1');
+
+      async function attempt(opts) {
+        const client = http2.connect(`https://127.0.0.1:${bound.port}`, opts);
+        let timer;
+        try {
+          return await new Promise(resolve => {
+            timer = setTimeout(() => resolve(false), 5000);
+            client.on('error', () => resolve(false));
+            client.on('close', () => resolve(false));
+            client.on('connect', () => {
+              const req = client.request({ ':path': '/' });
+              req.on('error', () => resolve(false));
+              req.on('close', () => resolve(false));
+              req.on('response', () => resolve(true));
+              req.end();
+            });
+          });
+        } finally {
+          if (timer) clearTimeout(timer);
+          client.destroy();
+        }
+      }
+
+      // Case 1: Trusted client cert is accepted
+      const accepted = await attempt({
+        ca: fs.readFileSync(path.join(FIXTURES_DIR, 'cert.pem')),
+        cert: fs.readFileSync(trusted.leafCert),
+        key: fs.readFileSync(trusted.leafKey),
+        rejectUnauthorized: false,
+      });
+      assert.strictEqual(accepted, true, 'expected trusted client cert to be accepted under Node.js');
+
+      // Case 2: Missing client cert is rejected
+      const rejectedNoCert = await attempt({
+        ca: fs.readFileSync(path.join(FIXTURES_DIR, 'cert.pem')),
+        rejectUnauthorized: false,
+      });
+      assert.strictEqual(rejectedNoCert, false, 'expected missing client cert to be rejected under Node.js');
+
+      // Case 3: Untrusted client cert is rejected
+      const rejectedUntrusted = await attempt({
+        ca: fs.readFileSync(path.join(FIXTURES_DIR, 'cert.pem')),
+        cert: fs.readFileSync(untrusted.leafCert),
+        key: fs.readFileSync(untrusted.leafKey),
+        rejectUnauthorized: false,
+      });
+      assert.strictEqual(rejectedUntrusted, false, 'expected untrusted client cert to be rejected under Node.js');
+    } finally {
+      if (epServer) await epServer.close();
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   }

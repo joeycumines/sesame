@@ -1,5 +1,6 @@
 import * as http2 from 'node:http2';
 import * as fs from 'node:fs';
+import * as tls from 'node:tls';
 import {ConnectRouter} from '@connectrpc/connect';
 import {connectNodeAdapter} from '@connectrpc/connect-node';
 import {RemoteControl} from './gen/sesame/v1alpha1/remotecontrol_pb';
@@ -13,6 +14,12 @@ export interface EndpointServer {
   close(): Promise<void>;
 }
 
+// Returns true when the value looks like PEM content rather than a path.
+function isPemLiteral(val: string): boolean {
+  const trimmed = val.trim();
+  return trimmed.startsWith('-----BEGIN ') && trimmed.includes('-----END ');
+}
+
 // Resolves operator-provided TLS material to PEM bytes. Literal PEM content
 // is used as-is; anything else is a file path, read eagerly so a missing,
 // empty, or non-PEM file fails here with a clear error instead of surfacing
@@ -22,13 +29,22 @@ function loadPemMaterial(val: string, name: string): Buffer {
   if (val.trim().length === 0) {
     throw new Error(`${name} must not be empty`);
   }
-  const content = val.includes('-----BEGIN')
-    ? val
-    : fs.readFileSync(val, 'utf8');
+  if (isPemLiteral(val)) {
+    return Buffer.from(val, 'utf8');
+  }
+  if (
+    val.includes('\n') ||
+    val.includes('\r') ||
+    val.includes('\0') ||
+    val.includes('-----END')
+  ) {
+    throw new Error(`Invalid PEM content for ${name}`);
+  }
+  const content = fs.readFileSync(val, 'utf8');
   if (content.trim().length === 0) {
     throw new Error(`${name} is empty: ${val}`);
   }
-  if (!content.includes('-----BEGIN')) {
+  if (!isPemLiteral(content)) {
     throw new Error(`Invalid PEM content for ${name}: ${val}`);
   }
   return Buffer.from(content, 'utf8');
@@ -38,16 +54,18 @@ export function createEndpointServer(
   config: ServerConfig,
   tlsProvider?: TLSProvider,
 ): EndpointServer {
-  const routes = (router: ConnectRouter) => {
-    router.service(
-      RemoteControl,
-      createRemoteControlService(config, tlsProvider),
-    );
-  };
-
-  const handler = connectNodeAdapter({routes});
-
   const {tlsCert, tlsKey, clientCaCert} = config.secrets;
+
+  // Validate TLS configuration order matching config.ts: clientCaCert
+  // requires both halves; then both halves must be provided together.
+  if (
+    clientCaCert !== undefined &&
+    (tlsCert === undefined || tlsKey === undefined)
+  ) {
+    throw new Error(
+      'clientCaCert requires both tlsCert and tlsKey to be configured',
+    );
+  }
 
   // Defined-ness (not truthiness) decides whether the TLS listener is
   // requested: a defined-but-empty field fails loudly here instead of
@@ -57,27 +75,41 @@ export function createEndpointServer(
       'Both tlsCert and tlsKey must be provided to enable the TLS listener',
     );
   }
-  if (clientCaCert !== undefined && tlsCert === undefined) {
-    throw new Error(
-      'clientCaCert requires both tlsCert and tlsKey to be configured',
-    );
-  }
 
   let server: http2.Http2Server | http2.Http2SecureServer;
 
   if (tlsCert !== undefined && tlsKey !== undefined) {
-    const secureOptions: http2.SecureServerOptions = {
-      cert: loadPemMaterial(tlsCert, 'TLS certificate'),
-      key: loadPemMaterial(tlsKey, 'TLS key'),
-    };
+    const cert = loadPemMaterial(tlsCert, 'TLS certificate');
+    const key = loadPemMaterial(tlsKey, 'TLS key');
+    const secureOptions: http2.SecureServerOptions = {cert, key};
     if (clientCaCert !== undefined) {
       secureOptions.ca = loadPemMaterial(clientCaCert, 'Client CA certificate');
       secureOptions.requestCert = true;
       secureOptions.rejectUnauthorized = true;
     }
 
+    // Force synchronous OpenSSL/BoringSSL context initialization so that
+    // malformed PEM or mismatched key material fails synchronously inside
+    // createEndpointServer under both Bun and Node.js runtimes.
+    const secureContext = tls.createSecureContext(secureOptions);
+    secureOptions.secureContext = secureContext;
+
+    const routes = (router: ConnectRouter) => {
+      router.service(
+        RemoteControl,
+        createRemoteControlService(config, tlsProvider),
+      );
+    };
+    const handler = connectNodeAdapter({routes});
     server = http2.createSecureServer(secureOptions, handler);
   } else {
+    const routes = (router: ConnectRouter) => {
+      router.service(
+        RemoteControl,
+        createRemoteControlService(config, tlsProvider),
+      );
+    };
+    const handler = connectNodeAdapter({routes});
     server = http2.createServer(handler);
   }
 

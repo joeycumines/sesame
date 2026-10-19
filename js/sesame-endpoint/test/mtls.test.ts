@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import {execFileSync, spawnSync} from 'node:child_process';
 import {X509Certificate} from 'node:crypto';
 import {parseConfig} from '../src/config';
-import {createEndpointServer, EndpointServer} from '../src/server';
+import {createEndpointServer, type EndpointServer} from '../src/server';
 
 const FIXTURES_DIR = fs.existsSync(path.join(__dirname, 'fixtures'))
   ? path.join(__dirname, 'fixtures')
@@ -21,11 +21,23 @@ function runOpenssl(args: string[]): void {
   execFileSync('openssl', args, {stdio: 'pipe'});
 }
 
-// Writes the explicit extension file for client certificates. Plain
-// `req -x509` emits an X.509 v1 CA with no extensions under LibreSSL, and
-// `x509 -req` without -extfile emits an extension-less leaf (no clientAuth
-// EKU) under both LibreSSL and OpenSSL, so the fixtures must not rely on
-// host openssl defaults.
+// Writes explicit extension files for CA and client certificates so fixtures
+// are well-formed across all OpenSSL and LibreSSL versions without relying
+// on openssl.cnf defaults or implementation-specific flags like req -addext.
+function writeCaExtensions(dir: string): string {
+  const extPath = path.join(dir, 'ca.ext');
+  fs.writeFileSync(
+    extPath,
+    [
+      '[v3_ca]',
+      'basicConstraints=critical,CA:TRUE',
+      'keyUsage=critical,keyCertSign,cRLSign',
+      '',
+    ].join('\n'),
+  );
+  return extPath;
+}
+
 function writeLeafExtensions(dir: string): string {
   const extPath = path.join(dir, 'leaf.ext');
   fs.writeFileSync(
@@ -41,40 +53,49 @@ function writeLeafExtensions(dir: string): string {
   return extPath;
 }
 
-// Generates a CA and a client certificate signed by it. Both carry explicit
-// X.509 v3 extensions (CA:TRUE on the CA, clientAuth EKU on the leaf) so the
-// trust chain is well-formed on every openssl implementation.
+// Generates a CA and a client certificate signed by it using portable extfiles.
 function generateClientPair(
   dir: string,
   prefix: string,
   caCn: string,
   leafCn: string,
+  caExtPath: string,
   leafExtPath: string,
 ): {caCertPath: string; certPath: string; keyPath: string} {
   const caCertPath = path.join(dir, `${prefix}-ca.crt`);
   const caKeyPath = path.join(dir, `${prefix}-ca.key`);
+  const caCsrPath = path.join(dir, `${prefix}-ca.csr`);
   const certPath = path.join(dir, `${prefix}.crt`);
   const keyPath = path.join(dir, `${prefix}.key`);
   const csrPath = path.join(dir, `${prefix}.csr`);
 
   runOpenssl([
     'req',
-    '-x509',
     '-nodes',
     '-newkey',
     'rsa:2048',
-    '-days',
-    '1',
     '-keyout',
     caKeyPath,
     '-out',
-    caCertPath,
+    caCsrPath,
     '-subj',
     `/CN=${caCn}`,
-    '-addext',
-    'basicConstraints=critical,CA:TRUE',
-    '-addext',
-    'keyUsage=critical,keyCertSign,cRLSign',
+  ]);
+  runOpenssl([
+    'x509',
+    '-req',
+    '-in',
+    caCsrPath,
+    '-signkey',
+    caKeyPath,
+    '-out',
+    caCertPath,
+    '-days',
+    '1',
+    '-extfile',
+    caExtPath,
+    '-extensions',
+    'v3_ca',
   ]);
   runOpenssl([
     'req',
@@ -113,16 +134,19 @@ function generateClientPair(
 
 // Attempts an HTTP/2 exchange with the given TLS client options. Resolves
 // true when the server accepted the client and answered, false when the
-// connection was rejected. The session is always destroyed in finally, so a
-// rejected attempt cannot leak and settlement never races an explicit close.
+// connection was rejected. A 5-second fallback timeout prevents test hangs.
+// The session is always destroyed in finally.
 async function attemptExchange(
   host: string,
   port: number,
   options: http2.SecureClientSessionOptions,
+  timeoutMs = 5000,
 ): Promise<boolean> {
   const client = http2.connect(`https://${host}:${port}`, options);
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await new Promise<boolean>(resolve => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
       client.on('error', () => resolve(false));
       client.on('close', () => resolve(false));
       client.on('connect', () => {
@@ -134,6 +158,7 @@ async function attemptExchange(
       });
     });
   } finally {
+    if (timer) clearTimeout(timer);
     client.destroy();
   }
 }
@@ -149,6 +174,7 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
 
   beforeAll(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sesame-mtls-test-'));
+    const caExtPath = writeCaExtensions(tmpDir);
     const leafExtPath = writeLeafExtensions(tmpDir);
 
     const client = generateClientPair(
@@ -156,6 +182,7 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       'client',
       'Test Client CA',
       'test-client',
+      caExtPath,
       leafExtPath,
     );
     clientCaCertPath = client.caCertPath;
@@ -167,6 +194,7 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       'untrusted',
       'Untrusted CA',
       'untrusted-client',
+      caExtPath,
       leafExtPath,
     );
     untrustedCaPath = untrusted.caCertPath;
@@ -450,13 +478,102 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       ).toThrow('Invalid PEM content for --tls-cert');
     });
 
-    it('fails closed on multi-line non-PEM input', () => {
-      expect(() =>
+    it('fails closed on multi-line non-PEM input without leaking secret in ENOENT', () => {
+      const sensitiveSecret =
+        'SECRET_KEY_HEADERLESS_LINE_ONE\nSECRET_KEY_HEADERLESS_LINE_TWO';
+      let caughtErr: Error | undefined;
+      try {
         parseConfig([
-          '--tls-cert=line one\nline two',
+          `--tls-cert=${sensitiveSecret}`,
           `--tls-key=${SERVER_KEY}`,
-        ]),
-      ).toThrow('ENOENT');
+        ]);
+      } catch (err) {
+        caughtErr = err as Error;
+      }
+      expect(caughtErr).toBeDefined();
+      expect(caughtErr!.message).toContain(
+        'Invalid PEM content for --tls-cert',
+      );
+      expect(caughtErr!.message).not.toContain('ENOENT');
+      expect(caughtErr!.message).not.toContain(sensitiveSecret);
+    });
+
+    it('honors --help and --version even when preceding TLS flags point to a non-existent file', () => {
+      const helpRes = parseConfig([
+        '--tls-cert=/path/does/not/exist/cert.pem',
+        '--help',
+      ]);
+      expect(helpRes.helpRequested).toBe(true);
+
+      const versionRes = parseConfig([
+        '--tls-cert=/path/does/not/exist/cert.pem',
+        '-v',
+      ]);
+      expect(versionRes.versionRequested).toBe(true);
+    });
+
+    it('supports CLI flag overriding without failing on earlier invalid/missing files', () => {
+      const res = parseConfig([
+        '--tls-cert=/missing/initial.pem',
+        `--tls-cert=${SERVER_CERT}`,
+        `--tls-key=${SERVER_KEY}`,
+      ]);
+      expect(res.config).toBeDefined();
+      expect(res.config!.secrets.tlsCert).toContain('BEGIN CERTIFICATE');
+    });
+
+    it('rejects TLS flags with no value when followed by another flag', () => {
+      expect(() =>
+        parseConfig(['--tls-cert', `--tls-key=${SERVER_KEY}`]),
+      ).toThrow('Missing value for --tls-cert');
+      expect(() =>
+        parseConfig(['--tls-key', `--tls-cert=${SERVER_CERT}`]),
+      ).toThrow('Missing value for --tls-key');
+    });
+
+    it('reads certificate files whose filename contains "-----BEGIN"', () => {
+      const pathWithBegin = path.join(tmpDir, 'custom-----BEGIN-fixture.pem');
+      fs.copyFileSync(SERVER_CERT, pathWithBegin);
+      const res = parseConfig([
+        `--tls-cert=${pathWithBegin}`,
+        `--tls-key=${SERVER_KEY}`,
+      ]);
+      expect(res.config).toBeDefined();
+      expect(res.config!.secrets.tlsCert).toContain('BEGIN CERTIFICATE');
+    });
+
+    it('eagerly resolves upstream secrets and rejects blank values and partial pairs', () => {
+      // Blank values fail closed
+      expect(() => parseConfig([], {SESAME_ENDPOINT_CA_CERT: ''})).toThrow(
+        'Empty value for SESAME_ENDPOINT_CA_CERT',
+      );
+      expect(() =>
+        parseConfig([], {SESAME_ENDPOINT_CLIENT_CERT: '   '}),
+      ).toThrow('Empty value for SESAME_ENDPOINT_CLIENT_CERT');
+      expect(() => parseConfig([], {SESAME_ENDPOINT_CLIENT_KEY: ''})).toThrow(
+        'Empty value for SESAME_ENDPOINT_CLIENT_KEY',
+      );
+
+      // File paths resolved to PEM content
+      const res = parseConfig([], {
+        SESAME_ENDPOINT_CA_CERT: clientCaCertPath,
+        SESAME_ENDPOINT_CLIENT_CERT: clientCertPath,
+        SESAME_ENDPOINT_CLIENT_KEY: clientKeyPath,
+      });
+      expect(res.config).toBeDefined();
+      expect(res.config!.secrets.caCert).toContain('BEGIN CERTIFICATE');
+      expect(res.config!.secrets.clientCert).toContain('BEGIN CERTIFICATE');
+      expect(res.config!.secrets.clientKey).toContain('BEGIN PRIVATE KEY');
+
+      // Pair requirement: clientCert requires clientKey and vice versa
+      const bothClientHalves =
+        'Both client certificate (SESAME_ENDPOINT_CLIENT_CERT) and client key (SESAME_ENDPOINT_CLIENT_KEY) must be provided together';
+      expect(() =>
+        parseConfig([], {SESAME_ENDPOINT_CLIENT_CERT: clientCertPath}),
+      ).toThrow(bothClientHalves);
+      expect(() =>
+        parseConfig([], {SESAME_ENDPOINT_CLIENT_KEY: clientKeyPath}),
+      ).toThrow(bothClientHalves);
     });
   });
 
@@ -503,13 +620,21 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       expect(() =>
         createEndpointServer({
           ...validConfig!,
-          secrets: {...validConfig!.secrets, tlsKey: undefined},
+          secrets: {
+            ...validConfig!.secrets,
+            clientCaCert: undefined,
+            tlsKey: undefined,
+          },
         }),
       ).toThrow('Both tlsCert and tlsKey must be provided');
       expect(() =>
         createEndpointServer({
           ...validConfig!,
-          secrets: {...validConfig!.secrets, tlsCert: undefined},
+          secrets: {
+            ...validConfig!.secrets,
+            clientCaCert: undefined,
+            tlsCert: undefined,
+          },
         }),
       ).toThrow('Both tlsCert and tlsKey must be provided');
       // A defined-but-empty half is not "partial" - it reaches the content
@@ -541,9 +666,41 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       expect(() =>
         createEndpointServer({
           ...validConfig!,
-          secrets: {clientCaCert: '-----BEGIN CERTIFICATE-----'},
+          secrets: {
+            clientCaCert:
+              '-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----',
+          },
         }),
       ).toThrow('clientCaCert requires both tlsCert and tlsKey');
+    });
+
+    it('matches config.ts check order: clientCaCert check precedes partial TLS check', () => {
+      expect(() =>
+        createEndpointServer({
+          ...validConfig!,
+          secrets: {
+            ...validConfig!.secrets,
+            tlsKey: undefined,
+            clientCaCert:
+              '-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----',
+          },
+        }),
+      ).toThrow('clientCaCert requires both tlsCert and tlsKey');
+    });
+
+    it('throws synchronously inside createEndpointServer on malformed PEM under Bun and Node', () => {
+      expect(() =>
+        createEndpointServer({
+          ...validConfig!,
+          secrets: {
+            ...validConfig!.secrets,
+            tlsCert:
+              '-----BEGIN CERTIFICATE-----\nnot-base64\n-----END CERTIFICATE-----\n',
+            tlsKey:
+              '-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----\n',
+          },
+        }),
+      ).toThrow();
     });
 
     it('throws when the client CA file is empty', () => {
@@ -651,11 +808,49 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
     });
   });
 
+  describe('TLS listener without client CA (standard TLS)', () => {
+    let endpointServer: EndpointServer;
+    let serverHost: string;
+    let serverPort: number;
+
+    beforeAll(async () => {
+      const res = parseConfig([
+        '--host=127.0.0.1',
+        `--tls-cert=${SERVER_CERT}`,
+        `--tls-key=${SERVER_KEY}`,
+      ]);
+      endpointServer = createEndpointServer(res.config!);
+      const bound = await endpointServer.listen(0, '127.0.0.1');
+      serverHost = bound.host;
+      serverPort = bound.port;
+    });
+
+    afterAll(async () => {
+      if (endpointServer) {
+        await endpointServer.close();
+      }
+    });
+
+    it('accepts a client connecting without a client certificate', async () => {
+      const accepted = await attemptExchange(serverHost, serverPort, {
+        ca: fs.readFileSync(SERVER_CERT),
+        rejectUnauthorized: false,
+      });
+      expect(accepted).toBe(true);
+    });
+  });
+
   describe('CLI startup error reporting', () => {
+    const cleanEnv = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([k]) => !k.startsWith('SESAME_ENDPOINT_'),
+      ),
+    );
+
     it('reports an unresolvable environment TLS path as a friendly error', () => {
       const res = spawnSync(process.execPath, [CLI_PATH], {
         env: {
-          ...process.env,
+          ...cleanEnv,
           SESAME_ENDPOINT_TLS_CERT: path.join(tmpDir, 'cli-missing-cert.pem'),
           SESAME_ENDPOINT_TLS_KEY: path.join(tmpDir, 'cli-missing-key.pem'),
         },
@@ -666,6 +861,7 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       // Friendly one-liner with the parse error; not a raw stack trace.
       expect(res.stderr.startsWith('sesame-endpoint: ')).toBe(true);
       expect(res.stderr).toContain('ENOENT');
+      expect(res.stderr).not.toContain('\n    at ');
     });
 
     it('reports malformed TLS material as a friendly error, not a raw stack', () => {
@@ -681,7 +877,7 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       );
       const res = spawnSync(process.execPath, [CLI_PATH], {
         env: {
-          ...process.env,
+          ...cleanEnv,
           SESAME_ENDPOINT_TLS_CERT: badCert,
           SESAME_ENDPOINT_TLS_KEY: badKey,
         },
@@ -689,10 +885,11 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
         timeout: 30000,
       });
       expect(res.status).toBe(1);
-      // Depending on the runtime, malformed PEM fails at TLS context
-      // construction or at listen; both must surface as a friendly one-line
-      // error rather than an unhandled stack trace.
-      expect(res.stderr.startsWith('sesame-endpoint')).toBe(true);
+      // Both Node and Bun fail synchronously inside createEndpointServer
+      // and surface the friendly one-line error without a raw stack trace.
+      expect(res.stderr.startsWith('sesame-endpoint: ')).toBe(true);
+      expect(res.stderr).not.toContain('sesame-endpoint failed to start:');
+      expect(res.stderr).not.toContain('\n    at ');
     });
   });
 });

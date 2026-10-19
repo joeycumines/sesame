@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import {parseConfig, formatHelp} from './config';
-import {createEndpointServer, EndpointServer} from './server';
+import {createEndpointServer, type EndpointServer} from './server';
 
 const VERSION = '0.1.0';
 
