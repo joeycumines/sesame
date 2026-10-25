@@ -39,6 +39,7 @@
     "lint": "gts lint",
     "clean": "gts clean",
     "compile": "tsc && chmod +x build/src/cli.js",
+    "build": "bun run compile",
     "fix": "gts fix",
     "prepare": "bun run compile",
     "pretest": "bun run compile",
