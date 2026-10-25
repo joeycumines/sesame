@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 import {parseConfig, formatHelp} from './config';
 import {createEndpointServer, type EndpointServer} from './server';
+import {getVersion} from './version';
 
-const VERSION = '0.1.0';
-
-async function main() {
+export async function main() {
   let result: ReturnType<typeof parseConfig>;
   try {
     result = parseConfig(process.argv.slice(2), process.env);
@@ -21,7 +20,15 @@ async function main() {
   }
 
   if (result.versionRequested) {
-    process.stdout.write(`sesame-endpoint v${VERSION}\n`);
+    let version: string;
+    try {
+      version = getVersion();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`sesame-endpoint: ${msg}\n`);
+      process.exit(1);
+    }
+    process.stdout.write(`sesame-endpoint v${version}\n`);
     process.exit(0);
   }
 
@@ -68,4 +75,6 @@ async function main() {
   }
 }
 
-void main();
+if (require.main === module) {
+  void main();
+}

@@ -13,6 +13,7 @@
         "@bufbuild/protoc-gen-es": "2.15.0",
         "@types/bun": "1.4.2",
         "@types/node": "^22.20.5",
+        "globals": "15.15.0",
         "gts": "^7.0.0",
         "typescript": "^5.9.3",
       },

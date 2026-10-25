@@ -5,6 +5,9 @@
 exclusively through CLI arguments and `SESAME_ENDPOINT_*` environment variables.
 
 ```bash
+# From a checkout
+bun install
+bun run compile
 bun run start --help
 ```
 
@@ -48,16 +51,74 @@ surprising:
   per-message receive limit (grpc-go default: 4MiB); this endpoint
   enforces that ceiling at configuration parse time.
 
-To install dependencies:
+## Development
+
+Development and package management use [Bun](https://bun.com). The compiled
+CLI is also exercised under Node.js by `test:node` so the published package
+stays runtime-compatible with both runtimes.
 
 ```bash
+# Install dependencies
 bun install
+
+# Run full checks (clean, compile, Bun tests, Node runner, linter, and
+# packed-artifact verification)
+bun run check
+
+# Run tests under Bun
+bun test
+
+# Run the compiled output under Node.js (requires `bun run compile` first)
+bun run test:node
+
+# Run linter
+bun run lint
 ```
 
-To run:
+## Release
+
+Releases are published to NPM using `bun publish`. The `package.json` `files`
+allowlist is `["build/src"]`: it ships the compiled library and CLI. NPM
+always adds the root `package.json`, `README.md`, and `LICENSE`, so those are
+present in the tarball as well; no other repository content is packed.
+
+`pack:verify` packs a real tarball in a temporary directory, checks its
+contents, extracts it, and runs the extracted CLI under both Node.js and Bun.
+`check`, `pack`, and the publish scripts run this verification, so a
+checkout-only test cannot mask a broken artifact.
+
+Release tooling requires Bun 1.2.18 or newer (`engines.bun`): the
+`version:*` scripts shell out to `bun pm version`, which Bun gained in
+1.2.18. Older Bun versions fail the engines check instead of crashing
+mid-release.
 
 ```bash
-bun run start
+# 1. Verify the tarball, then preview packaged contents
+bun run pack:dry
+
+# 2. Bump version (patch / minor / major / prerelease)
+bun run version:patch
+
+# 3. Simulate NPM publish (dry-run)
+bun run publish:dry
+
+# 4. Publish to NPM
+bun run publish:latest   # or publish:next
 ```
 
-This project was created using `bun init` in bun v1.4.2. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+`bun run pack` runs the same verification and leaves the verified tarball in
+the package directory.
+
+From the repository root, equivalent GNU Make targets are available. Use
+`make` on Linux and `gmake` on macOS:
+```bash
+make sesame-endpoint.check
+make sesame-endpoint.pack-dry
+make sesame-endpoint.pack
+make sesame-endpoint.publish-dry
+make sesame-endpoint.publish
+```
+
+## License
+
+This package is licensed under the [MIT License](./LICENSE).

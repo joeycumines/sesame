@@ -1,3 +1,5 @@
+const globals = require('globals');
+
 let customConfig = [];
 let hasIgnoresFile = false;
 try {
@@ -12,4 +14,15 @@ if (hasIgnoresFile) {
   customConfig = [{ignores}];
 }
 
-module.exports = [...customConfig, ...require('gts')];
+module.exports = [
+  ...customConfig,
+  ...require('gts'),
+  {
+    files: ['test/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+];

@@ -29,13 +29,13 @@
 //	-html PATH     render the self-contained HTML report to PATH
 //	-endpoint      run the endpoint-bun scenarios (skipped by default)
 //	-cli PATH      sesame-endpoint CLI entry point
-//	               (default sesame-endpoint/build/src/cli.js)
+//	               (default js/sesame-endpoint/build/src/cli.js)
 //	-runtime NAME  endpoint runtime: bun, node, or auto
 //	               (default auto: bun when on PATH, else node)
 //	-fixture PATH  override the embedded Bun-fetch reference fixture
 //
 // The endpoint-bun scenarios additionally require -cli to point at a built
-// endpoint (run `bun run compile` in sesame-endpoint first).
+// endpoint (run `bun run compile` in js/sesame-endpoint first).
 //
 // Exit status is 0 iff no non-skipped scenario failed.
 package main

@@ -47,8 +47,11 @@ SESAME_ENDPOINT_DIR ?= js/sesame-endpoint
 BUN ?= bun
 BUF ?= buf
 
+export BUN
+
 .PHONY: check
 check: all test-ts test-integration
+	$(MAKE) sesame-endpoint.pack-verify
 
 .PHONY: all
 all: lint build test
@@ -77,7 +80,7 @@ test-race: build
 .PHONY: test-integration
 test-integration: test-integration-cover test-integration-race
 
-# sesame-endpoint (TypeScript) targets, aligned with sesame-endpoint/package.json scripts.
+# sesame-endpoint (TypeScript) targets, aligned with js/sesame-endpoint/package.json scripts.
 # Canonical targets use the `sesame-endpoint.` prefix; the legacy `*-ts`
 # names below are thin backwards-compat aliases.
 .PHONY: sesame-endpoint.build
@@ -120,6 +123,30 @@ sesame-endpoint.install:
 .PHONY: sesame-endpoint.update
 sesame-endpoint.update:
 	cd $(SESAME_ENDPOINT_DIR) && $(BUN) update
+
+.PHONY: sesame-endpoint.check
+sesame-endpoint.check:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run check
+
+.PHONY: sesame-endpoint.pack-verify
+sesame-endpoint.pack-verify: sesame-endpoint.build
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run pack:verify
+
+.PHONY: sesame-endpoint.pack-dry
+sesame-endpoint.pack-dry:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run pack:dry
+
+.PHONY: sesame-endpoint.pack
+sesame-endpoint.pack:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run pack
+
+.PHONY: sesame-endpoint.publish-dry
+sesame-endpoint.publish-dry:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run publish:dry
+
+.PHONY: sesame-endpoint.publish
+sesame-endpoint.publish:
+	cd $(SESAME_ENDPOINT_DIR) && $(BUN) run publish:latest
 
 .PHONY: test-ts
 test-ts: sesame-endpoint.test
@@ -217,8 +244,13 @@ quick-test-tls: sesame-endpoint.build
 		-json scratch/testdata/quick-test-tls/results.json \
 		-html scratch/tls-report.html
 
+# CI runs the default gate: Go lint+build+test, both TS test runners, the Go
+# integration tests, and a fresh-build pack verification. test-integration is
+# only reachable through `check`, which is why ci must delegate to it rather
+# than re-listing targets (the old form never ran integration tests and
+# duplicated the TS checks sesame-endpoint.check re-ran internally).
 .PHONY: ci
 ci:
 	$(GO) env
 	$(MAKE) tools
-	$(MAKE) all
+	$(MAKE) check

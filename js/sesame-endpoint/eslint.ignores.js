@@ -1,1 +1,1 @@
-module.exports = ['build/', 'src/gen/**', 'test/node-runner.js'];
+module.exports = ['build/', 'src/gen/**'];

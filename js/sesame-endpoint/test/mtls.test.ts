@@ -3,6 +3,7 @@ import * as http2 from 'node:http2';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import * as net from 'node:net';
 import {execFileSync, spawnSync} from 'node:child_process';
 import {X509Certificate} from 'node:crypto';
 import {parseConfig} from '../src/config';
@@ -890,6 +891,69 @@ describe('sesame-endpoint mTLS configuration and server verification', () => {
       expect(res.stderr.startsWith('sesame-endpoint: ')).toBe(true);
       expect(res.stderr).not.toContain('sesame-endpoint failed to start:');
       expect(res.stderr).not.toContain('\n    at ');
+    });
+
+    it('reports socket listen failure with sesame-endpoint failed to start prefix', async () => {
+      const blocker = net.createServer();
+      await new Promise<void>(resolve => {
+        blocker.listen(0, '127.0.0.1', () => resolve());
+      });
+      const port = (blocker.address() as net.AddressInfo).port;
+      try {
+        const res = spawnSync(
+          process.execPath,
+          [CLI_PATH, '--port', String(port), '--host', '127.0.0.1'],
+          {
+            env: cleanEnv,
+            encoding: 'utf8',
+            timeout: 30000,
+          },
+        );
+        expect(res.status).toBe(1);
+        expect(res.stderr.startsWith('sesame-endpoint failed to start: ')).toBe(
+          true,
+        );
+        expect(res.stderr).not.toContain('\n    at ');
+      } finally {
+        await new Promise<void>(resolve => blocker.close(() => resolve()));
+      }
+    });
+
+    it('reports version resolution failure as a friendly error outside a package', () => {
+      // A broken install whose tree has no sesame-endpoint manifest above
+      // src/: copy src/ to an orphan directory and link node_modules so
+      // imports resolve but version resolution cannot. --version must
+      // print the same friendly one-liner as every other startup failure
+      // instead of an unhandled rejection with a raw stack trace.
+      const orphanDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'sesame-cli-orphan-'),
+      );
+      try {
+        fs.cpSync(
+          path.join(__dirname, '..', 'src'),
+          path.join(orphanDir, 'src'),
+          {recursive: true},
+        );
+        fs.symlinkSync(
+          path.join(__dirname, '..', 'node_modules'),
+          path.join(orphanDir, 'node_modules'),
+          process.platform === 'win32' ? 'junction' : 'dir',
+        );
+        const res = spawnSync(
+          process.execPath,
+          [path.join(orphanDir, 'src', 'cli.ts'), '--version'],
+          {env: cleanEnv, encoding: 'utf8', timeout: 30000},
+        );
+        expect(res.status).toBe(1);
+        expect(res.stderr.startsWith('sesame-endpoint: ')).toBe(true);
+        expect(res.stderr).toContain(
+          'unable to resolve sesame-endpoint version',
+        );
+        expect(res.stderr).not.toContain('\n    at ');
+        expect(res.stdout).toBe('');
+      } finally {
+        fs.rmSync(orphanDir, {recursive: true, force: true});
+      }
     });
   });
 });

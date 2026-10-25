@@ -7,33 +7,33 @@ const http2 = require('node:http2');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { execFileSync } = require('node:child_process');
-const { create } = require('@bufbuild/protobuf');
-const { createGrpcTransport } = require('@connectrpc/connect-node');
-const { createClient, Code, ConnectError } = require('@connectrpc/connect');
+const {execFileSync} = require('node:child_process');
+const {create} = require('@bufbuild/protobuf');
+const {createGrpcTransport} = require('@connectrpc/connect-node');
+const {createClient, Code, ConnectError} = require('@connectrpc/connect');
 
-  const {
-    parseConfig,
-    formatHelp,
-    createEndpointServer,
-    FlowController,
-    RemoteControl,
-    NetConnRequestSchema,
-    NetConnRequest_DialSchema,
-    NetConnRequest_ControlSchema,
-    NetConnRequest_Control_UpgradeTlsSchema,
-    NetConnRequest_Control_ResetSchema,
-    NetConnRequest_Control_HalfCloseSchema,
-    NetConnRequest_Control_PingSchema,
-    NetConnRequest_CapabilitiesSchema,
-    TlsOptionsSchema,
-    NetAddrSchema,
-    ClientHelloSpecSchema,
-    ProxyOptionsSchema,
-    ProxyHopSchema,
-    ProxyHop_Type,
-  } = require('../build/src/index.js');
-const { StatusSchema } = require('../build/src/gen/google/rpc/status_pb.js');
+const {
+  parseConfig,
+  formatHelp,
+  createEndpointServer,
+  FlowController,
+  RemoteControl,
+  NetConnRequestSchema,
+  NetConnRequest_DialSchema,
+  NetConnRequest_ControlSchema,
+  NetConnRequest_Control_UpgradeTlsSchema,
+  NetConnRequest_Control_ResetSchema,
+  NetConnRequest_Control_HalfCloseSchema,
+  NetConnRequest_Control_PingSchema,
+  NetConnRequest_CapabilitiesSchema,
+  TlsOptionsSchema,
+  NetAddrSchema,
+  ClientHelloSpecSchema,
+  ProxyOptionsSchema,
+  ProxyHopSchema,
+  ProxyHop_Type,
+} = require('../build/src/index.js');
+const {StatusSchema} = require('../build/src/gen/google/rpc/status_pb.js');
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures');
 const CERT_PEM = fs.readFileSync(path.join(FIXTURES_DIR, 'cert.pem'));
@@ -49,7 +49,7 @@ class RequestStream {
   push(item) {
     if (this.closed) return;
     if (this.waiters.length > 0) {
-      this.waiters.shift().resolve({ value: item, done: false });
+      this.waiters.shift().resolve({value: item, done: false});
     } else {
       this.queue.push(item);
     }
@@ -59,7 +59,7 @@ class RequestStream {
     if (this.closed) return;
     this.closed = true;
     while (this.waiters.length > 0) {
-      this.waiters.shift().resolve({ value: undefined, done: true });
+      this.waiters.shift().resolve({value: undefined, done: true});
     }
   }
 
@@ -71,7 +71,7 @@ class RequestStream {
         return;
       } else {
         const item = await new Promise((resolve, reject) => {
-          this.waiters.push({ resolve, reject });
+          this.waiters.push({resolve, reject});
         });
         if (item.done) return;
         yield item.value;
@@ -93,7 +93,10 @@ async function run() {
   assert.strictEqual(cliCfg.config.host, '0.0.0.0');
   assert.strictEqual(cliCfg.config.port, 8080);
 
-  const envCfg = parseConfig([], { SESAME_ENDPOINT_HOST: '10.0.0.1', SESAME_ENDPOINT_PORT: '9090' });
+  const envCfg = parseConfig([], {
+    SESAME_ENDPOINT_HOST: '10.0.0.1',
+    SESAME_ENDPOINT_PORT: '9090',
+  });
   assert.strictEqual(envCfg.config.host, '10.0.0.1');
   assert.strictEqual(envCfg.config.port, 9090);
   assert.ok(formatHelp().includes('SESAME_ENDPOINT_'));
@@ -113,28 +116,37 @@ async function run() {
   await new Promise(r => tcpEcho.listen(0, '127.0.0.1', r));
   const tcpPort = tcpEcho.address().port;
 
-  const { config } = parseConfig([]);
+  const {config} = parseConfig([]);
   const epServer = createEndpointServer(config);
   const bound = await epServer.listen(0, '127.0.0.1');
 
-  const transport = createGrpcTransport({ baseUrl: `http://127.0.0.1:${bound.port}` });
+  const transport = createGrpcTransport({
+    baseUrl: `http://127.0.0.1:${bound.port}`,
+  });
   const client = createClient(RemoteControl, transport);
 
   const reqStream1 = new RequestStream();
-  reqStream1.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'dial',
-      value: create(NetConnRequest_DialSchema, {
-        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tcpPort}` }),
-      }),
-    },
-  }));
-  reqStream1.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'bytes',
-      value: Buffer.from('Node Plaintext Message'),
-    },
-  }));
+  reqStream1.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'dial',
+        value: create(NetConnRequest_DialSchema, {
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: `127.0.0.1:${tcpPort}`,
+          }),
+        }),
+      },
+    }),
+  );
+  reqStream1.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'bytes',
+        value: Buffer.from('Node Plaintext Message'),
+      },
+    }),
+  );
 
   const respStream1 = client.netConn(reqStream1);
   const it1 = respStream1[Symbol.asyncIterator]();
@@ -142,84 +154,110 @@ async function run() {
   assert.strictEqual(conn1.value.data.case, 'conn');
   const echo1 = await it1.next();
   assert.strictEqual(echo1.value.data.case, 'bytes');
-  assert.strictEqual(Buffer.from(echo1.value.data.value).toString('utf-8'), 'Node Plaintext Message');
+  assert.strictEqual(
+    Buffer.from(echo1.value.data.value).toString('utf-8'),
+    'Node Plaintext Message',
+  );
   reqStream1.close();
 
   // Test 4: Endpoint TLS Termination & ALPN under Node.js
   console.log('4. Testing Endpoint TLS Termination with ALPN under Node.js...');
-  const tlsEcho = tls.createServer({ cert: CERT_PEM, key: KEY_PEM, ALPNProtocols: ['test-node', 'h2'] }, s => s.pipe(s));
+  const tlsEcho = tls.createServer(
+    {cert: CERT_PEM, key: KEY_PEM, ALPNProtocols: ['test-node', 'h2']},
+    s => s.pipe(s),
+  );
   await new Promise(r => tlsEcho.listen(0, '127.0.0.1', r));
   const tlsPort = tlsEcho.address().port;
 
   const reqStream2 = new RequestStream();
-  reqStream2.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'dial',
-      value: create(NetConnRequest_DialSchema, {
-        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tlsPort}` }),
-        tls: create(TlsOptionsSchema, {
-          sni: 'localhost',
-          alpnProtocols: ['test-node'],
-          insecureSkipVerify: true,
+  reqStream2.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'dial',
+        value: create(NetConnRequest_DialSchema, {
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: `127.0.0.1:${tlsPort}`,
+          }),
+          tls: create(TlsOptionsSchema, {
+            sni: 'localhost',
+            alpnProtocols: ['test-node'],
+            insecureSkipVerify: true,
+          }),
         }),
-      }),
-    },
-  }));
-  reqStream2.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'bytes',
-      value: Buffer.from('Node TLS Message'),
-    },
-  }));
+      },
+    }),
+  );
+  reqStream2.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'bytes',
+        value: Buffer.from('Node TLS Message'),
+      },
+    }),
+  );
 
   const respStream2 = client.netConn(reqStream2);
   const it2 = respStream2[Symbol.asyncIterator]();
   const conn2 = await it2.next();
   assert.strictEqual(conn2.value.data.case, 'conn');
-  assert.strictEqual(conn2.value.data.value.tls.negotiatedProtocol, 'test-node');
+  assert.strictEqual(
+    conn2.value.data.value.tls.negotiatedProtocol,
+    'test-node',
+  );
   // Wire-contract parity: negotiated cipher suite is reported (non-zero)
   // and the peer chain is present under Node too.
   assert.notStrictEqual(conn2.value.data.value.tls.cipherSuite, 0);
   assert.ok(conn2.value.data.value.tls.peerCertificates.length > 0);
   const echo2 = await it2.next();
   assert.strictEqual(echo2.value.data.case, 'bytes');
-  assert.strictEqual(Buffer.from(echo2.value.data.value).toString('utf-8'), 'Node TLS Message');
+  assert.strictEqual(
+    Buffer.from(echo2.value.data.value).toString('utf-8'),
+    'Node TLS Message',
+  );
   reqStream2.close();
 
   // Test 5: In-Stream Ping/Pong under Node.js
   console.log('5. Testing In-Stream Ping/Pong under Node.js...');
   const reqStream3 = new RequestStream();
-  reqStream3.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'dial',
-      value: create(NetConnRequest_DialSchema, {
-        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tcpPort}` }),
-        capabilities: create(NetConnRequest_CapabilitiesSchema, {
-          supportsOpportunisticTls: true,
-          supportsFlowControl: true,
+  reqStream3.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'dial',
+        value: create(NetConnRequest_DialSchema, {
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: `127.0.0.1:${tcpPort}`,
+          }),
+          capabilities: create(NetConnRequest_CapabilitiesSchema, {
+            supportsOpportunisticTls: true,
+            supportsFlowControl: true,
+          }),
         }),
-      }),
-    },
-  }));
+      },
+    }),
+  );
   const respStream3 = client.netConn(reqStream3);
   const it3 = respStream3[Symbol.asyncIterator]();
   const conn3 = await it3.next();
   assert.strictEqual(conn3.value.data.case, 'conn');
 
-  reqStream3.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'control',
-      value: create(NetConnRequest_ControlSchema, {
-        action: {
-          case: 'ping',
-          value: create(NetConnRequest_Control_PingSchema, {
-            id: 777n,
-            timestampNanos: 999999n,
-          }),
-        },
-      }),
-    },
-  }));
+  reqStream3.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'control',
+        value: create(NetConnRequest_ControlSchema, {
+          action: {
+            case: 'ping',
+            value: create(NetConnRequest_Control_PingSchema, {
+              id: 777n,
+              timestampNanos: 999999n,
+            }),
+          },
+        }),
+      },
+    }),
+  );
   const pong3 = await it3.next();
   assert.strictEqual(pong3.value.data.case, 'control');
   assert.strictEqual(pong3.value.data.value.event.case, 'pong');
@@ -229,21 +267,26 @@ async function run() {
   // Test 6: Fail-Closed non-default ClientHello dimension under Node.js
   console.log('6. Testing Fail-Closed ClientHello rejection under Node.js...');
   const reqStream4 = new RequestStream();
-  reqStream4.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'dial',
-      value: create(NetConnRequest_DialSchema, {
-        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tlsPort}` }),
-        tls: create(TlsOptionsSchema, {
-          sni: 'localhost',
-          insecureSkipVerify: true,
-          clientHello: create(ClientHelloSpecSchema, {
-            signatureAlgorithms: [0x0403],
+  reqStream4.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'dial',
+        value: create(NetConnRequest_DialSchema, {
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: `127.0.0.1:${tlsPort}`,
+          }),
+          tls: create(TlsOptionsSchema, {
+            sni: 'localhost',
+            insecureSkipVerify: true,
+            clientHello: create(ClientHelloSpecSchema, {
+              signatureAlgorithms: [0x0403],
+            }),
           }),
         }),
-      }),
-    },
-  }));
+      },
+    }),
+  );
   const respStream4 = client.netConn(reqStream4);
   const it4 = respStream4[Symbol.asyncIterator]();
   try {
@@ -259,38 +302,44 @@ async function run() {
   // Test 7: Reject upgrade_tls without options under Node.js
   console.log('7. Testing options-less upgradeTls rejection under Node.js...');
   const reqStream5 = new RequestStream();
-  reqStream5.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'dial',
-      value: create(NetConnRequest_DialSchema, {
-        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tcpPort}` }),
-        capabilities: create(NetConnRequest_CapabilitiesSchema, {
-          supportsOpportunisticTls: true,
-          supportsFlowControl: true,
+  reqStream5.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'dial',
+        value: create(NetConnRequest_DialSchema, {
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: `127.0.0.1:${tcpPort}`,
+          }),
+          capabilities: create(NetConnRequest_CapabilitiesSchema, {
+            supportsOpportunisticTls: true,
+            supportsFlowControl: true,
+          }),
         }),
-      }),
-    },
-  }));
+      },
+    }),
+  );
   const respStream5 = client.netConn(reqStream5);
   const it5 = respStream5[Symbol.asyncIterator]();
   const conn5 = await it5.next();
   assert.strictEqual(conn5.value.data.case, 'conn');
 
-  reqStream5.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'control',
-      value: create(NetConnRequest_ControlSchema, {
-        action: {
-          case: 'upgradeTls',
-          value: create(NetConnRequest_Control_UpgradeTlsSchema, {}),
-        },
-      }),
-    },
-  }));
+  reqStream5.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'control',
+        value: create(NetConnRequest_ControlSchema, {
+          action: {
+            case: 'upgradeTls',
+            value: create(NetConnRequest_Control_UpgradeTlsSchema, {}),
+          },
+        }),
+      },
+    }),
+  );
 
   let sawInvalidArgument = false;
   try {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const resp = await it5.next();
       if (resp.done) break;
@@ -302,7 +351,10 @@ async function run() {
       }
     }
   } catch (err) {
-    assert.ok(err instanceof ConnectError, `expected ConnectError, got: ${err}`);
+    assert.ok(
+      err instanceof ConnectError,
+      `expected ConnectError, got: ${err}`,
+    );
     assert.strictEqual(err.code, Code.InvalidArgument);
     sawInvalidArgument = true;
   }
@@ -312,43 +364,49 @@ async function run() {
   // Test 8: Reset surfaces as an error carrying the reason under Node.js
   console.log('8. Testing reset-reason surfacing under Node.js...');
   const resetStream = new RequestStream();
-  resetStream.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'dial',
-      value: create(NetConnRequest_DialSchema, {
-        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${tcpPort}` }),
-        capabilities: create(NetConnRequest_CapabilitiesSchema, {
-          supportsOpportunisticTls: true,
-          supportsFlowControl: true,
+  resetStream.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'dial',
+        value: create(NetConnRequest_DialSchema, {
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: `127.0.0.1:${tcpPort}`,
+          }),
+          capabilities: create(NetConnRequest_CapabilitiesSchema, {
+            supportsOpportunisticTls: true,
+            supportsFlowControl: true,
+          }),
         }),
-      }),
-    },
-  }));
+      },
+    }),
+  );
   const resetResp = client.netConn(resetStream);
   const resetIt = resetResp[Symbol.asyncIterator]();
   const resetConn = await resetIt.next();
   assert.strictEqual(resetConn.value.data.case, 'conn');
 
-  resetStream.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'control',
-      value: create(NetConnRequest_ControlSchema, {
-        action: {
-          case: 'reset',
-          value: create(NetConnRequest_Control_ResetSchema, {
-            reason: create(StatusSchema, {
-              code: Code.Canceled,
-              message: 'node-runner reset probe',
+  resetStream.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'control',
+        value: create(NetConnRequest_ControlSchema, {
+          action: {
+            case: 'reset',
+            value: create(NetConnRequest_Control_ResetSchema, {
+              reason: create(StatusSchema, {
+                code: Code.Canceled,
+                message: 'node-runner reset probe',
+              }),
             }),
-          }),
-        },
-      }),
-    },
-  }));
+          },
+        }),
+      },
+    }),
+  );
 
   let resetErr;
   try {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const resp = await resetIt.next();
       if (resp.done) break;
@@ -357,9 +415,18 @@ async function run() {
   } catch (err) {
     resetErr = err;
   }
-  assert.ok(resetErr instanceof ConnectError, `expected ConnectError, got: ${resetErr}`);
-  assert.ok(resetErr.message.includes('connection reset by client'), resetErr.message);
-  assert.ok(resetErr.message.includes('node-runner reset probe'), resetErr.message);
+  assert.ok(
+    resetErr instanceof ConnectError,
+    `expected ConnectError, got: ${resetErr}`,
+  );
+  assert.ok(
+    resetErr.message.includes('connection reset by client'),
+    resetErr.message,
+  );
+  assert.ok(
+    resetErr.message.includes('node-runner reset probe'),
+    resetErr.message,
+  );
   assert.strictEqual(resetErr.code, Code.Canceled);
   resetStream.close();
 
@@ -367,25 +434,32 @@ async function run() {
   console.log('9. Testing request-EOF full-close semantics under Node.js...');
   let upstreamFullyClosed = false;
   const silentUpstream = net.createServer(sock => {
-    sock.on('close', () => { upstreamFullyClosed = true; });
+    sock.on('close', () => {
+      upstreamFullyClosed = true;
+    });
     sock.on('data', () => {});
   });
   await new Promise(r => silentUpstream.listen(0, '127.0.0.1', () => r()));
   const silentPort = silentUpstream.address().port;
 
   const eofStream = new RequestStream();
-  eofStream.push(create(NetConnRequestSchema, {
-    data: {
-      case: 'dial',
-      value: create(NetConnRequest_DialSchema, {
-        address: create(NetAddrSchema, { network: 'tcp', address: `127.0.0.1:${silentPort}` }),
-        capabilities: create(NetConnRequest_CapabilitiesSchema, {
-          supportsOpportunisticTls: true,
-          supportsFlowControl: true,
+  eofStream.push(
+    create(NetConnRequestSchema, {
+      data: {
+        case: 'dial',
+        value: create(NetConnRequest_DialSchema, {
+          address: create(NetAddrSchema, {
+            network: 'tcp',
+            address: `127.0.0.1:${silentPort}`,
+          }),
+          capabilities: create(NetConnRequest_CapabilitiesSchema, {
+            supportsOpportunisticTls: true,
+            supportsFlowControl: true,
+          }),
         }),
-      }),
-    },
-  }));
+      },
+    }),
+  );
   const eofResp = client.netConn(eofStream);
   const eofIt = eofResp[Symbol.asyncIterator]();
   const eofConn = await eofIt.next();
@@ -399,7 +473,10 @@ async function run() {
   while (!upstreamFullyClosed && Date.now() < eofDeadline) {
     await new Promise(r => setTimeout(r, 20));
   }
-  assert.ok(upstreamFullyClosed, 'upstream socket must be fully closed on request EOF');
+  assert.ok(
+    upstreamFullyClosed,
+    'upstream socket must be fully closed on request EOF',
+  );
   await new Promise(r => silentUpstream.close(() => r()));
 
   // Byte-level SOCKS5 mock (RFC 1928): a greeting -> (auth) -> connect
@@ -493,21 +570,23 @@ async function run() {
           buf = buf.subarray(total);
 
           stage = 'tunnel';
-          raw.write(Buffer.concat([
-            Buffer.from([
-              0x05,
-              opts.connectRep ?? 0x00,
-              0x00,
-              0x01,
-              0,
-              0,
-              0,
-              0,
-              0,
-              0,
+          raw.write(
+            Buffer.concat([
+              Buffer.from([
+                0x05,
+                opts.connectRep ?? 0x00,
+                0x00,
+                0x01,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+              ]),
+              opts.coalesceWithReply ?? Buffer.alloc(0),
             ]),
-            opts.coalesceWithReply ?? Buffer.alloc(0),
-          ]));
+          );
           if ((opts.connectRep ?? 0x00) !== 0x00) {
             raw.destroy();
             return;
@@ -539,15 +618,17 @@ async function run() {
   }
 
   const proxyDial = (reqStream, target, hop) => {
-    reqStream.push(create(NetConnRequestSchema, {
-      data: {
-        case: 'dial',
-        value: create(NetConnRequest_DialSchema, {
-          address: create(NetAddrSchema, {network: 'tcp', address: target}),
-          proxy: create(ProxyOptionsSchema, {hops: [hop]}),
-        }),
-      },
-    }));
+    reqStream.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {network: 'tcp', address: target}),
+            proxy: create(ProxyOptionsSchema, {hops: [hop]}),
+          }),
+        },
+      }),
+    );
   };
 
   // Test 10: SOCKS5 traversal with the framing bytes verified
@@ -557,13 +638,22 @@ async function run() {
   const socksPort = socksMock.server.address().port;
   try {
     const reqStream10 = new RequestStream();
-    proxyDial(reqStream10, `localhost:${tcpPort}`, create(ProxyHopSchema, {
-      type: ProxyHop_Type.SOCKS5,
-      address: create(NetAddrSchema, {network: 'tcp', address: `127.0.0.1:${socksPort}`}),
-    }));
-    reqStream10.push(create(NetConnRequestSchema, {
-      data: {case: 'bytes', value: Buffer.from('NODE SOCKS5 TRAVERSAL')},
-    }));
+    proxyDial(
+      reqStream10,
+      `localhost:${tcpPort}`,
+      create(ProxyHopSchema, {
+        type: ProxyHop_Type.SOCKS5,
+        address: create(NetAddrSchema, {
+          network: 'tcp',
+          address: `127.0.0.1:${socksPort}`,
+        }),
+      }),
+    );
+    reqStream10.push(
+      create(NetConnRequestSchema, {
+        data: {case: 'bytes', value: Buffer.from('NODE SOCKS5 TRAVERSAL')},
+      }),
+    );
 
     const resp10 = client.netConn(reqStream10);
     const it10 = resp10[Symbol.asyncIterator]();
@@ -572,38 +662,57 @@ async function run() {
     assert.strictEqual(conn10.value.data.value.proxy.traversedHops.length, 1);
     const echo10 = await it10.next();
     assert.strictEqual(echo10.value.data.case, 'bytes');
-    assert.strictEqual(Buffer.from(echo10.value.data.value).toString('utf-8'), 'NODE SOCKS5 TRAVERSAL');
+    assert.strictEqual(
+      Buffer.from(echo10.value.data.value).toString('utf-8'),
+      'NODE SOCKS5 TRAVERSAL',
+    );
 
     // The framing is the thing under test: exact greeting and
     // domain-typed CONNECT bytes.
     const frame = socksMock.frames().at(-1);
-    assert.ok(Buffer.compare(frame.greeting, Buffer.from([0x05, 0x01, 0x00])) === 0,
-      `greeting = ${frame.greeting.toString('hex')}`);
+    assert.ok(
+      Buffer.compare(frame.greeting, Buffer.from([0x05, 0x01, 0x00])) === 0,
+      `greeting = ${frame.greeting.toString('hex')}`,
+    );
     assert.strictEqual(frame.auth, null);
     const wantConnect = Buffer.concat([
       Buffer.from([0x05, 0x01, 0x00, 0x03, 'localhost'.length]),
       Buffer.from('localhost', 'utf-8'),
       Buffer.from([tcpPort >> 8, tcpPort & 0xff]),
     ]);
-    assert.ok(Buffer.compare(frame.connect, wantConnect) === 0,
-      `connect = ${frame.connect.toString('hex')}`);
+    assert.ok(
+      Buffer.compare(frame.connect, wantConnect) === 0,
+      `connect = ${frame.connect.toString('hex')}`,
+    );
     reqStream10.close();
   } finally {
     await new Promise(r => socksMock.server.close(() => r()));
   }
 
   // Test 11: early tunnel bytes coalesced with the SOCKS5 connect reply
-  console.log('11. Testing SOCKS5 coalesced connect-reply bytes under Node.js...');
+  console.log(
+    '11. Testing SOCKS5 coalesced connect-reply bytes under Node.js...',
+  );
   const earlyPayload = Buffer.from('SOCKS-EARLY');
-  const coalesceMock = makeSocks5Mock({coalesceWithReply: earlyPayload, noUpstream: true});
+  const coalesceMock = makeSocks5Mock({
+    coalesceWithReply: earlyPayload,
+    noUpstream: true,
+  });
   await new Promise(r => coalesceMock.server.listen(0, '127.0.0.1', r));
   const coalescePort = coalesceMock.server.address().port;
   try {
     const reqStream11 = new RequestStream();
-    proxyDial(reqStream11, `localhost:${tcpPort}`, create(ProxyHopSchema, {
-      type: ProxyHop_Type.SOCKS5,
-      address: create(NetAddrSchema, {network: 'tcp', address: `127.0.0.1:${coalescePort}`}),
-    }));
+    proxyDial(
+      reqStream11,
+      `localhost:${tcpPort}`,
+      create(ProxyHopSchema, {
+        type: ProxyHop_Type.SOCKS5,
+        address: create(NetAddrSchema, {
+          network: 'tcp',
+          address: `127.0.0.1:${coalescePort}`,
+        }),
+      }),
+    );
 
     const resp11 = client.netConn(reqStream11);
     const it11 = resp11[Symbol.asyncIterator]();
@@ -611,8 +720,10 @@ async function run() {
     assert.strictEqual(conn11.value.data.case, 'conn');
     const early11 = await it11.next();
     assert.strictEqual(early11.value.data.case, 'bytes');
-    assert.ok(Buffer.compare(Buffer.from(early11.value.data.value), earlyPayload) === 0,
-      'coalesced early tunnel bytes must arrive in order');
+    assert.ok(
+      Buffer.compare(Buffer.from(early11.value.data.value), earlyPayload) === 0,
+      'coalesced early tunnel bytes must arrive in order',
+    );
     reqStream11.close();
   } finally {
     await new Promise(r => coalesceMock.server.close(() => r()));
@@ -640,13 +751,25 @@ async function run() {
   const httpProxyPort = httpProxy.address().port;
   try {
     const reqStream12 = new RequestStream();
-    proxyDial(reqStream12, `127.0.0.1:${tcpPort}`, create(ProxyHopSchema, {
-      type: ProxyHop_Type.HTTP_CONNECT,
-      address: create(NetAddrSchema, {network: 'tcp', address: `127.0.0.1:${httpProxyPort}`}),
-    }));
-    reqStream12.push(create(NetConnRequestSchema, {
-      data: {case: 'bytes', value: Buffer.from('NODE HTTP CONNECT TRAVERSAL')},
-    }));
+    proxyDial(
+      reqStream12,
+      `127.0.0.1:${tcpPort}`,
+      create(ProxyHopSchema, {
+        type: ProxyHop_Type.HTTP_CONNECT,
+        address: create(NetAddrSchema, {
+          network: 'tcp',
+          address: `127.0.0.1:${httpProxyPort}`,
+        }),
+      }),
+    );
+    reqStream12.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'bytes',
+          value: Buffer.from('NODE HTTP CONNECT TRAVERSAL'),
+        },
+      }),
+    );
 
     const resp12 = client.netConn(reqStream12);
     const it12 = resp12[Symbol.asyncIterator]();
@@ -655,7 +778,10 @@ async function run() {
     assert.strictEqual(conn12.value.data.value.proxy.traversedHops.length, 1);
     const echo12 = await it12.next();
     assert.strictEqual(echo12.value.data.case, 'bytes');
-    assert.strictEqual(Buffer.from(echo12.value.data.value).toString('utf-8'), 'NODE HTTP CONNECT TRAVERSAL');
+    assert.strictEqual(
+      Buffer.from(echo12.value.data.value).toString('utf-8'),
+      'NODE HTTP CONNECT TRAVERSAL',
+    );
     reqStream12.close();
   } finally {
     await new Promise(r => httpProxy.close(() => r()));
@@ -677,18 +803,23 @@ async function run() {
   const halfClosePort = halfCloseUpstream.address().port;
   try {
     const reqStream13 = new RequestStream();
-    reqStream13.push(create(NetConnRequestSchema, {
-      data: {
-        case: 'dial',
-        value: create(NetConnRequest_DialSchema, {
-          address: create(NetAddrSchema, {network: 'tcp', address: `127.0.0.1:${halfClosePort}`}),
-          capabilities: create(NetConnRequest_CapabilitiesSchema, {
-            supportsOpportunisticTls: true,
-            supportsFlowControl: true,
+    reqStream13.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'dial',
+          value: create(NetConnRequest_DialSchema, {
+            address: create(NetAddrSchema, {
+              network: 'tcp',
+              address: `127.0.0.1:${halfClosePort}`,
+            }),
+            capabilities: create(NetConnRequest_CapabilitiesSchema, {
+              supportsOpportunisticTls: true,
+              supportsFlowControl: true,
+            }),
           }),
-        }),
-      },
-    }));
+        },
+      }),
+    );
 
     const resp13 = client.netConn(reqStream13);
     const it13 = resp13[Symbol.asyncIterator]();
@@ -696,26 +827,30 @@ async function run() {
     assert.strictEqual(conn13.value.data.case, 'conn');
 
     // Echo roundtrip proves the tunnel before the half-close.
-    reqStream13.push(create(NetConnRequestSchema, {
-      data: {case: 'bytes', value: Buffer.from('PING')},
-    }));
+    reqStream13.push(
+      create(NetConnRequestSchema, {
+        data: {case: 'bytes', value: Buffer.from('PING')},
+      }),
+    );
     const echo13 = await nextBytes(it13);
     assert.strictEqual(Buffer.from(echo13).toString('utf-8'), 'PING');
 
     // Client-initiated write-side close: the upstream must see a FIN,
     // keep the relay running for the post-FIN marker, and then end
     // cleanly via the halfClose event.
-    reqStream13.push(create(NetConnRequestSchema, {
-      data: {
-        case: 'control',
-        value: create(NetConnRequest_ControlSchema, {
-          action: {
-            case: 'halfClose',
-            value: create(NetConnRequest_Control_HalfCloseSchema, {}),
-          },
-        }),
-      },
-    }));
+    reqStream13.push(
+      create(NetConnRequestSchema, {
+        data: {
+          case: 'control',
+          value: create(NetConnRequest_ControlSchema, {
+            action: {
+              case: 'halfClose',
+              value: create(NetConnRequest_Control_HalfCloseSchema, {}),
+            },
+          }),
+        },
+      }),
+    );
 
     const final13 = await nextBytes(it13);
     assert.strictEqual(Buffer.from(final13).toString('utf-8'), 'FINAL');
@@ -724,12 +859,17 @@ async function run() {
     for (;;) {
       const resp = await it13.next();
       if (resp.done) break;
-      if (resp.value.data.case === 'control' &&
-          resp.value.data.value.event.case === 'halfClose') {
+      if (
+        resp.value.data.case === 'control' &&
+        resp.value.data.value.event.case === 'halfClose'
+      ) {
         sawHalfCloseEvent = true;
       }
     }
-    assert.ok(sawHalfCloseEvent, 'expected the halfClose control event before stream end');
+    assert.ok(
+      sawHalfCloseEvent,
+      'expected the halfClose control event before stream end',
+    );
     assert.ok(sawFin, 'upstream must have observed the FIN');
     reqStream13.close();
   } finally {
@@ -746,37 +886,55 @@ async function run() {
     try {
       const badCert = path.join(tmp, 'bad-cert.pem');
       const badKey = path.join(tmp, 'bad-key.pem');
-      fs.writeFileSync(badCert, '-----BEGIN CERTIFICATE-----\nnot-base64\n-----END CERTIFICATE-----\n');
-      fs.writeFileSync(badKey, '-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----\n');
+      fs.writeFileSync(
+        badCert,
+        '-----BEGIN CERTIFICATE-----\nnot-base64\n-----END CERTIFICATE-----\n',
+      );
+      fs.writeFileSync(
+        badKey,
+        '-----BEGIN PRIVATE KEY-----\nnot-base64\n-----END PRIVATE KEY-----\n',
+      );
 
       const cleanEnv = Object.fromEntries(
-        Object.entries(process.env).filter(([k]) => !k.startsWith('SESAME_ENDPOINT_')),
+        Object.entries(process.env).filter(
+          ([k]) => !k.startsWith('SESAME_ENDPOINT_'),
+        ),
       );
 
       let status = 0;
       let stderr = '';
       try {
-        execFileSync(process.execPath, [path.join(__dirname, '..', 'build', 'src', 'cli.js')], {
-          // Capture stderr (asserted below) instead of letting execFileSync
-          // echo it to this runner's stderr: the failure is expected.
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: {
-            ...cleanEnv,
-            SESAME_ENDPOINT_TLS_CERT: badCert,
-            SESAME_ENDPOINT_TLS_KEY: badKey,
+        execFileSync(
+          process.execPath,
+          [path.join(__dirname, '..', 'build', 'src', 'cli.js')],
+          {
+            // Capture stderr (asserted below) instead of letting execFileSync
+            // echo it to this runner's stderr: the failure is expected.
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: {
+              ...cleanEnv,
+              SESAME_ENDPOINT_TLS_CERT: badCert,
+              SESAME_ENDPOINT_TLS_KEY: badKey,
+            },
+            encoding: 'utf8',
+            timeout: 30000,
           },
-          encoding: 'utf8',
-          timeout: 30000,
-        });
+        );
       } catch (err) {
         status = err.status;
         stderr = String(err.stderr);
       }
       assert.strictEqual(status, 1, `expected exit 1, got ${status}`);
-      assert.ok(stderr.startsWith('sesame-endpoint: '), `expected a friendly CLI error, got: ${stderr}`);
-      assert.ok(!stderr.includes('\n    at '), `expected no raw stack trace, got: ${stderr}`);
+      assert.ok(
+        stderr.startsWith('sesame-endpoint: '),
+        `expected a friendly CLI error, got: ${stderr}`,
+      );
+      assert.ok(
+        !stderr.includes('\n    at '),
+        `expected no raw stack trace, got: ${stderr}`,
+      );
     } finally {
-      fs.rmSync(tmp, { recursive: true, force: true });
+      fs.rmSync(tmp, {recursive: true, force: true});
     }
   }
 
@@ -788,9 +946,15 @@ async function run() {
     let epServer;
     try {
       const caExt = path.join(tmp, 'ca.ext');
-      fs.writeFileSync(caExt, '[v3_ca]\nbasicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n');
+      fs.writeFileSync(
+        caExt,
+        '[v3_ca]\nbasicConstraints=critical,CA:TRUE\nkeyUsage=critical,keyCertSign,cRLSign\n',
+      );
       const leafExt = path.join(tmp, 'leaf.ext');
-      fs.writeFileSync(leafExt, '[v3_leaf]\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=clientAuth\n');
+      fs.writeFileSync(
+        leafExt,
+        '[v3_leaf]\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=clientAuth\n',
+      );
 
       function genPair(prefix, cn) {
         const caKey = path.join(tmp, `${prefix}-ca.key`);
@@ -800,18 +964,89 @@ async function run() {
         const leafCsr = path.join(tmp, `${prefix}.csr`);
         const leafCert = path.join(tmp, `${prefix}.crt`);
 
-        execFileSync('openssl', ['req', '-nodes', '-newkey', 'rsa:2048', '-keyout', caKey, '-out', caCsr, '-subj', `/CN=${cn} CA`], { stdio: 'pipe' });
-        execFileSync('openssl', ['x509', '-req', '-in', caCsr, '-signkey', caKey, '-out', caCert, '-days', '1', '-extfile', caExt, '-extensions', 'v3_ca'], { stdio: 'pipe' });
-        execFileSync('openssl', ['req', '-nodes', '-newkey', 'rsa:2048', '-keyout', leafKey, '-out', leafCsr, '-subj', `/CN=${cn}`], { stdio: 'pipe' });
-        execFileSync('openssl', ['x509', '-req', '-in', leafCsr, '-CA', caCert, '-CAkey', caKey, '-CAcreateserial', '-out', leafCert, '-days', '1', '-extfile', leafExt, '-extensions', 'v3_leaf'], { stdio: 'pipe' });
+        execFileSync(
+          'openssl',
+          [
+            'req',
+            '-nodes',
+            '-newkey',
+            'rsa:2048',
+            '-keyout',
+            caKey,
+            '-out',
+            caCsr,
+            '-subj',
+            `/CN=${cn} CA`,
+          ],
+          {stdio: 'pipe'},
+        );
+        execFileSync(
+          'openssl',
+          [
+            'x509',
+            '-req',
+            '-in',
+            caCsr,
+            '-signkey',
+            caKey,
+            '-out',
+            caCert,
+            '-days',
+            '1',
+            '-extfile',
+            caExt,
+            '-extensions',
+            'v3_ca',
+          ],
+          {stdio: 'pipe'},
+        );
+        execFileSync(
+          'openssl',
+          [
+            'req',
+            '-nodes',
+            '-newkey',
+            'rsa:2048',
+            '-keyout',
+            leafKey,
+            '-out',
+            leafCsr,
+            '-subj',
+            `/CN=${cn}`,
+          ],
+          {stdio: 'pipe'},
+        );
+        execFileSync(
+          'openssl',
+          [
+            'x509',
+            '-req',
+            '-in',
+            leafCsr,
+            '-CA',
+            caCert,
+            '-CAkey',
+            caKey,
+            '-CAcreateserial',
+            '-out',
+            leafCert,
+            '-days',
+            '1',
+            '-extfile',
+            leafExt,
+            '-extensions',
+            'v3_leaf',
+          ],
+          {stdio: 'pipe'},
+        );
 
-        return { caCert, leafCert, leafKey };
+        return {caCert, leafCert, leafKey};
       }
 
       const trusted = genPair('trusted', 'Node Trusted');
       const untrusted = genPair('untrusted', 'Node Untrusted');
 
-      const { config } = parseConfig([
+      const {config} = parseConfig([
         '--host=127.0.0.1',
         `--tls-cert=${path.join(FIXTURES_DIR, 'cert.pem')}`,
         `--tls-key=${path.join(FIXTURES_DIR, 'key.pem')}`,
@@ -829,7 +1064,7 @@ async function run() {
             client.on('error', () => resolve(false));
             client.on('close', () => resolve(false));
             client.on('connect', () => {
-              const req = client.request({ ':path': '/' });
+              const req = client.request({':path': '/'});
               req.on('error', () => resolve(false));
               req.on('close', () => resolve(false));
               req.on('response', () => resolve(true));
@@ -849,14 +1084,22 @@ async function run() {
         key: fs.readFileSync(trusted.leafKey),
         rejectUnauthorized: false,
       });
-      assert.strictEqual(accepted, true, 'expected trusted client cert to be accepted under Node.js');
+      assert.strictEqual(
+        accepted,
+        true,
+        'expected trusted client cert to be accepted under Node.js',
+      );
 
       // Case 2: Missing client cert is rejected
       const rejectedNoCert = await attempt({
         ca: fs.readFileSync(path.join(FIXTURES_DIR, 'cert.pem')),
         rejectUnauthorized: false,
       });
-      assert.strictEqual(rejectedNoCert, false, 'expected missing client cert to be rejected under Node.js');
+      assert.strictEqual(
+        rejectedNoCert,
+        false,
+        'expected missing client cert to be rejected under Node.js',
+      );
 
       // Case 3: Untrusted client cert is rejected
       const rejectedUntrusted = await attempt({
@@ -865,10 +1108,121 @@ async function run() {
         key: fs.readFileSync(untrusted.leafKey),
         rejectUnauthorized: false,
       });
-      assert.strictEqual(rejectedUntrusted, false, 'expected untrusted client cert to be rejected under Node.js');
+      assert.strictEqual(
+        rejectedUntrusted,
+        false,
+        'expected untrusted client cert to be rejected under Node.js',
+      );
     } finally {
       if (epServer) await epServer.close();
-      fs.rmSync(tmp, { recursive: true, force: true });
+      fs.rmSync(tmp, {recursive: true, force: true});
+    }
+  }
+
+  // 16. Testing release packaging integrity and CLI version under Node.js
+  {
+    process.stdout.write(
+      '16. Testing release packaging integrity and CLI version under Node.js...\n',
+    );
+    const pkgJson = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'),
+    );
+    assert.strictEqual(pkgJson.name, 'sesame-endpoint');
+    assert.strictEqual(pkgJson.license, 'MIT');
+    assert.deepStrictEqual(pkgJson.files, ['build/src']);
+    assert.ok(
+      fs.existsSync(path.join(__dirname, '..', 'LICENSE')),
+      'LICENSE must exist in package',
+    );
+
+    const cleanEnv = Object.fromEntries(
+      Object.entries(process.env).filter(
+        ([key]) => !key.startsWith('SESAME_ENDPOINT_'),
+      ),
+    );
+    const cliPath = path.join(__dirname, '..', 'build', 'src', 'cli.js');
+    const verOut = execFileSync(process.execPath, [cliPath, '--version'], {
+      encoding: 'utf-8',
+      env: cleanEnv,
+    });
+    assert.strictEqual(verOut, `sesame-endpoint v${pkgJson.version}\n`);
+
+    const helpOut = execFileSync(process.execPath, [cliPath, '--help'], {
+      encoding: 'utf-8',
+      env: cleanEnv,
+    });
+    assert.ok(
+      helpOut.includes('Usage: sesame-endpoint'),
+      'cli --help must contain usage',
+    );
+  }
+
+  // 17. Testing CLI version resolution failure under Node.js
+  // A broken install with no sesame-endpoint manifest above the CLI must
+  // report the friendly one-liner, never an unhandled-rejection stack —
+  // the Node.js counterpart of the orphan-CLI test in mtls.test.ts.
+  console.log(
+    '17. Testing CLI version resolution error reporting under Node.js...',
+  );
+  {
+    const orphanDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'sesame-cli-orphan-'),
+    );
+    try {
+      fs.cpSync(
+        path.join(__dirname, '..', 'build', 'src'),
+        path.join(orphanDir, 'build', 'src'),
+        {recursive: true},
+      );
+      fs.symlinkSync(
+        path.join(__dirname, '..', 'node_modules'),
+        path.join(orphanDir, 'node_modules'),
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+
+      const cleanEnv = Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([k]) => !k.startsWith('SESAME_ENDPOINT_'),
+        ),
+      );
+
+      let status = 0;
+      let stdout = '';
+      let stderr = '';
+      try {
+        stdout = execFileSync(
+          process.execPath,
+          [path.join(orphanDir, 'build', 'src', 'cli.js'), '--version'],
+          {
+            // Capture the expected failure instead of letting execFileSync
+            // echo it to this runner's stderr.
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: cleanEnv,
+            encoding: 'utf8',
+            timeout: 30000,
+          },
+        );
+      } catch (err) {
+        status = err.status;
+        stdout = String(err.stdout);
+        stderr = String(err.stderr);
+      }
+      assert.strictEqual(status, 1, `expected exit 1, got ${status}`);
+      assert.ok(
+        stderr.startsWith('sesame-endpoint: '),
+        `expected a friendly CLI error, got: ${stderr}`,
+      );
+      assert.ok(
+        stderr.includes('unable to resolve sesame-endpoint version'),
+        `expected the version resolution message, got: ${stderr}`,
+      );
+      assert.ok(
+        !stderr.includes('\n    at '),
+        `expected no raw stack trace, got: ${stderr}`,
+      );
+      assert.strictEqual(stdout, '', `expected no stdout, got: ${stdout}`);
+    } finally {
+      fs.rmSync(orphanDir, {recursive: true, force: true});
     }
   }
 

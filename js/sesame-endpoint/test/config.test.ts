@@ -1,5 +1,6 @@
 import {describe, expect, it} from 'bun:test';
 import {parseConfig, formatHelp} from '../src/config';
+import {main} from '../src/cli';
 
 describe('config parser', () => {
   it('returns default configuration when no args or env are given', () => {
@@ -240,5 +241,9 @@ describe('config parser', () => {
     expect(help).toContain('--tls-cert <path|pem>');
     expect(help).toContain('--tls-key <path|pem>');
     expect(help).toContain('--client-ca-cert <path|pem>');
+  });
+
+  it('exports main from cli entrypoint without executing on import', () => {
+    expect(typeof main).toBe('function');
   });
 });

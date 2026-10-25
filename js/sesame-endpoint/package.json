@@ -10,7 +10,24 @@
   "files": [
     "build/src"
   ],
-  "license": "Apache-2.0",
+  "license": "MIT",
+  "author": "Joseph Cumines <joeycumines@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joeycumines/sesame.git",
+    "directory": "js/sesame-endpoint"
+  },
+  "bugs": {
+    "url": "https://github.com/joeycumines/sesame/issues"
+  },
+  "homepage": "https://github.com/joeycumines/sesame/tree/main/js/sesame-endpoint#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "bun": ">=1.2.18"
+  },
   "keywords": [
     "sesame",
     "endpoint",
@@ -26,6 +43,17 @@
     "prepare": "bun run compile",
     "pretest": "bun run compile",
     "posttest": "bun run lint",
+    "check": "bun run clean && bun run compile && bun test && bun run test:node && bun run lint && bun run pack:verify",
+    "pack:verify": "node test/pack-runner.js",
+    "pack:dry": "bun run check && bun pm pack --dry-run",
+    "pack": "bun run clean && bun run compile && bun test && bun run test:node && bun run lint && node test/pack-runner.js --keep",
+    "publish:dry": "bun run check && bun publish --dry-run",
+    "publish:latest": "bun run check && bun publish --tag latest",
+    "publish:next": "bun run check && bun publish --tag next",
+    "version:patch": "bun pm version patch --no-git-tag-version && bun run check",
+    "version:minor": "bun pm version minor --no-git-tag-version && bun run check",
+    "version:major": "bun pm version major --no-git-tag-version && bun run check",
+    "version:prerelease": "bun pm version prerelease --no-git-tag-version && bun run check",
     "generate": "cd ../../schema && protoc -I . -I ./googleapis --plugin=protoc-gen-es=$(cd ../js/sesame-endpoint && bun pm bin)/protoc-gen-es --es_out=../js/sesame-endpoint/src/gen --es_opt=target=ts google/api/field_behavior.proto google/rpc/status.proto sesame/type/netaddr.proto sesame/v1alpha1/tls.proto sesame/v1alpha1/proxy.proto sesame/v1alpha1/remotecontrol.proto",
     "test": "bun test",
     "test:node": "node test/node-runner.js",
@@ -35,6 +63,7 @@
     "@bufbuild/protoc-gen-es": "2.15.0",
     "@types/bun": "1.4.2",
     "@types/node": "^22.20.5",
+    "globals": "15.15.0",
     "gts": "^7.0.0",
     "typescript": "^5.9.3"
   },
